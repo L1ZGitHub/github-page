@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { Calendar, Clock, User, BarChart3 } from "lucide-react"
 import { getAllSlugs, getPostBySlug } from "@/lib/mdx"
 import { getRelatedPosts } from "@/lib/blog"
-import { getCategoryStyle } from "@/lib/category-colors"
+import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
 import { BlogCard } from "@/components/blog-card"
 
 interface Props {
@@ -83,7 +83,7 @@ export default async function BlogPost({ params }: Props) {
               <Clock className="size-4 text-gray-400" />
               {post.readTime}
             </span>
-            <span className="article-difficulty-badge">
+            <span className="article-difficulty-badge" style={getDifficultyStyle(post.difficulty)}>
               <BarChart3 className="size-3" />
               {post.difficulty}
             </span>

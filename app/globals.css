@@ -403,11 +403,15 @@ code.hljs {
 /* Strings — YELLOW */
 .hljs-string,
 .hljs-template-variable,
-.hljs-variable,
 .hljs-addition,
 .hljs-selector-attr,
 .hljs-selector-pseudo {
   color: #E6DB74;
+}
+
+/* Variables — default text (Pygments: .nv/.bp = #F8F8F2, e.g. `self`) */
+.hljs-variable {
+  color: #F8F8F2;
 }
 
 /* Numbers, literals — PURPLE */

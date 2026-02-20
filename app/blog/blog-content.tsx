@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { Search } from "lucide-react"
 import { BlogCard } from "@/components/blog-card"
 import type { BlogPostMeta } from "@/lib/mdx"
 
@@ -11,10 +12,20 @@ interface BlogContentProps {
 
 export function BlogContent({ posts, categories }: BlogContentProps) {
   const [activeCategory, setActiveCategory] = useState("All")
+  const [searchQuery, setSearchQuery] = useState("")
   const gridRef = useRef<HTMLDivElement>(null)
 
   const filteredPosts = posts.filter((post) => {
-    return activeCategory === "All" || post.category === activeCategory
+    const matchesCategory = activeCategory === "All" || post.category === activeCategory
+    if (!matchesCategory) return false
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      post.title.toLowerCase().includes(q) ||
+      post.description.toLowerCase().includes(q) ||
+      post.category.toLowerCase().includes(q) ||
+      post.tags.some((tag) => tag.toLowerCase().includes(q))
+    )
   })
 
   /* Staggered scroll-in animation (matching old site's IntersectionObserver) */
@@ -41,15 +52,30 @@ export function BlogContent({ posts, categories }: BlogContentProps) {
 
   return (
     <>
+      {/* Search bar */}
+      <div className="mx-auto mb-6 max-w-md">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search articles..."
+            className="w-full rounded-full border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-700 placeholder-gray-400 outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+          />
+        </div>
+      </div>
+
       {/* Category filter pills - matching old site exactly */}
       <div className="flex flex-wrap justify-center gap-2 mb-12">
         <button
           onClick={() => setActiveCategory("All")}
           className={`rounded-full border px-5 py-2 text-sm font-medium transition-all duration-200 ${
             activeCategory === "All"
-              ? "border-amber-500 bg-amber-500 text-white"
+              ? "border-amber-500 bg-amber-500"
               : "border-gray-200 bg-white text-gray-600 hover:border-amber-400 hover:text-amber-600"
           }`}
+          style={activeCategory === "All" ? { color: "#ffffff" } : undefined}
         >
           All
         </button>
@@ -59,9 +85,10 @@ export function BlogContent({ posts, categories }: BlogContentProps) {
             onClick={() => setActiveCategory(category)}
             className={`rounded-full border px-5 py-2 text-sm font-medium transition-all duration-200 ${
               activeCategory === category
-                ? "border-amber-500 bg-amber-500 text-white"
+                ? "border-amber-500 bg-amber-500"
                 : "border-gray-200 bg-white text-gray-600 hover:border-amber-400 hover:text-amber-600"
             }`}
+            style={activeCategory === category ? { color: "#ffffff" } : undefined}
           >
             {category}
           </button>
@@ -85,7 +112,7 @@ export function BlogContent({ posts, categories }: BlogContentProps) {
               No articles found
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              No articles match the selected category. Try a different filter.
+              No articles match your search. Try a different filter or search term.
             </p>
           </div>
         )}

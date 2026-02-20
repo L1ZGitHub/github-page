@@ -72,3 +72,48 @@ export function getCategoryStyle(category: string): React.CSSProperties {
   }
   return map[category] || { background: "#fffbeb", color: "#d97706" }
 }
+
+/**
+ * Difficulty badge colors matching the old site exactly.
+ *
+ * Old-site CSS:
+ *   .difficulty-beginner      { background: var(--emerald-50); color: var(--emerald-600); }
+ *   .difficulty-intermediate   { background: var(--amber-50);   color: var(--amber-600); }
+ *   .difficulty-advanced       { background: #fef2f2;          color: #dc2626; }
+ */
+export interface DifficultyColors {
+  /** Tailwind classes */
+  classes: string
+  /** Inline CSS style */
+  style: React.CSSProperties
+}
+
+const difficultyColorMap: Record<string, DifficultyColors> = {
+  beginner: {
+    classes: "bg-emerald-50 text-emerald-600",
+    style: { background: "#ecfdf5", color: "#059669" },
+  },
+  intermediate: {
+    classes: "bg-amber-50 text-amber-600",
+    style: { background: "#fffbeb", color: "#d97706" },
+  },
+  advanced: {
+    classes: "bg-red-50 text-red-600",
+    style: { background: "#fef2f2", color: "#dc2626" },
+  },
+}
+
+const defaultDifficulty: DifficultyColors = {
+  classes: "bg-amber-50 text-amber-600",
+  style: { background: "#fffbeb", color: "#d97706" },
+}
+
+/** Get Tailwind classes for a difficulty badge. */
+export function getDifficultyColors(difficulty: string): DifficultyColors {
+  return difficultyColorMap[difficulty?.toLowerCase()] || defaultDifficulty
+}
+
+/** Get inline CSS style for a difficulty badge (article page). */
+export function getDifficultyStyle(difficulty: string): React.CSSProperties {
+  return (difficultyColorMap[difficulty?.toLowerCase()] || defaultDifficulty).style
+}

@@ -1,17 +1,11 @@
 import Link from "next/link"
 import { Calendar, Clock } from "lucide-react"
 import type { BlogPostMeta } from "@/lib/mdx"
-import { getCategoryColors } from "@/lib/category-colors"
-
-const difficultyColors: Record<string, string> = {
-  beginner: "bg-emerald-50 text-emerald-600",
-  intermediate: "bg-amber-50 text-amber-600",
-  advanced: "bg-red-50 text-red-600",
-}
+import { getCategoryColors, getDifficultyColors } from "@/lib/category-colors"
 
 export function BlogCard({ post, index }: { post: BlogPostMeta; index?: number }) {
   const catColors = getCategoryColors(post.category)
-  const diffColor = difficultyColors[post.difficulty] || "bg-amber-50 text-amber-600"
+  const diffColor = getDifficultyColors(post.difficulty).classes
 
   return (
     <Link
