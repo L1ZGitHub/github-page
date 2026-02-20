@@ -129,7 +129,7 @@ This is where semantic search enters the picture.
 
 Semantic search uses vector representations of text, called embeddings, to capture meaning instead of just words. Two texts with similar meaning will be close in the embedding space, even if they share no words.
 
-This is the core building block of modern RAG systems and is discussed more deeply in “Retrieval-Augmented Generation: A Complete Guide” and “Embedding Models Compared: OpenAI vs Open-Source”.
+This is the core building block of modern RAG systems and is discussed more deeply in “Retrieval-Augmented Generation: A Complete Guide” and “[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)”.
 
 ### How semantic search works
 
@@ -144,7 +144,7 @@ Unlike keyword search, there is no direct term matching. Everything happens in e
 
 ### A minimal semantic search example in Python
 
-Here is a simple implementation using Sentence Transformers and a naive in-memory index. In a real system you would plug into a vector database like those covered in “Understanding Vector Databases: A Beginner's Guide”.
+Here is a simple implementation using Sentence Transformers and a naive in-memory index. In a real system you would plug into a vector database like those covered in “[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)”.
 
 ```python
 from sentence_transformers import SentenceTransformer
@@ -203,7 +203,7 @@ Semantic search is not a magic replacement. It has limitations:
 - Infrastructure complexity: vector databases, monitoring embedding drift, model versioning
 - Potential privacy and compliance issues if you send data to third-party APIs
 
-For privacy-sensitive workloads, you might want to combine semantic search with techniques from “Privacy-Preserving NLP: Protecting Sensitive Data in Language Models”, like on-premise models, anonymization, and encryption.
+For privacy-sensitive workloads, you might want to combine semantic search with techniques from “[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)”, like on-premise models, anonymization, and encryption.
 
 
 ## When to use keyword search
@@ -250,7 +250,7 @@ For internal wikis, support centers, and developer docs, users rarely know the e
 - “how to reset my password if I forgot the email”
 - “api limit errors when sending many requests”
 
-Here semantic search can surface relevant articles even if the wording does not match. This is exactly the kind of retrieval you want for LLM-based support bots or documentation assistants, as covered in “Building AI Agents with LangChain and LangGraph”.
+Here semantic search can surface relevant articles even if the wording does not match. This is exactly the kind of retrieval you want for LLM-based support bots or documentation assistants, as covered in “[Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)”.
 
 ### Scenario 2: RAG systems and LLM applications
 
@@ -386,3 +386,9 @@ A few battle-tested lessons I wish I had early on.
 - Use vector databases for scalable semantic search and retrieval pipelines
 - For privacy-sensitive data, consider on-premise models and privacy-preserving NLP techniques
 - Always start from user needs and evaluation data, not from the latest hype in search technology
+
+## Related Articles
+
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
+- [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)

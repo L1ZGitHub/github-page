@@ -19,7 +19,7 @@ As a Nature analysis of AI governance challenges has explored, the fragmentation
 
 ### The US Lab Approach
 
-American frontier labs have invested heavily in alignment research, driven by a combination of genuine concern about advanced AI risks and the reputational necessity of demonstrating responsible development. The technical portfolio includes Reinforcement Learning from Human Feedback (RLHF), Constitutional AI (Anthropic's approach of training models against explicit principles), red-teaming, and increasingly sophisticated evaluation frameworks for dangerous capabilities.
+American frontier labs have invested heavily in alignment research, driven by a combination of genuine concern about advanced AI risks and the reputational necessity of demonstrating responsible development. The technical portfolio includes [Reinforcement Learning](/blog/finagent-and-beyond-multimodal-foundation-agents-for-trading) from Human Feedback (RLHF), Constitutional AI (Anthropic's approach of training models against explicit principles), red-teaming, and increasingly sophisticated [evaluation frameworks](/blog/llm-evaluation-frameworks-beyond-perplexity) for dangerous capabilities.
 
 The philosophical orientation is broadly consequentialist and focused on long-term risk. Anthropic's published research emphasizes "catastrophic risk" from misaligned advanced systems. OpenAI's charter references the goal of ensuring AGI "benefits all of humanity." Google DeepMind invests in formal approaches to AI safety, including interpretability research aimed at understanding model internals.
 
@@ -49,7 +49,7 @@ Beyond the philosophical differences, the three poles are developing divergent t
 
 US labs are pushing toward scalable oversight: techniques for aligning systems that may eventually exceed human capability in specific domains. This includes debate (having AI systems argue opposing positions for human judges), recursive reward modeling (using AI systems to help evaluate other AI systems), and interpretability research aimed at understanding what models "know" and "want." The implicit assumption is that alignment is a technical problem with technical solutions.
 
-Chinese labs are investing more heavily in structured output control: ensuring that model outputs conform to specific requirements through a combination of training-time constraints, inference-time filtering, and retrieval-augmented generation with curated knowledge bases. This approach is less concerned with the model's "internal alignment" and more concerned with observable output compliance. It is pragmatic and effective for its stated goals.
+Chinese labs are investing more heavily in structured output control: ensuring that model outputs conform to specific requirements through a combination of training-time constraints, inference-time filtering, and [retrieval-augmented generation](/blog/retrieval-augmented-generation-a-complete-guide) with curated knowledge bases. This approach is less concerned with the model's "internal alignment" and more concerned with observable output compliance. It is pragmatic and effective for its stated goals.
 
 The open-source community is fragmented but gravitating toward evaluation-driven safety: building comprehensive benchmark suites that test for specific harmful behaviors, and releasing those benchmarks publicly so that any model can be assessed. Projects like the AI Safety Benchmark from MLCommons represent this approach, standardized tests that any developer can run against any model.
 
@@ -81,7 +81,7 @@ The deepest question is whether universal AI safety standards are even coherent.
 
 The analogy to other international standards is instructive. Aviation safety standards (ICAO) are genuinely universal because the physics of flight is universal: a plane that is safe in one country is safe in another. Pharmaceutical safety standards (ICH) are broadly harmonized because human biology is universal, though cultural differences in risk tolerance create some variation. Financial regulatory standards (Basel) are partially harmonized, with significant national variation reflecting different economic philosophies.
 
-AI safety is closer to financial regulation than to aviation. The "physics" of AI, the mathematics of neural networks, is universal, but the definition of safe behavior is deeply contextual. A universal standard would need to abstract away from specific value judgments and focus on properties that all poles can agree on: reliability (the model does what the user intends), robustness (the model behaves predictably under adversarial conditions), and transparency (the model's capabilities and limitations are accurately communicated).
+AI safety is closer to financial regulation than to aviation. The "physics" of AI, the mathematics of [neural networks](/blog/getting-started-with-pytorch-for-deep-learning), is universal, but the definition of safe behavior is deeply contextual. A universal standard would need to abstract away from specific value judgments and focus on properties that all poles can agree on: reliability (the model does what the user intends), robustness (the model behaves predictably under adversarial conditions), and transparency (the model's capabilities and limitations are accurately communicated).
 
 These are necessary but insufficient. They say nothing about what the model should or should not be willing to do, the core question of alignment. And it is precisely this question where the poles diverge most sharply.
 
@@ -116,3 +116,9 @@ The pessimistic scenario is a world where safety standards fragment entirely, wh
 For AI engineers and technical leaders, the implication is that alignment is not just a research problem to be delegated to specialist teams. It is a design decision embedded in every system you build, shaped by values you should be explicit about, and operating in a geopolitical context you cannot ignore. Building safe AI in a multipolar world requires not just technical skill but strategic awareness, and the humility to recognize that your safety framework is one among several, each reflecting legitimate but different priorities.
 
 The world is not converging on a single vision of AI safety. Learning to navigate that divergence, productively and without catastrophe, is one of the defining challenges of this decade.
+
+## Related Articles
+
+- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
+- [Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai)
+- [Introduction to Differential Privacy for NLP](/blog/introduction-to-differential-privacy-for-nlp)

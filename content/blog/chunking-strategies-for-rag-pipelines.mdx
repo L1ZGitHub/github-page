@@ -15,7 +15,7 @@ Chunking looks trivial at first. Split text every N characters, send to the embe
 
 In this post I want to walk through practical chunking strategies for Retrieval-Augmented Generation (RAG) pipelines, from simple baselines to more advanced, structure-aware methods. I will focus on trade-offs and implementation details I see in production systems.
 
-If you are new to RAG itself, the articles on "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems" give a good foundation. Here I will zoom into the chunking step of the ingestion pipeline.
+If you are new to RAG itself, the articles on "Retrieval-Augmented Generation: A Complete Guide" and "[Building Production-Ready RAG Systems](/blog/building-production-ready-rag-systems)" give a good foundation. Here I will zoom into the chunking step of the ingestion pipeline.
 
 ## What chunking is really optimizing
 
@@ -27,7 +27,7 @@ Good chunking tries to optimize three conflicting objectives:
 2. **Retrieval granularity**  - Chunks should be small enough so that retrieval is specific and does not pull in too much noise.
 3. **Coverage and recall**  - Information relevant to a question should actually live in at least one chunk that can be retrieved.
 
-Your model, vector database, and prompt strategy all interact with chunking. As I discussed in "Understanding Vector Databases: A Beginner's Guide", the index structure favors certain query lengths and vector distributions. Chunking indirectly shapes those.
+Your model, vector database, and prompt strategy all interact with chunking. As I discussed in "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)", the index structure favors certain query lengths and vector distributions. Chunking indirectly shapes those.
 
 ## Baseline: fixed-size chunking with overlap
 
@@ -245,7 +245,7 @@ Good strategies:
 - Within an article, chunk by paragraphs with more overlap, so that cross-references stay together.
 - Preserve section numbers and titles in metadata.
 
-This is particularly important in privacy-preserving NLP settings as I discuss in "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models". Legal corpora often contain sensitive terms, and fine-grained, structure-aware chunking lets you apply redaction or access control at the right granularity.
+This is particularly important in privacy-preserving NLP settings as I discuss in "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)". Legal corpora often contain sensitive terms, and fine-grained, structure-aware chunking lets you apply redaction or access control at the right granularity.
 
 ### Tables and PDFs
 
@@ -308,7 +308,7 @@ This is far from perfect, but in some domains it gives a noticeable improvement 
 
 ## Hybrid multi-granularity chunking
 
-For more advanced RAG systems, especially those described in "Fine-Tuning LLMs on Custom Data: A Practical Guide" and the production RAG article, a single granularity is sometimes not enough.
+For more advanced RAG systems, especially those described in "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)" and the production RAG article, a single granularity is sometimes not enough.
 
 Hybrid strategies index multiple views of the same content:
 
@@ -411,3 +411,9 @@ RAG systems are sensitive to indexing changes. Treat chunking as part of your sc
 - Evaluate chunking with both quantitative retrieval metrics and qualitative inspection of failed queries.
 - Chunk boundaries interact with privacy and access control, so choose chunk size with sensitivity in mind.
 - Treat chunking as a first-class part of your RAG architecture and version it like any other schema change.
+
+## Related Articles
+
+- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
+- [Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)
+- [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)

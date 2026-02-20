@@ -13,7 +13,7 @@ Financial markets generate data in forms that most AI systems only partially und
 
 FinAgent changed that. Published by Zhang et al. in early 2024, FinAgent is a multimodal foundation agent that integrates numerical, textual, and visual market data into a unified reasoning loop, achieving over +36% cumulative profit improvement versus prior state-of-the-art methods on standard benchmarks. What makes it interesting is not just the performance, but the architectural patterns it introduces: dual-level reflection, structured memory retrieval, and modality-specific processing chains that generalize well beyond trading.
 
-If you have read my articles on Building a Multi-Agent AI System and Multimodal AI: Combining Vision and Language Models, FinAgent sits at the intersection of both. It is a single agent architecture, but the design patterns extend naturally to multi-agent swarms for high-frequency trading and DeFi.
+If you have read my articles on Building a Multi-Agent AI System and [Multimodal AI: Combining Vision and Language Models](/blog/multimodal-ai-combining-vision-and-language-models), FinAgent sits at the intersection of both. It is a single [agent architecture](/blog/anatomy-of-an-openclaw-agent), but the design patterns extend naturally to multi-agent swarms for high-frequency trading and DeFi.
 
 ## The Multimodal Input Pipeline
 
@@ -149,7 +149,7 @@ This dual-level design mirrors how experienced traders operate. You make quick a
 
 FinAgent maintains an episodic memory of past trading decisions and their outcomes. When facing a new market situation, the agent retrieves similar past episodes to inform its reasoning, essentially a RAG system specialized for financial decision-making.
 
-The memory retrieval works across modalities. A current chart pattern can trigger retrieval of past situations with similar visual signatures, even if the numerical indicators were different. This is the same principle behind hybrid retrieval that I covered in Hybrid Search: Combining Dense and Sparse Retrieval, but applied to a decision-making context rather than document search.
+The memory retrieval works across modalities. A current chart pattern can trigger retrieval of past situations with similar visual signatures, even if the numerical indicators were different. This is the same principle behind hybrid retrieval that I covered in [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval), but applied to a decision-making context rather than document search.
 
 ```python
 from typing import Tuple
@@ -214,3 +214,9 @@ The architectural patterns are the same: modality-specific processing, memory re
 - Single-agent architectures decompose naturally into multi-agent swarms by assigning modality specialists and a coordinator, following the orchestrator pattern familiar from distributed AI systems.
 - Reinforcement learning integration is the logical next step, but requires careful handling of non-stationarity and regime changes in financial markets.
 - DeFi and on-chain applications extend the same patterns to adversarial, high-speed environments where execution atomicity and gas efficiency become critical constraints.
+
+## Related Articles
+
+- [Agentic RAG: The Next Evolution](/blog/agentic-rag-the-next-evolution)
+- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
+- [Multimodal AI Agents: When AI Sees, Hears, and Acts](/blog/multimodal-ai-agents-when-ai-sees-hears-and-acts)

@@ -247,9 +247,9 @@ With a tight timeout, you keep single-request latency acceptable while still ben
 
 Real-time pipelines often contain a surprising amount of non-ML work:
 
-- Tokenization and normalization (see "Building Custom Tokenizers for Domain-Specific NLP").
+- Tokenization and normalization (see "[Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)").
 - Feature joins with user or product metadata.
-- Security and privacy filters (see "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models").
+- Security and privacy filters (see "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)").
 
 Guidelines:
 
@@ -291,8 +291,8 @@ If your pipeline is RAG-based, a big chunk of your latency is in retrieval and r
 
 Components:
 
-- Vector search (see "Understanding Vector Databases: A Beginner's Guide").
-- Hybrid search (dense + sparse) as described in "Hybrid Search: Combining Dense and Sparse Retrieval".
+- Vector search (see "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)").
+- Hybrid search (dense + sparse) as described in "[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)".
 - Reranking model to pick the best contexts.
 
 Practical tips:
@@ -348,7 +348,7 @@ Hook these metrics into alerts: p95 latency above 800 ms for 5 minutes is usuall
 You also need **logging of inputs and outputs** (with anonymization) so you can:
 
 - Debug failures.
-- Rebuild datasets for fine-tuning (see "Fine-Tuning LLMs on Custom Data: A Practical Guide").
+- Rebuild datasets for fine-tuning (see "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)").
 
 ## Scaling and reliability
 
@@ -453,3 +453,9 @@ Here you get:
 - Instrument everything: latency, throughput, errors, and quality metrics are essential for operating real-time systems.
 - Apply caching, horizontal scaling, and graceful degradation strategies to handle spikes and partial failures without breaking the user experience.
 - Start with a minimal, observable pipeline, then iterate on models and infrastructure together as you scale.
+
+## Related Articles
+
+- [CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)
+- [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)
+- [Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)

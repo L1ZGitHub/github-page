@@ -132,7 +132,7 @@ Beyond differential privacy, several practical anonymization techniques can redu
 
 ### Pre-training Anonymization
 
-**Named Entity Recognition + Replacement**: Run NER on training data and replace sensitive entities with synthetic alternatives. This preserves text structure while removing identifying information.
+**[Named Entity Recognition](/blog/named-entity-recognition-with-modern-nlp) + Replacement**: Run NER on training data and replace sensitive entities with synthetic alternatives. This preserves text structure while removing identifying information.
 
 **K-Anonymity for Text**: Ensure that each text pattern appears at least k times in the training data by generalizing rare sequences.
 
@@ -195,3 +195,9 @@ Privacy-preserving NLP is not just an academic concern; it is a practical requir
 Our work at INRIA on language-specific memorization patterns highlights that privacy solutions need to be adapted to the linguistic and cultural context of the data. There is no universal solution, but combining multiple defense layers provides robust protection for most applications.
 
 For a deeper dive into our findings, I encourage you to read the full paper: [Towards the Anonymization of Language Modeling](https://arxiv.org/html/2501.02407v2).
+
+## Related Articles
+
+- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
+- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
+- [Introduction to Differential Privacy for NLP](/blog/introduction-to-differential-privacy-for-nlp)

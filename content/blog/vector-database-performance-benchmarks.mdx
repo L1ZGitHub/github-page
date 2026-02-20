@@ -36,7 +36,7 @@ Before talking about numbers, we need clarity on *what* is being measured. For v
    - Impact of replication, sharding, and persistence
    - Warm vs cold cache behavior
 
-In the "Understanding Vector Databases: A Beginner's Guide" article I covered the basic concepts like HNSW, IVF, and product quantization. Here we will use those concepts, but with a more engineering-oriented mindset: how to actually test them.
+In the "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)" article I covered the basic concepts like HNSW, IVF, and product quantization. Here we will use those concepts, but with a more engineering-oriented mindset: how to actually test them.
 
 ## Dataset and embedding model selection
 
@@ -52,7 +52,7 @@ For RAG workloads, good benchmarks use:
 - Chunking strategies similar to your target architecture
   - If you have not decided, the "Chunking Strategies for RAG Pipelines" article has concrete patterns
 
-If you are working in a privacy-sensitive domain, you can follow the ideas from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" and generate synthetic data that mimics structure without exposing real content.
+If you are working in a privacy-sensitive domain, you can follow the ideas from "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" and generate synthetic data that mimics structure without exposing real content.
 
 ### Embedding model choice matters
 
@@ -62,7 +62,7 @@ The embedding model affects:
 - Vector distribution and norm
 - Semantic properties (which affect recall metrics)
 
-If you have not yet decided, see "Embedding Models Compared: OpenAI vs Open-Source" for a deeper comparison. For benchmarking frameworks, I typically use one or two models:
+If you have not yet decided, see "[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)" for a deeper comparison. For benchmarking frameworks, I typically use one or two models:
 
 - A **lighter model** (e.g. 384-d) to test high scale and low memory setups
 - A **heavier model** (e.g. 1536-d or 3072-d) to simulate more demanding semantic workloads
@@ -323,7 +323,7 @@ You may find a configuration with Recall@10 = 0.99 but RAG answer quality (measu
 To measure this, extend the benchmark to the end-to-end pipeline:
 
 1. Given a query, fetch top-k chunks from your vector database
-2. Build a prompt according to your template (see "Prompt Engineering Best Practices for Production")
+2. Build a prompt according to your template (see "[Prompt Engineering Best Practices for Production](/blog/prompt-engineering-best-practices-for-production)")
 3. Call the LLM with deterministic settings (e.g. temperature = 0)
 4. Score the answer using a grading rubric or LLM-as-judge
 
@@ -345,7 +345,7 @@ def rag_answer(query: str, retriever, llm):
 # Then benchmark both quality and time-to-first-token
 ```
 
-This merges concepts from "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems" and provides a more honest measurement of business impact.
+This merges concepts from "[Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)" and "Building Production-Ready RAG Systems" and provides a more honest measurement of business impact.
 
 ## Common pitfalls in vector database benchmarks
 
@@ -455,3 +455,9 @@ With a shared interface you can plug this retriever into your existing RAG pipel
 - Always connect index-level metrics to RAG-level quality and end-to-end latency, not just ANN statistics.
 - Automate benchmarks with a shared retriever abstraction so you can compare multiple vector databases consistently.
 - Combine results with cost and operational complexity to make an informed choice for your production RAG system.
+
+## Related Articles
+
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
+- [Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)

@@ -9,13 +9,13 @@ readTime: "10 min read"
 author: "Hélain Zimmermann"
 ---
 
-Something remarkable has happened in the AI industry over the past six months, and it has less to do with model capabilities than with model economics. Chinese AI labs, DeepSeek, Moonshot (Kimi), Zhipu (GLM), and others, have released a wave of large language models that match or closely approach the performance of GPT-4 and Claude Opus 4 on major benchmarks, at a fraction of the inference cost. For startups, developers, and anyone building AI-powered products, this shift changes the calculus of model selection in fundamental ways.
+Something remarkable has happened in the AI industry over the past six months, and it has less to do with model capabilities than with model economics. Chinese AI labs, DeepSeek, Moonshot (Kimi), Zhipu (GLM), and others, have released a wave of [large language models](/blog/data-privacy-in-the-age-of-large-language-models) that match or closely approach the performance of GPT-4 and Claude Opus 4 on major benchmarks, at a fraction of the inference cost. For startups, developers, and anyone building AI-powered products, this shift changes the calculus of model selection in fundamental ways.
 
 As the [Latent Space newsletter reported](https://www.latent.space/p/ainews-zai-glm-5-new-sota-open-weights) in its coverage of GLM-5's release, we are witnessing a new wave of open-weights models that achieve state-of-the-art results while being dramatically more affordable to run. The implications ripple through every layer of the AI stack, from infrastructure to applications to business models.
 
 ## The Benchmark Shock
 
-The moment that crystallized this trend was DeepSeek-V3's performance on SWE-bench Verified, the widely-used benchmark for evaluating AI models on real-world software engineering tasks. DeepSeek-V3 scored 67.3%, placing it in the same tier as GPT-4o and ahead of many Western models that cost significantly more to operate. Kimi K2, released shortly after, posted similarly competitive numbers across a range of coding and reasoning benchmarks.
+The moment that crystallized this trend was DeepSeek-V3's performance on SWE-bench Verified, the widely-used benchmark for evaluating AI models on real-world [software engineering](/blog/python-best-practices-for-ml-engineers) tasks. DeepSeek-V3 scored 67.3%, placing it in the same tier as GPT-4o and ahead of many Western models that cost significantly more to operate. Kimi K2, released shortly after, posted similarly competitive numbers across a range of coding and reasoning benchmarks.
 
 But the headline performance is only half the story. The other half is cost. Running DeepSeek-V3 through its API costs approximately $0.27 per million input tokens and $1.10 per million output tokens. Compare this with GPT-4o at $2.50/$10.00 or Claude Opus 4 at $15.00/$75.00 for the same token volumes. The gap is not incremental, it is an order of magnitude.
 
@@ -94,3 +94,9 @@ Chinese labs will continue pushing the frontier of cost-efficiency, potentially 
 The open-source ecosystem will mature, making it easier to self-host, fine-tune, and deploy models regardless of origin. This democratization of capability is, in the long run, the most consequential trend.
 
 For developers and startups making model choices today, the practical advice is straightforward: evaluate models on the intersection of capability and cost for your specific use case. Do not default to the most expensive option out of inertia. Build your architecture to be model-agnostic so you can switch as the landscape evolves. And keep a close eye on the next generation of releases, the pace of improvement shows no sign of slowing down.
+
+## Related Articles
+
+- [Agents + Open Weights: Toward a Linux of AI Agents, Or a Security Nightmare?](/blog/agents-plus-open-weights-linux-of-agents-or-security-nightmare)
+- [Chinese AI Models Are Catching Up, And Sometimes Surpassing, The West](/blog/chinese-ai-models-catching-up-and-surpassing-the-west)
+- [GLM-5, Kimi K2.5, DeepSeek V3: A 2026 Panorama of Frontier Chinese LLMs](/blog/glm5-kimi-deepseek-panorama-2026-chinese-llms)

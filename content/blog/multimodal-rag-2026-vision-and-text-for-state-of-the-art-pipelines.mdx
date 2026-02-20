@@ -13,7 +13,7 @@ Text-only RAG has a blind spot. When your knowledge base contains architectural 
 
 Multimodal RAG closes that gap by retrieving and reasoning over both text and visual content. In early 2026, this is no longer experimental. Models like Qwen3-VL, combined with mature embedding pipelines and vector databases, make it possible to build production-grade multimodal retrieval systems without a research lab budget.
 
-I have been deploying RAG systems at Ailog for years, from the foundational patterns in Building Production-Ready RAG Systems to the agentic architectures in Agentic RAG: The Next Evolution. Multimodal RAG is the natural next step, and the engineering patterns are surprisingly similar once you understand the core differences.
+I have been deploying RAG systems at Ailog for years, from the foundational patterns in [Building Production-Ready RAG Systems](/blog/building-production-ready-rag-systems) to the agentic architectures in Agentic RAG: The Next Evolution. Multimodal RAG is the natural next step, and the engineering patterns are surprisingly similar once you understand the core differences.
 
 ## Why text-only RAG is no longer enough
 
@@ -24,7 +24,7 @@ Most enterprise documents are not pure text. Consider:
 - **Medical records** mixing narrative notes with imaging results
 - **E-commerce catalogs** where product images carry critical information that text descriptions miss
 
-A standard text RAG pipeline, even with excellent chunking (see Chunking Strategies for RAG Pipelines), will either ignore these visual elements or rely on OCR-extracted text that loses layout, structure, and visual meaning.
+A standard text RAG pipeline, even with excellent chunking (see [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)), will either ignore these visual elements or rely on OCR-extracted text that loses layout, structure, and visual meaning.
 
 Multimodal RAG treats images as first-class retrievable units alongside text chunks. At query time, the system can retrieve relevant figures, charts, or photos and feed them directly to a vision-language model for grounded answers.
 
@@ -40,7 +40,7 @@ The architecture extends the classic RAG pattern with parallel visual and textua
 4. **Cross-modal fusion**: merge retrieval results from both modalities at query time
 5. **Generation**: feed fused context to a vision-language model for the final answer
 
-If you have read Hybrid Search: Combining Dense and Sparse Retrieval, this should feel familiar. Multimodal RAG is essentially hybrid search extended to a new modality.
+If you have read [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval), this should feel familiar. Multimodal RAG is essentially hybrid search extended to a new modality.
 
 ### Visual encoders in 2026
 
@@ -49,7 +49,7 @@ The encoder choice matters enormously for retrieval quality and cost. Here is th
 - **SigLIP / SigLIP-2**: strong open-source visual encoders with efficient inference, good for shared embedding spaces.
 - **Qwen3-VL encoder**: the vision component can be used standalone for embeddings. Excellent on document-style images like charts and tables.
 - **ColPali / ColQwen**: late-interaction models that treat document pages as image inputs directly, bypassing OCR. Very promising for PDF-heavy use cases.
-- **OpenAI / Cohere multimodal embeddings**: hosted APIs, convenient but with privacy and cost tradeoffs (see Data Privacy in the Age of Large Language Models).
+- **OpenAI / Cohere multimodal embeddings**: hosted APIs, convenient but with privacy and cost tradeoffs (see [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)).
 
 For production, I recommend SigLIP-2 for the visual path and a proven text encoder like BGE or E5, aligned through a lightweight projection layer.
 
@@ -145,7 +145,7 @@ def encode_image_chunks(chunks: list[Chunk]) -> np.ndarray:
     return embeddings.cpu().numpy()
 ```
 
-An important consideration: SigLIP and CLIP models align text and image spaces through contrastive training. If you use separate encoders (BGE for text, SigLIP for images), you need a projection layer or separate indices with score fusion. I covered these tradeoffs in Embedding Models Compared: OpenAI vs Open-Source.
+An important consideration: SigLIP and CLIP models align text and image spaces through contrastive training. If you use separate encoders (BGE for text, SigLIP for images), you need a projection layer or separate indices with score fusion. I covered these tradeoffs in [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source).
 
 ### Step 3: Cross-modal fusion at query time
 
@@ -255,3 +255,9 @@ Multimodal RAG is more expensive than text-only RAG. Images are larger to store,
 - Cost optimization through tiered encoding, lazy loading, caching, and modality-aware query routing is essential for keeping multimodal RAG economically viable.
 - Evaluation requires per-modality metrics and dedicated visual test sets beyond standard text RAG benchmarks.
 - Start with a simple dual-index setup and score fusion, then iterate toward tighter cross-modal integration as your retrieval quality data guides you.
+
+## Related Articles
+
+- [2026: The Year of AI Memory Beyond Basic RAG](/blog/2026-the-year-of-ai-memory-beyond-basic-rag)
+- [Agentic RAG: The Next Evolution](/blog/agentic-rag-the-next-evolution)
+- [Multimodal AI: Combining Vision and Language Models](/blog/multimodal-ai-combining-vision-and-language-models)

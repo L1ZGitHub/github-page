@@ -11,7 +11,7 @@ author: "Hélain Zimmermann"
 
 Retrieval-Augmented Generation changed how we build LLM applications. But if you have deployed RAG in production, you already know the limits. A user comes back the next day, asks a follow-up question, and the system has no idea who they are or what was discussed. Each session starts from zero. The retrieval is stateless, the context is ephemeral, and the illusion of intelligence breaks the moment continuity matters.
 
-2026 is the year this changes. The convergence of hybrid LLM architectures, persistent memory stores, and agentic workflows is pushing us beyond "retrieve and generate" into something closer to genuine AI memory. If you have followed my earlier posts on *Retrieval-Augmented Generation: A Complete Guide*, *Chunking Strategies for RAG Pipelines*, and *Agentic RAG: The Next Evolution*, think of this as the next layer in the stack.
+2026 is the year this changes. The convergence of hybrid LLM architectures, persistent memory stores, and agentic workflows is pushing us beyond "retrieve and generate" into something closer to genuine AI memory. If you have followed my earlier posts on *[Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)*, *Chunking Strategies for RAG Pipelines*, and *Agentic RAG: The Next Evolution*, think of this as the next layer in the stack.
 
 ## What basic RAG gets wrong about memory
 
@@ -22,7 +22,7 @@ Standard RAG treats every query as independent. You embed a question, retrieve t
 - **Learned preferences**: that the user prefers concise answers, or always needs SQL examples
 - **Task progress**: where a multi-step workflow left off yesterday
 
-These are not retrieval problems. They are memory problems. And solving them requires rethinking the architecture beyond a single vector index, as I discussed in *Understanding Vector Databases: A Beginner's Guide* and *Vector Database Performance Benchmarks*.
+These are not retrieval problems. They are memory problems. And solving them requires rethinking the architecture beyond a single vector index, as I discussed in *[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)* and *[Vector Database Performance Benchmarks](/blog/vector-database-performance-benchmarks)*.
 
 ## Three types of AI memory
 
@@ -240,7 +240,7 @@ The memory systems described here go well beyond what a simple vector similarity
 - **Skill reuse**: procedural memory that shortcuts planning for known task patterns
 - **Active consolidation**: turning raw interaction logs into distilled, high-value knowledge
 
-This is the direction the field is heading. If you have built systems following the patterns in *Scaling RAG Systems to Millions of Documents* and *Hybrid Search: Combining Dense and Sparse Retrieval*, the memory layer is a natural extension. It does not replace your RAG pipeline. It wraps around it, adding the continuity and personalization that users increasingly expect.
+This is the direction the field is heading. If you have built systems following the patterns in *[Scaling RAG Systems to Millions of Documents](/blog/scaling-rag-systems-to-millions-of-documents)* and *[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)*, the memory layer is a natural extension. It does not replace your RAG pipeline. It wraps around it, adding the continuity and personalization that users increasingly expect.
 
 ## Key Takeaways
 
@@ -251,3 +251,9 @@ This is the direction the field is heading. If you have built systems following 
 - Financial agents and long-running workflows benefit most from persistent memory, where continuity across sessions directly improves output quality.
 - Memory consolidation, distilling episodic memories into semantic facts, is essential to keep the system performant and relevant over time.
 - Memory-augmented agents do not replace RAG. They extend it with temporal awareness, structured knowledge, and learned procedures.
+
+## Related Articles
+
+- [Agentic RAG: The Next Evolution](/blog/agentic-rag-the-next-evolution)
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)

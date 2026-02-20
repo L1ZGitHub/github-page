@@ -11,7 +11,7 @@ author: "Hélain Zimmermann"
 
 The conversations at IEEE CAI 2026 and the adjacent ICDCS and HPDC sessions made one thing clear: multi-agent AI systems are no longer research curiosities. They are production infrastructure. But the gap between a demo with three agents passing messages and a fault-tolerant distributed system serving real users is enormous, and most teams underestimate it.
 
-In my earlier post on *Building a Multi-Agent AI System*, I covered the foundational patterns: orchestrator plus specialists, blackboard architectures, and peer-to-peer agents. This article goes deeper into the design patterns that emerged from this year's conference discussions and from our own production experience at Ailog. The focus is on separation of concerns, fault tolerance, federated orchestration, and the monitoring infrastructure that makes it all debuggable.
+In my earlier post on *[Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)*, I covered the foundational patterns: orchestrator plus specialists, blackboard architectures, and peer-to-peer agents. This article goes deeper into the design patterns that emerged from this year's conference discussions and from our own production experience at Ailog. The focus is on separation of concerns, fault tolerance, federated orchestration, and the monitoring infrastructure that makes it all debuggable.
 
 ## The compound AI system mindset
 
@@ -278,7 +278,7 @@ In our production systems at Ailog, every agent-to-agent call and every external
 
 ## Pattern 3: Federated orchestration
 
-For organizations with multiple teams or deployments, centralized orchestration becomes a bottleneck. The federated orchestration pattern, drawing from concepts in *Federated Learning for Privacy-Preserving AI*, distributes coordination across multiple orchestrators that share learned policies.
+For organizations with multiple teams or deployments, centralized orchestration becomes a bottleneck. The federated orchestration pattern, drawing from concepts in *[Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai)*, distributes coordination across multiple orchestrators that share learned policies.
 
 Each team or deployment runs its own local orchestrator with local agents. A global coordination layer handles:
 
@@ -292,7 +292,7 @@ The practical benefit is autonomy: teams can add, remove, or update agents witho
 
 ## Monitoring multi-agent systems in production
 
-Observability in multi-agent systems is qualitatively harder than monitoring a single model endpoint, a point I made in *Monitoring ML Models in Production*. With agents, you need to track:
+Observability in multi-agent systems is qualitatively harder than monitoring a single model endpoint, a point I made in *[Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)*. With agents, you need to track:
 
 - **Distributed traces**: a single user request may touch five agents across three services
 - **Agent-level metrics**: latency, token usage, tool call frequency, error rates per agent
@@ -345,7 +345,7 @@ The IEEE CAI 2026 panels were refreshingly honest about scaling limits. Some pat
 
 **Cost management**: multi-agent systems multiply LLM API costs. Instrument token usage per agent, per task type, and set budgets. Some tasks do not need a frontier model, and routing simpler subtasks to smaller models reduces cost significantly.
 
-**Testing**: unit testing individual agents is straightforward. Integration testing the full system, with realistic failure modes, is where most teams struggle. Build a test harness that can simulate agent failures, slow responses, and malformed outputs. This ties directly to the CI/CD practices in *CI/CD Pipelines for Machine Learning Projects*, where you want automated regression tests that exercise the full agent graph.
+**Testing**: unit testing individual agents is straightforward. Integration testing the full system, with realistic failure modes, is where most teams struggle. Build a test harness that can simulate agent failures, slow responses, and malformed outputs. This ties directly to the CI/CD practices in *[CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)*, where you want automated regression tests that exercise the full agent graph.
 
 ## Error recovery strategies
 
@@ -367,3 +367,9 @@ Three recovery patterns proved most reliable in production discussions at the co
 - Keep agent count between 3 and 8 per orchestrator, and use hierarchical orchestration for larger systems.
 - Build integration tests that simulate realistic failure modes, including slow agents, malformed outputs, and partial availability.
 - Treat multi-agent AI systems as distributed applications first, applying proven patterns from microservice and distributed systems engineering.
+
+## Related Articles
+
+- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
+- [CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)
+- [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)

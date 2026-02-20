@@ -28,7 +28,7 @@ Labels:     B-PER  O        B-ORG    O   B-LOC I-LOC       O   B-DATE
 NER is often one layer in a larger system:
 
 - In RAG pipelines (see "Retrieval-Augmented Generation: A Complete Guide"), NER helps detect key entities for indexing and query expansion.
-- In privacy-preserving workloads (see "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models"), NER is a workhorse for de-identification, for example masking names, emails, or IDs.
+- In privacy-preserving workloads (see "Introduction to Differential Privacy for NLP" and "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)"), NER is a workhorse for de-identification, for example masking names, emails, or IDs.
 - In analytics, it powers downstream entity resolution, knowledge graphs, and searching by people or organizations.
 
 ## From CRFs to transformers
@@ -238,7 +238,7 @@ If you have read "Building Production-Ready RAG Systems" and "Chunking Strategie
 
 ### 1. Pre-processing and redaction
 
-Before indexing documents into a vector database (see "Understanding Vector Databases: A Beginner's Guide"), NER can:
+Before indexing documents into a vector database (see "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)"), NER can:
 
 - Mask sensitive entities: `Alice` -> `[PERSON]`
 - Normalize variants: `IBM`, `International Business Machines` -> `IBM`
@@ -269,7 +269,7 @@ Combine this with your chunking strategy so that entity spans are not cut mid-wa
 
 ### 2. Query understanding and expansion
 
-For search, especially in hybrid setups like in "Hybrid Search: Combining Dense and Sparse Retrieval", NER gives you structured hooks:
+For search, especially in hybrid setups like in "[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)", NER gives you structured hooks:
 
 - Detect entities in the user query.
 - Use them as filters on metadata (e.g. `ORG=OpenAI`).
@@ -354,7 +354,7 @@ Running NER in production has its own pitfalls. From my experience and from patt
 
 ## Where LLMs fit into NER
 
-LLMs can act as zero-shot or few-shot NER engines. With good prompts (see "Prompt Engineering Best Practices for Production"), you can:
+LLMs can act as zero-shot or few-shot NER engines. With good prompts (see "[Prompt Engineering Best Practices for Production](/blog/prompt-engineering-best-practices-for-production)"), you can:
 
 - Rapidly prototype new label sets.
 - Label small datasets to bootstrap supervised models.
@@ -372,3 +372,9 @@ However, for privacy-heavy settings, relying solely on black-box LLM NER can be 
 - Evaluate NER using both classic F1 and application-driven metrics like privacy recall or impact on retrieval quality.
 - Deploy NER with attention to batching, latency, tokenization consistency, versioning, and continuous monitoring.
 - LLMs are powerful for prototyping and bootstrapping NER datasets but should be combined with local models in privacy-sensitive pipelines.
+
+## Related Articles
+
+- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
+- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
+- [Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai)

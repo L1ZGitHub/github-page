@@ -18,7 +18,7 @@ In this post I will walk through how I now think about this decision when buildi
 
 ## What embedding models actually do in your stack
 
-If you have read my guides on Retrieval-Augmented Generation and Building Production-Ready RAG Systems, you know embeddings sit in the critical path of:
+If you have read my guides on [Retrieval-Augmented Generation](/blog/retrieval-augmented-generation-a-complete-guide) and [Building Production-Ready RAG Systems](/blog/building-production-ready-rag-systems), you know embeddings sit in the critical path of:
 
 - Document ingestion (chunking + embedding)
 - Query processing (query rewriting + embedding)
@@ -58,7 +58,7 @@ OpenAI embeddings handle many languages reasonably well without extra work, whic
 **1. Data control and privacy**  
 If you work with sensitive data, privacy-preserving NLP constraints often push you away from external APIs.
 
-OpenAI offers options to avoid training on your data, but regulatory or contractual requirements may still forbid sending data off-prem. In my article on Privacy-Preserving NLP I go deeper into these constraints and typical threat models.
+OpenAI offers options to avoid training on your data, but regulatory or contractual requirements may still forbid sending data off-prem. In my article on [Privacy-Preserving NLP](/blog/privacy-preserving-nlp) I go deeper into these constraints and typical threat models.
 
 **2. Cost at scale**  
 Embedding a few thousand documents is cheap. Embedding tens of millions is a different story.
@@ -107,7 +107,7 @@ This is often the killer feature:
 This ties into the ideas from Fine-Tuning LLMs on Custom Data: while that post focuses on generative models, the same principle applies - you get big gains when your training distribution matches your real data.
 
 **4. Flexible vector sizes and architectures**  
-You can choose 384, 768, 1024, 2048 dimensional models depending on your latency/accuracy tradeoff and how it works with your vector database (see Understanding Vector Databases for more on storage and indexing implications).
+You can choose 384, 768, 1024, 2048 dimensional models depending on your latency/accuracy tradeoff and how it works with your vector database (see [Understanding Vector Databases](/blog/understanding-vector-databases) for more on storage and indexing implications).
 
 ### Limitations
 
@@ -235,7 +235,7 @@ For production, you would typically wrap this in a FastAPI or gRPC service and d
 
 Benchmarks like MTEB are helpful to narrow the search space, but they are not your ground truth. In my RAG work I always evaluate embeddings on **task-specific metrics**.
 
-If you have read Chunking Strategies for RAG Pipelines, you know that evaluation must reflect the full retrieval context. Same applies here.
+If you have read [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines), you know that evaluation must reflect the full retrieval context. Same applies here.
 
 ### A minimal evaluation loop
 
@@ -364,3 +364,9 @@ This gives you a real-world A/B style evaluation without fully committing.
 - Hybrid setups are often best: private OSS embeddings for sensitive data, OpenAI for public or less critical indices.
 - Reuse your RAG evaluation stack (metrics, labeled queries) to compare embedding models objectively.
 - Choose embeddings with the same care you choose your LLM - they can make or break your system quality.
+
+## Related Articles
+
+- [2026: The Year of AI Memory Beyond Basic RAG](/blog/2026-the-year-of-ai-memory-beyond-basic-rag)
+- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
+- [Model Context Protocol: Connecting LLMs to External Tools](/blog/model-context-protocol-connecting-llms-to-external-tools)

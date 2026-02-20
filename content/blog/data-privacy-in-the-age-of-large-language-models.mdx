@@ -18,7 +18,7 @@ In this article I will walk through how I think about data privacy in LLM-based 
 
 ## What privacy means in LLM systems
 
-Before talking about mitigations, it helps to be precise about what we want to protect. In "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" I split the problem into three parts:
+Before talking about mitigations, it helps to be precise about what we want to protect. In "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" I split the problem into three parts:
 
 1. **Data at rest** - what is stored in your databases, object storage, vector indices, fine-tuned models.
 2. **Data in transit** - what flows over the network between clients, your backend, and third-party APIs.
@@ -148,7 +148,7 @@ Two important notes:
 
 ## Privacy-aware RAG design
 
-RAG introduces unique privacy challenges. If you have read "Semantic Search vs Keyword Search: When to Use What" and "Chunking Strategies for RAG Pipelines", you know RAG often means:
+RAG introduces unique privacy challenges. If you have read "[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)" and "Chunking Strategies for RAG Pipelines", you know RAG often means:
 
 - A vector database containing your documents or embeddings.
 - A retrieval step that pulls relevant chunks as context.
@@ -157,7 +157,7 @@ If you are not careful, a user asking a clever question can trick the system int
 
 ### Isolate embeddings and raw documents
 
-From "Understanding Vector Databases: A Beginner's Guide" and "Vector Database Performance Benchmarks", you already know how to pick and optimize a vector store. For privacy, adopt these patterns:
+From "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)" and "Vector Database Performance Benchmarks", you already know how to pick and optimize a vector store. For privacy, adopt these patterns:
 
 - Store **raw documents** in a separate data store with its own ACLs.
 - Store **embeddings** and minimal metadata (IDs, coarse tags) in the vector store.
@@ -232,7 +232,7 @@ Not all LLM deployments are equal from a privacy perspective.
    - Pros: full control, can align with internal security policies.
    - Cons: you own scaling, security hardening, updates.
 
-In "Embedding Models Compared: OpenAI vs Open-Source" I discuss latency and quality trade-offs, but privacy often pushes teams toward private or self-hosted options for sensitive workloads.
+In "[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)" I discuss latency and quality trade-offs, but privacy often pushes teams toward private or self-hosted options for sensitive workloads.
 
 ### Configuration must-haves
 
@@ -304,7 +304,7 @@ When building tests or evaluation sets (for example in RAG scenario testing as i
 
 ## Fine-tuning and long-term storage
 
-Fine-tuning LLMs on custom data is powerful. As discussed in "Fine-Tuning LLMs on Custom Data: A Practical Guide", it can dramatically improve performance on narrow tasks. From a privacy perspective, fine-tuning is also the most sensitive operation you can perform.
+Fine-tuning LLMs on custom data is powerful. As discussed in "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)", it can dramatically improve performance on narrow tasks. From a privacy perspective, fine-tuning is also the most sensitive operation you can perform.
 
 ### Rules for safe fine-tuning
 
@@ -358,3 +358,9 @@ If you are already using the patterns from "Deploying ML Models with FastAPI and
 - Configure logging and monitoring to store only **redacted or aggregated** data, and keep raw data isolated and short-lived.
 - Avoid fine-tuning on raw logs, use **anonymized, well-documented datasets**, and push domain facts into RAG instead of the weights.
 - Regularly review your architecture, from client to vector DB to model, and update your threat model as new features are added.
+
+## Related Articles
+
+- [AI Agents in Finance: MNPI Risks and Cross-Deal Contamination](/blog/ai-agents-in-finance-mnpi-risks-and-cross-deal-contamination)
+- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
+- [Introduction to Differential Privacy for NLP](/blog/introduction-to-differential-privacy-for-nlp)

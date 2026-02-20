@@ -85,7 +85,7 @@ Once you treat image embeddings as just another vector type, you can build:
 - RAG over screenshots and PDFs
 - Hybrid search mixing text, tables, diagrams, and UI states
 
-The pipeline resembles what I described in Hybrid Search: Combining Dense and Sparse Retrieval and Building a Multi-Agent AI System, with these additions:
+The pipeline resembles what I described in [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval) and Building a Multi-Agent AI System, with these additions:
 
 1. Ingestion extracts text, images, tables from documents
 2. Text encoder processes text chunks
@@ -172,7 +172,7 @@ def search_images(text_query_tokens, text_encoder, image_embs, image_ids, k=5):
     return [image_ids[i] for i in topk.indices]
 ```
 
-For large scale, you will move this into a vector database as discussed in Understanding Vector Databases: A Beginner's Guide.
+For large scale, you will move this into a vector database as discussed in [Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases).
 
 
 ## Practical multimodal RAG pipeline
@@ -272,7 +272,7 @@ This is very similar to the agentic patterns I described in Agentic RAG: The Nex
 
 You need to pick encoders that match your budget and latency constraints.
 
-- OpenAI and other hosted multimodal models: great quality, but with privacy and cost tradeoffs. For sensitive data, see Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
+- OpenAI and other hosted multimodal models: great quality, but with privacy and cost tradeoffs. For sensitive data, see [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models) and [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp).
 - Open source CLIP or SigLIP models: good for search and retrieval, easy to self host
 - Larger multimodal LLMs: best quality for rich reasoning, but expensive
 
@@ -339,3 +339,9 @@ You can implement steps 2-3 with the same FastAPI patterns described in Deployin
 - Production systems must address encoder choice, latency, and evaluation, just like text-only RAG, but with new failure modes around visual hallucinations.
 - Privacy risks increase with images, so masking, storage policies, and access control are critical for screenshots and sensitive documents.
 - A practical starting point is a lightweight multimodal assistant that retrieves over both text and images and uses a multimodal LLM to generate grounded answers.
+
+## Related Articles
+
+- [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)
+- [Multimodal AI Agents: When AI Sees, Hears, and Acts](/blog/multimodal-ai-agents-when-ai-sees-hears-and-acts)
+- [Multimodal RAG 2026: Vision and Text for State-of-the-Art Pipelines](/blog/multimodal-rag-2026-vision-and-text-for-state-of-the-art-pipelines)

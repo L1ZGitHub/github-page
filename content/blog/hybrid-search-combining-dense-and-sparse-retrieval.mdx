@@ -42,7 +42,7 @@ Sparse retrieval (BM25, keyword search) excels at lexical matching, but misses:
 - Contextual meaning: "apple" the company vs the fruit
 - Long queries: term frequency and document length normalization can behave strangely
 
-My article Semantic Search vs Keyword Search: When to Use What goes deeper into this tradeoff. The core point is simple: both approaches are incomplete views of similarity.
+My article [Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what) goes deeper into this tradeoff. The core point is simple: both approaches are incomplete views of similarity.
 
 ### Practical motivation: safety and debuggability
 
@@ -198,7 +198,7 @@ results = client.search(
 )
 ```
 
-Refer to Vector Database Performance Benchmarks and Understanding Vector Databases: A Beginner's Guide if you want a deeper comparison of engines and their hybrid capabilities.
+Refer to Vector Database Performance Benchmarks and [Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases) if you want a deeper comparison of engines and their hybrid capabilities.
 
 
 ## How to represent queries for hybrid search
@@ -207,7 +207,7 @@ Hybrid search begins at query representation. For dense retrieval it is obvious 
 
 ### Dense query encoding
 
-When encoding queries, two best practices from Embedding Models Compared: OpenAI vs Open-Source are especially relevant:
+When encoding queries, two best practices from [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source) are especially relevant:
 
 - Use a model trained for retrieval, not for general sentence similarity or classification
 - If your domain is specialized (legal, medical, code), consider a domain-specific model
@@ -410,7 +410,7 @@ Hybrid retrieval is especially important in stage 2 when your corpus is noisy or
 
 ### Guardrails and privacy
 
-When building privacy-preserving systems, as discussed in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models and Data Privacy in the Age of Large Language Models, hybrid search offers some additional levers:
+When building privacy-preserving systems, as discussed in [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp) and [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models), hybrid search offers some additional levers:
 
 - You can configure the sparse index to exclude specific fields by default
 - You can apply per-index or per-field access control for sensitive data
@@ -485,3 +485,8 @@ Measure each component as suggested in Vector Database Performance Benchmarks, n
 - Multi-stage RAG pipelines benefit most from hybrid retrieval, especially in noisy or high-stakes domains like legal, medical, or internal policy search.
 - Latency, privacy, and access control must be designed jointly with retrieval, not as afterthoughts, to build robust production systems.
 
+## Related Articles
+
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)
+- [Vector Database Performance Benchmarks](/blog/vector-database-performance-benchmarks)

@@ -102,7 +102,7 @@ def evaluate_retriever(
     return {k: float(np.mean(v)) for k, v in scores.items()}
 ```
 
-This kind of evaluation is where you compare different embedding models, as in Embedding Models Compared: OpenAI vs Open-Source. You can quickly see how model choice, chunk size or index configuration impact recall.
+This kind of evaluation is where you compare different embedding models, as in [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source). You can quickly see how model choice, chunk size or index configuration impact recall.
 
 ### Evaluating generation in isolation
 
@@ -264,9 +264,9 @@ With this, you can run evaluation jobs as part of your CI when you change:
 - the embedding model
 - vector database indexing parameters
 - chunking strategy
-- LLM provider or prompting (see Prompt Engineering Best Practices for Production)
+- LLM provider or prompting (see [Prompt Engineering Best Practices for Production](/blog/prompt-engineering-best-practices-for-production))
 
-If you already have a deployed system (for example behind FastAPI as in Deploying ML Models with FastAPI and Docker), you can periodically sample real queries, label them, and feed them into this pipeline.
+If you already have a deployed system (for example behind FastAPI as in [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)), you can periodically sample real queries, label them, and feed them into this pipeline.
 
 
 ## 3. Online and human-in-the-loop evaluation
@@ -442,12 +442,12 @@ In that case, you might:
 
 - keep B as default
 - improve A further for difficult queries
-- or route complex queries to A and simple ones to B using a classifier (see Building AI Agents with LangChain and LangGraph for ideas on routing architectures)
+- or route complex queries to A and simple ones to B using a classifier (see [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph) for ideas on routing architectures)
 
 
 ## A note on privacy and evaluation data
 
-When you store evaluation logs and user feedback, you are likely storing sensitive information. Concepts from Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP apply just as much here.
+When you store evaluation logs and user feedback, you are likely storing sensitive information. Concepts from [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models) and Privacy-Preserving NLP apply just as much here.
 
 A few practical guidelines:
 
@@ -492,3 +492,9 @@ Evaluation metrics are what keep you from wasting weeks fine-tuning a model that
 - Inspect the worst examples manually, that is where the best insights and improvements come from.
 - Use evaluation results to decide when to improve retrieval, when to tweak prompts, and when fine-tuning is worth it.
 - Treat evaluation data as sensitive: anonymize, restrict access, and respect user privacy throughout your pipeline.
+
+## Related Articles
+
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
+- [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity)

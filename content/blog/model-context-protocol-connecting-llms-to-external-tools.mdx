@@ -81,7 +81,7 @@ Some MCP implementations also expose reusable prompt templates as first-class ob
 If you have standardized system prompts for:
 
 - RAG answer style
-- Privacy-aware redaction (see Data Privacy in the Age of Large Language Models)
+- Privacy-aware redaction (see [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models))
 - Evaluation instructions (as in LLM Evaluation Frameworks: Beyond Perplexity)
 
 You can register these as prompts the client can fetch and apply instead of pasting them manually everywhere.
@@ -281,7 +281,7 @@ If you have a RAG pipeline like in Building a RAG Chatbot from Scratch with Pyth
 
 - Retrieval tools
   - `dense_search` using embeddings (see Embedding Models Compared: OpenAI vs Open-Source)
-  - `sparse_search` using BM25 or keyword (see Hybrid Search: Combining Dense and Sparse Retrieval)
+  - `sparse_search` using BM25 or keyword (see [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval))
 - Reranking tools
   - `rerank_passages` with a cross encoder
 - Post-processing resources
@@ -412,7 +412,7 @@ To future proof your system design:
 - Separate “business logic” from “LLM orchestration logic”
 - Prefer schemas and explicit typing over ad hoc JSON blobs
 
-If you are already comfortable with concepts from Understanding Transformer Architectures and Building AI Agents with LangChain and LangGraph, you are well positioned. MCP is less about a new theoretical idea and more about cleaning up the messy edges between LLMs and the rest of your stack.
+If you are already comfortable with concepts from Understanding Transformer Architectures and [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph), you are well positioned. MCP is less about a new theoretical idea and more about cleaning up the messy edges between LLMs and the rest of your stack.
 
 Personally, I find that once you start thinking in terms of “capabilities exposed via MCP” rather than “hard coded chains inside a given app,” your architecture diagrams become much more modular.
 
@@ -427,3 +427,9 @@ Personally, I find that once you start thinking in terms of “capabilities expo
 - Good tool design emphasizes clarity, safety, privacy, and separation of concerns between logic and orchestration.
 - Existing practices from RAG architectures, privacy-preserving NLP, and production ML monitoring map cleanly onto MCP tools and resources.
 - Logging and evaluating tool usage is essential to keep MCP-powered systems reliable and cost effective at scale.
+
+## Related Articles
+
+- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
+- [Building a RAG Chatbot from Scratch with Python](/blog/building-a-rag-chatbot-from-scratch-with-python)
+- [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)

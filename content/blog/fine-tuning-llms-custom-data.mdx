@@ -296,10 +296,16 @@ def evaluate_model(model, tokenizer, test_examples):
 2. **Learning rate too high**: Start with 2e-4 for LoRA. If loss is unstable, reduce by half.
 3. **Overfitting**: If validation loss starts increasing, stop training. Use more data or increase dropout.
 4. **Wrong format**: Ensure your training data matches exactly how the model will be prompted in production.
-5. **Ignoring the base model**: Always compare against the un-fine-tuned model. Sometimes prompt engineering alone is sufficient.
+5. **Ignoring the base model**: Always compare against the un-fine-tuned model. Sometimes [prompt engineering](/blog/prompt-engineering-best-practices-for-production) alone is sufficient.
 
 ## Conclusion
 
 Fine-tuning with LoRA and QLoRA has made it practical to customize LLMs on modest hardware. The key to success is not the training process itself, but the quality of your data and the clarity of your evaluation criteria. Start with a clear definition of what you want the model to do differently, prepare high-quality examples of that behavior, and iterate based on evaluation results.
 
 For most applications at Ailog, we find that combining a lightly fine-tuned model with RAG provides the best results: the fine-tuning handles style and format, while RAG handles factual knowledge. This separation of concerns makes the system easier to maintain and update over time.
+
+## Related Articles
+
+- [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)
+- [Fine-Tuning Open-Source LLMs with LoRA and QLoRA](/blog/fine-tuning-open-source-llms-with-lora-and-qlora)
+- [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity)

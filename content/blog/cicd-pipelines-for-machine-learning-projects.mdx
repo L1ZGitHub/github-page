@@ -28,7 +28,7 @@ This aligns with themes from *Building Production-Ready RAG Systems* and *Retrie
 
 - Keep experiments reproducible.
 - Prevent regressions in prediction quality.
-- Protect user data, as in *Data Privacy in the Age of Large Language Models*.
+- Protect user data, as in *[Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)*.
 - Make deployments boring and reversible.
 
 I like to think of it in three stages:
@@ -233,11 +233,11 @@ For RAG, quality checks could cover:
 - Exact match / F1 for answers.
 - Latency and cost per request.
 
-These metrics echo the frameworks described in *Retrieval-Augmented Generation: A Complete Guide* and *Semantic Search vs Keyword Search: When to Use What*.
+These metrics echo the frameworks described in *Retrieval-Augmented Generation: A Complete Guide* and *[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)*.
 
 ### 4. Privacy and security checks
 
-If you work with sensitive data, your CI/CD pipeline must help enforce privacy commitments, as discussed in *Introduction to Differential Privacy for NLP* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models*.
+If you work with sensitive data, your CI/CD pipeline must help enforce privacy commitments, as discussed in *Introduction to Differential Privacy for NLP* and *[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)*.
 
 Ideas:
 
@@ -410,7 +410,7 @@ For canaries, the implementation depends on your stack (Kubernetes, API gateway,
 - Trigger traffic-splitting rules.
 - Collect metrics (latency, error rate, key model metrics) for a few minutes.
 
-This pattern is powerful for RAG systems where new embedding models, prompt templates, or chunking strategies can change behavior in unexpected ways. It combines ideas from *Embedding Models Compared: OpenAI vs Open-Source*, *Chunking Strategies for RAG Pipelines*, and *Prompt Engineering Best Practices for Production*.
+This pattern is powerful for RAG systems where new embedding models, prompt templates, or chunking strategies can change behavior in unexpected ways. It combines ideas from *[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)*, *Chunking Strategies for RAG Pipelines*, and *[Prompt Engineering Best Practices for Production](/blog/prompt-engineering-best-practices-for-production)*.
 
 ## CI/CD for RAG and multi-agent systems
 
@@ -470,3 +470,9 @@ I have found that once teams experience the peace of mind of a well tuned ML CI/
 - For RAG and multi-agent systems, test the full pipeline, not just individual components.
 - Keep PR pipelines fast, push heavy evaluations and benchmarks to scheduled jobs.
 - Document the pipeline so that every engineer understands how models reach production.
+
+## Related Articles
+
+- [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)
+- [Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)
+- [Python Best Practices for ML Engineers](/blog/python-best-practices-for-ml-engineers)

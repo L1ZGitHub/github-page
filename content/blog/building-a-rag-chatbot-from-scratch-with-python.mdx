@@ -124,7 +124,7 @@ def chunk_documents(docs: List[str], chunk_size: int = 500, overlap: int = 100) 
     return all_chunks
 ```
 
-This is intentionally simple. In production, you will likely want token-based chunking and structure-aware splitting, as I discuss in the RAG series and in *Building Custom Tokenizers for Domain-Specific NLP*.
+This is intentionally simple. In production, you will likely want token-based chunking and structure-aware splitting, as I discuss in the RAG series and in *[Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)*.
 
 ## Step 3 - Embedding Text Chunks
 
@@ -221,7 +221,7 @@ class Retriever:
         return results
 ```
 
-Notice how each piece is small and composable. In more advanced RAG designs, such as the structured architectures from *Knowledge Graphs Meet LLMs: Structured RAG Architectures* or the hybrid strategies in *Hybrid Search: Combining Dense and Sparse Retrieval*, this composability becomes essential.
+Notice how each piece is small and composable. In more advanced RAG designs, such as the structured architectures from *[Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)* or the hybrid strategies in *[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)*, this composability becomes essential.
 
 ## Step 6 - Adding the LLM Layer
 
@@ -230,7 +230,7 @@ For the LLM, you have two main choices:
 - Local open-source model via `transformers` and PyTorch
 - Hosted API such as OpenAI, Anthropic, etc.
 
-For beginners and laptops, an API is often easier. For privacy-sensitive applications, the themes from *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models* and *Data Privacy in the Age of Large Language Models* become very important when making this choice.
+For beginners and laptops, an API is often easier. For privacy-sensitive applications, the themes from *[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)* and *Data Privacy in the Age of Large Language Models* become very important when making this choice.
 
 Below is an example using a generic `transformers` model, but you can replace the `LLMClient` with your own API client.
 
@@ -393,7 +393,7 @@ At this point, you can copy a few `.txt` files into `data/docs`, run `python mai
 
 Once you have this minimal chatbot working, you can gradually introduce more advanced ideas from the other posts:
 
-- Upgrade retrieval by combining dense and sparse methods as in *Hybrid Search: Combining Dense and Sparse Retrieval* or *Semantic Search vs Keyword Search: When to Use What*.
+- Upgrade retrieval by combining dense and sparse methods as in *Hybrid Search: Combining Dense and Sparse Retrieval* or *[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)*.
 - Integrate retrieval-specific evaluation criteria from *Evaluating RAG System Performance* so you can measure improvements instead of guessing.
 - Add a simple API using FastAPI, inspired by *Deploying ML Models with FastAPI and Docker*, then containerize your chatbot.
 - Introduce streaming responses and real-time constraints following patterns from *Building Real-Time ML Inference Pipelines*.
@@ -411,3 +411,9 @@ RAG systems are powerful precisely because they are composable. Once you underst
 - Evaluation and monitoring are critical once you move beyond experiments; borrow ideas from the RAG and monitoring articles on this site.
 - Privacy considerations should be addressed early if you ingest sensitive data, using techniques explored in the privacy-preserving NLP series.
 - Once the basics work, you can explore structured RAG, hybrid search, and agentic workflows to push your chatbot toward production readiness.
+
+## Related Articles
+
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity)
+- [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)

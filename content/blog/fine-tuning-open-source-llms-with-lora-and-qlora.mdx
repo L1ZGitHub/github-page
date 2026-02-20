@@ -332,7 +332,7 @@ The rest of the code (dataset, Trainer) is the same pattern.
 
 ### 1. Start from RAG, then patch with LoRA
 
-If you read Retrieval-Augmented Generation: A Complete Guide and Building Production-Ready RAG Systems, you know that improving retrieval quality and context formatting usually gives the highest ROI.
+If you read [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide) and Building Production-Ready RAG Systems, you know that improving retrieval quality and context formatting usually gives the highest ROI.
 
 My general order of operations:
 
@@ -383,7 +383,7 @@ For RAG + LoRA systems, I like to track:
 
 ### 5. Be careful with privacy
 
-If you are fine-tuning on private data (support conversations, medical notes, internal documents), revisit topics from Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
+If you are fine-tuning on private data (support conversations, medical notes, internal documents), revisit topics from [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models) and [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp).
 
 Some suggestions:
 
@@ -405,7 +405,7 @@ Then at runtime you can selectively load and merge adapters depending on context
 
 ## Integrating LoRA / QLoRA in a RAG pipeline
 
-If you already have a RAG system similar to what I describe in Building a Multi-Agent AI System or Knowledge Graphs Meet LLMs: Structured RAG Architectures, the best place to insert LoRA is usually the final answer generation step.
+If you already have a RAG system similar to what I describe in Building a Multi-Agent AI System or [Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures), the best place to insert LoRA is usually the final answer generation step.
 
 High level architecture:
 
@@ -433,3 +433,9 @@ This separation lets you:
 - Treat fine-tuned adapters as versioned artifacts, you can maintain multiple adapters for different tasks and even compose them.
 - Always consider privacy implications when fine-tuning on sensitive data, and apply anonymization or differential privacy when needed.
 - Monitoring and evaluation are critical, track both retrieval performance and final answer quality to know whether LoRA is actually helping.
+
+## Related Articles
+
+- [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)
+- [Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)
+- [Model Context Protocol: Connecting LLMs to External Tools](/blog/model-context-protocol-connecting-llms-to-external-tools)

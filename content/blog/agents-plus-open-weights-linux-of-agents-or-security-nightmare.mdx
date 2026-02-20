@@ -17,7 +17,7 @@ This is either the Linux moment for AI, a democratizing force that reshapes the 
 
 To understand what is new, consider what was required to build a capable AI agent even eighteen months ago. You needed access to a frontier model API (OpenAI, Anthropic, or Google), which meant per-token costs, rate limits, content policies, and geographic restrictions. The model provider could see your prompts, shut off access, or change pricing at any time. You were a tenant, not an owner.
 
-Today, the components for a fully sovereign agent stack are available. A frontier open-weight model like DeepSeek-V3 or GLM-5 can run on commodity hardware (or rented GPU clusters) with no API dependency. An agent framework like OpenClaw or the open-source variants of LangChain and CrewAI provides tool use, planning, memory, and multi-agent orchestration. Local vector databases (Qdrant, ChromaDB) handle retrieval-augmented generation. All of it can run on your own infrastructure, air-gapped if needed.
+Today, the components for a fully sovereign agent stack are available. A frontier open-weight model like DeepSeek-V3 or GLM-5 can run on commodity hardware (or rented GPU clusters) with no API dependency. An agent framework like OpenClaw or the open-source variants of LangChain and CrewAI provides tool use, planning, memory, and multi-agent orchestration. Local [[vector database](/blog/vector-database-performance-benchmarks)s](/blog/understanding-vector-databases) (Qdrant, ChromaDB) handle [retrieval-augmented generation](/blog/retrieval-augmented-generation-a-complete-guide). All of it can run on your own infrastructure, air-gapped if needed.
 
 This is qualitatively different from what came before. It is not just "open-source AI", it is an autonomous system capable of taking actions in the real world, built entirely from components that no single entity controls.
 
@@ -45,7 +45,7 @@ Open-source agent frameworks combined with open-weight models create a threat su
 
 **Tool-use exploitation.** Agent frameworks grant models access to tools: shell commands, file systems, APIs, databases. A vulnerability in the agent's planning or permission system can allow a manipulated model to execute unintended actions. In an open-source framework, the permission model's source code is available for adversaries to study and circumvent.
 
-**Supply chain attacks.** The open-source AI stack has many dependencies: model weights, tokenizers, agent frameworks, tool plugins, vector databases, embedding models. A compromised component anywhere in this chain, a backdoored fine-tune, a malicious plugin, a tampered embedding model, can compromise the entire system. The software supply chain security problem, already severe for traditional software, is amplified when the "software" includes neural network weights that are opaque to inspection.
+**Supply chain attacks.** The open-source AI stack has many dependencies: model weights, tokenizers, agent frameworks, tool plugins, vector databases, [embedding models](/blog/embedding-models-compared-openai-vs-open-source). A compromised component anywhere in this chain, a backdoored fine-tune, a malicious plugin, a tampered embedding model, can compromise the entire system. The software supply chain security problem, already severe for traditional software, is amplified when the "software" includes neural network weights that are opaque to inspection.
 
 **Model manipulation.** Open weights mean anyone can fine-tune a model to remove safety guardrails, introduce biases, or create targeted vulnerabilities. A model that appears to function normally on standard benchmarks but behaves maliciously in specific contexts is extremely difficult to detect. Traditional software can be audited line by line; neural network weights cannot.
 
@@ -92,3 +92,9 @@ The Linux analogy is instructive but insufficient. Linux reshaped server infrast
 For technical leaders, the practical advice is to engage with open agent frameworks now, contribute to their security hardening, and build deployment practices that assume adversarial conditions. For policymakers, the advice is to study how the open-source software community built governance institutions and adapt those models for AI, quickly. The window for shaping how this technology is deployed is open, but it will not stay open indefinitely.
 
 The Linux of AI agents is being built. Whether it becomes a foundation for broadly shared capability or a vector for broadly distributed risk depends on choices being made right now.
+
+## Related Articles
+
+- [AI Trends 2026: The Agentic Revolution and Hybrid Architectures](/blog/ai-trends-2026-the-agentic-revolution-and-hybrid-architectures)
+- [Chinese AI Models Are Catching Up, And Sometimes Surpassing, The West](/blog/chinese-ai-models-catching-up-and-surpassing-the-west)
+- [Open Source AI vs Closed AI: Why It Matters More Than Ever](/blog/open-source-vs-closed-ai-why-everyone-is-talking-about-it)

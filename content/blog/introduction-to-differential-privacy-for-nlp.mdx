@@ -47,11 +47,11 @@ For most NLP systems we use three main levers:
 
 Differential privacy primarily lives in the model-level, although it is easier to implement if you already have strong data and system-level practices.
 
-In a typical RAG system like the ones in "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems", your pipeline looks like:
+In a typical RAG system like the ones in "[Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)" and "Building Production-Ready RAG Systems", your pipeline looks like:
 
 1. Ingestion and PII handling.
 2. Text normalization and chunking (see "Chunking Strategies for RAG Pipelines").
-3. Embedding with a transformer (see "Embedding Models Compared: OpenAI vs Open-Source").
+3. Embedding with a transformer (see "[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)").
 4. Storage in a vector database ("Vector Database Performance Benchmarks").
 5. Retrieval + generation.
 
@@ -265,7 +265,7 @@ Threats it does not address by itself:
 - Prompt injection in RAG systems that pulls sensitive data from a vector database.
 - Side channels in deployed systems, like timing leaks.
 
-For those you need the system-level work covered in "Privacy-Preserving NLP" and "Deploying ML Models with FastAPI and Docker".
+For those you need the system-level work covered in "Privacy-Preserving NLP" and "[Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)".
 
 A DP-trained model can still reveal sensitive facts that are *correlated* with the training data. For example, a DP medical model can still learn that a certain medication is strongly associated with a disease. That is the point of learning.
 
@@ -308,7 +308,7 @@ One interesting pattern I use in practice:
 
 This way, most of your intelligence and language understanding lives in a non-private model trained once by a third party. You apply DP only to the thin, sensitive components you control.
 
-This aligns with architectures from "Building Production-Ready RAG Systems" and "Building AI Agents with LangChain and LangGraph". The agents and tools can remain largely standard, while the privacy-critical learners are wrapped in DP.
+This aligns with architectures from "Building Production-Ready RAG Systems" and "[Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)". The agents and tools can remain largely standard, while the privacy-critical learners are wrapped in DP.
 
 ### 4. Combine DP with standard regularization
 
@@ -386,3 +386,9 @@ For teams used to the patterns from "Python Best Practices for ML Engineers" and
 - RAG architectures let you offload most language understanding to non-private base models, and confine DP to thin adaptation layers.
 - Evaluate privacy not only via theoretical ε, but also with empirical membership inference tests and memorization checks.
 - Treat DP as a first-class engineering concern: log it, test it, and document it alongside your usual performance metrics.
+
+## Related Articles
+
+- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
+- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
+- [Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai)

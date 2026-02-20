@@ -15,7 +15,7 @@ I have been tracking these shifts closely at Ailog. What follows is my synthesis
 
 ## Agent Swarms Go Production
 
-2025 was the year agents went from demos to deployments. 2026 is the year they became infrastructure. The pattern I described in Building a Multi-Agent AI System, with orchestrators coordinating specialist agents, is now running in production at hedge funds, DeFi protocols, and enterprise automation platforms.
+2025 was the year agents went from demos to deployments. 2026 is the year they became infrastructure. The pattern I described in [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system), with orchestrators coordinating specialist agents, is now running in production at hedge funds, DeFi protocols, and enterprise automation platforms.
 
 The key enabler was not better models. It was better tooling: LangGraph, CrewAI, and the open-source agent frameworks I discussed in Agents + Open Weights: Toward a Linux of AI Agents have matured enough to handle real workloads. Error recovery, state persistence, observability, and tool-use reliability crossed the threshold from "works in demos" to "works at 3 AM when nobody is watching."
 
@@ -27,7 +27,7 @@ What makes this viable in 2026 is the combination of fast open-weight models (ru
 
 ### Enterprise Agent Orchestration
 
-Beyond finance, enterprises are deploying agent swarms for document processing pipelines, customer support escalation, and internal knowledge management. The architecture is familiar: a routing agent classifies the request, specialist agents handle domain-specific tasks (using RAG, as I covered in Agentic RAG: The Next Evolution), and a quality agent reviews the output.
+Beyond finance, enterprises are deploying agent swarms for document processing pipelines, customer support escalation, and internal knowledge management. The architecture is familiar: a routing agent classifies the request, specialist agents handle domain-specific tasks (using RAG, as I covered in [Agentic RAG: The Next Evolution](/blog/agentic-rag-the-next-evolution)), and a quality agent reviews the output.
 
 ```python
 from dataclasses import dataclass, field
@@ -98,7 +98,7 @@ Notice the hybrid model assignment. The router uses a small, fast model. Retriev
 
 ## Sovereign AI Infrastructure
 
-The geopolitics of AI infrastructure became impossible to ignore in 2025, and 2026 is seeing the consequences play out. The BlackRock-NVIDIA partnerships for sovereign AI data centers, the UAE's Falcon initiatives, and the expansion of Chinese AI infrastructure (which I covered in Chinese AI: Sovereign Hardware, GLM-5, and the Huawei Ascend Ecosystem) are all expressions of the same insight: whoever controls AI compute controls AI capability.
+The geopolitics of AI infrastructure became impossible to ignore in 2025, and 2026 is seeing the consequences play out. The BlackRock-NVIDIA partnerships for sovereign AI data centers, the UAE's Falcon initiatives, and the expansion of Chinese AI infrastructure (which I covered in Chinese AI: [Sovereign Hardware](/blog/chinese-ai-sovereign-hardware-glm5-huawei-ascend), GLM-5, and the Huawei Ascend Ecosystem) are all expressions of the same insight: whoever controls AI compute controls AI capability.
 
 For engineers, this means multi-cloud and multi-model strategies are no longer optional. If your system depends on a single API provider in a single jurisdiction, you have a single point of failure that is geopolitical, not just technical. The open-weight model ecosystem, from DeepSeek to Mistral to Qwen, provides the building blocks for sovereign deployment.
 
@@ -134,7 +134,7 @@ One of the most consequential technical developments is the rise of Reinforcemen
 
 DeepSeek-R1 demonstrated this at scale. The advantages are significant: verifiable rewards do not suffer from reward model drift, they scale without human annotation bottlenecks, and they produce models with genuinely improved reasoning rather than improved reward-model gaming.
 
-For RAG systems, this is particularly relevant. You can train models where the reward signal comes from retrieval accuracy, answer verifiability against source documents, and structured output correctness, exactly the metrics I discussed in Evaluating RAG System Performance. The model learns to produce answers that are not just fluent, but verifiably grounded.
+For RAG systems, this is particularly relevant. You can train models where the reward signal comes from retrieval accuracy, answer verifiability against source documents, and structured output correctness, exactly the metrics I discussed in [Evaluating RAG System Performance](/blog/evaluating-rag-system-performance). The model learns to produce answers that are not just fluent, but verifiably grounded.
 
 ## The Convergence: Agents + Open Weights + Hybrid Architectures
 
@@ -142,7 +142,7 @@ The most significant trend is not any single development but the convergence. Op
 
 This stack is increasingly viable for self-hosted deployment. A mid-size organization can now run a multi-agent system with hybrid model routing, RAG capabilities, and reflection mechanisms entirely on their own infrastructure, using open-weight models, open-source agent frameworks, and commodity GPU hardware.
 
-On the research side, neurogenesis-inspired approaches to growing and pruning neural network components during training are gaining attention. Combined with MoE routing and RLVR training, this points toward systems that continuously restructure themselves. The evaluation challenge, which I covered in LLM Evaluation Frameworks: Beyond Perplexity, becomes even more critical when models can modify their own routing and learn from verifiable feedback.
+On the research side, neurogenesis-inspired approaches to growing and pruning neural network components during training are gaining attention. Combined with MoE routing and RLVR training, this points toward systems that continuously restructure themselves. The evaluation challenge, which I covered in [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity), becomes even more critical when models can modify their own routing and learn from verifiable feedback.
 
 ## Key Takeaways
 
@@ -152,3 +152,9 @@ On the research side, neurogenesis-inspired approaches to growing and pruning ne
 - RLVR is producing models with genuinely improved reasoning by using verifiable signals instead of human preference labels. Watch it closely for any system with verifiable outputs.
 - The convergence of open weights, hybrid architectures, agent frameworks, and RLVR creates a viable self-hosted AI stack for mid-size organizations.
 - Design for model heterogeneity from the start, invest in agent infrastructure, and adopt RLVR where outputs are verifiable.
+
+## Related Articles
+
+- [Agents + Open Weights: Toward a Linux of AI Agents, Or a Security Nightmare?](/blog/agents-plus-open-weights-linux-of-agents-or-security-nightmare)
+- [Multi-Agent Multi-LLM Architectures: A 2026 Guide](/blog/multi-agent-multi-llm-architectures-a-2026-guide)
+- [Open Source AI vs Closed AI: Why It Matters More Than Ever](/blog/open-source-vs-closed-ai-why-everyone-is-talking-about-it)

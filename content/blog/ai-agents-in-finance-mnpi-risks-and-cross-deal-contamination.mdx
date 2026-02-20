@@ -26,7 +26,7 @@ RAG systems break this model in subtle ways:
 
 - **Retrieval is non-deterministic.** The same query can surface different documents depending on embeddings, index state, and ranking thresholds. Compliance cannot pre-approve what the system will retrieve.
 - **Alternative data blurs the line.** Satellite imagery, web scraping, credit card panels, and sensor data may contain information that qualifies as MNPI depending on context.
-- **Agents aggregate across sources.** A multi-tool agent, as described in my earlier posts on Agentic RAG and Building a Multi-Agent AI System, naturally combines information from multiple retrieval backends. That combination can itself constitute MNPI even when individual sources do not.
+- **Agents aggregate across sources.** A multi-tool agent, as described in my earlier posts on Agentic RAG and [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system), naturally combines information from multiple retrieval backends. That combination can itself constitute MNPI even when individual sources do not.
 - **Context windows are large.** Modern LLMs can process hundreds of thousands of tokens. An agent that stuffs its context with broadly retrieved data is far more likely to accidentally include deal-sensitive material.
 
 
@@ -99,7 +99,7 @@ For most hedge funds, full physical isolation is expensive. A pragmatic middle g
 
 ### 2. Authorization-aware retrieval
 
-Every retrieval call must be filtered by the requesting user's clearance and deal scope. This is the same principle I described in Building Production-Ready RAG Systems, but with financial-specific access controls.
+Every retrieval call must be filtered by the requesting user's clearance and deal scope. This is the same principle I described in [Building Production-Ready RAG Systems](/blog/building-production-ready-rag-systems), but with financial-specific access controls.
 
 ```python
 from typing import Optional
@@ -232,7 +232,7 @@ class ScopedRAGAgent:
 
 Before any data enters your RAG pipeline, classify it. Do not rely on post-hoc filtering alone. Tag every document with its deal association, classification level, source, and ingestion timestamp.
 
-This connects to the ideas in Introduction to Differential Privacy for NLP, where we discussed that privacy controls are most effective when applied as early as possible in the data pipeline.
+This connects to the ideas in [Introduction to Differential Privacy for NLP](/blog/introduction-to-differential-privacy-for-nlp), where we discussed that privacy controls are most effective when applied as early as possible in the data pipeline.
 
 
 ## Testing and validation
@@ -244,7 +244,7 @@ Compliance teams should run regular "contamination tests" against the RAG system
 - Check that audit logs capture every retrieval event, including blocked documents.
 - Run adversarial prompt tests to see if the agent can be tricked into ignoring deal boundaries.
 
-This is analogous to the evaluation techniques in Evaluating RAG System Performance, but with a compliance lens rather than a pure accuracy lens.
+This is analogous to the evaluation techniques in [Evaluating RAG System Performance](/blog/evaluating-rag-system-performance), but with a compliance lens rather than a pure accuracy lens.
 
 
 ## Key Takeaways
@@ -256,3 +256,9 @@ This is analogous to the evaluation techniques in Evaluating RAG System Performa
 - Classify and tag data **before ingestion** into the RAG pipeline, not after retrieval.
 - Run regular **contamination tests** and adversarial evaluations to validate that information barriers hold under realistic conditions.
 - Treat compliance as a first-class system design constraint, not a post-deployment checkbox.
+
+## Related Articles
+
+- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
+- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
+- [Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai)

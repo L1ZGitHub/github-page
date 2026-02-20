@@ -9,7 +9,7 @@ readTime: "10 min read"
 author: "Hélain Zimmermann"
 ---
 
-Most people hit the same wall with large language models: they sound confident, but they hallucinate, forget your data, and are out of date. Retrieval-Augmented Generation (RAG) is how I consistently turn those models into grounded, reliable tools that can actually work in production.
+Most people hit the same wall with [large language models](/blog/data-privacy-in-the-age-of-large-language-models): they sound confident, but they hallucinate, forget your data, and are out of date. Retrieval-Augmented Generation (RAG) is how I consistently turn those models into grounded, reliable tools that can actually work in production.
 
 RAG is not magic. It is a pattern. Once you understand its moving parts, you can design systems that are accurate, controllable, and privacy-aware, instead of hoping the model just “gets it right”.
 
@@ -25,7 +25,7 @@ Instead of fine-tuning the model on your documents, you:
 
 So the model does not have to “know” everything in its parameters. It learns how to *use* external knowledge.
 
-If you are completely new to vector search, my article "Understanding Vector Databases: A Beginner's Guide" is a good starting point to understand embeddings, similarity search, and why we use them at all.
+If you are completely new to vector search, my article "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)" is a good starting point to understand embeddings, similarity search, and why we use them at all.
 
 ### RAG vs fine-tuning
 
@@ -34,7 +34,7 @@ RAG and fine-tuning solve related but different problems:
 - RAG is best for: keeping answers up to date, grounding responses in specific documents, giving citations, respecting access control.
 - Fine-tuning is best for: adapting behavior and style, specializing to domain-specific formats, improving reasoning on a stable domain.
 
-In practice I often combine both. You can fine-tune for behavior and use RAG for knowledge. If you want a deeper dive into fine-tuning, see "Fine-Tuning LLMs on Custom Data: A Practical Guide".
+In practice I often combine both. You can fine-tune for behavior and use RAG for knowledge. If you want a deeper dive into fine-tuning, see "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)".
 
 ## The Core RAG Architecture
 
@@ -64,7 +64,7 @@ This is what runs for each user query.
 4. Build a prompt that includes the question and the retrieved chunks
 5. Ask the LLM to answer using only that context
 
-This is the minimal “production-ready” pattern that I described more formally in "Building Production-Ready RAG Systems".
+This is the minimal “production-ready” pattern that I described more formally in "[Building Production-Ready RAG Systems](/blog/building-production-ready-rag-systems)".
 
 ## A Minimal RAG Example in Python
 
@@ -230,7 +230,7 @@ With good metadata you can:
 - Implement row-level security
 - Debug wrong answers by tracing which chunk was used
 
-This connects directly with privacy concerns. In "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" I talk more about how metadata and access control prevent leaking cross-tenant data.
+This connects directly with privacy concerns. In "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" I talk more about how metadata and access control prevent leaking cross-tenant data.
 
 ## Improving Retrieval Quality
 
@@ -393,3 +393,9 @@ From there, you can explore more advanced RAG variations like multi-hop retrieva
 - Privacy-preserving design is critical: minimize data sent to the model, enforce access control, and log retrievals.
 - RAG and fine-tuning are complementary: use RAG for fresh knowledge, fine-tuning for behavior and domain adaptation.
 - Start small with a minimal prototype, then layer in vector databases, evaluations, and privacy protections as you move toward production.
+
+## Related Articles
+
+- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
+- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
+- [Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)

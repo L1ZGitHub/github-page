@@ -27,7 +27,7 @@ Tokenization is the first irreversible transformation of your text. Get it wrong
 - Break retrieval signals in RAG pipelines
 - Leak sensitive structure that affects privacy guarantees
 
-In "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems", I stressed that retrieval quality is as important as generation. Tokenization sits at the shared boundary between retrieval, generation, and indexing.
+In "[Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)" and "Building Production-Ready RAG Systems", I stressed that retrieval quality is as important as generation. Tokenization sits at the shared boundary between retrieval, generation, and indexing.
 
 ### Common failure modes with generic tokenizers
 
@@ -88,7 +88,7 @@ Before touching code, answer these questions:
 
 3. **What are your constraints?**
    - Max context length and latency (see "Scaling RAG Systems to Millions of Documents").
-   - Privacy policies and anonymization rules (see "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models").
+   - Privacy policies and anonymization rules (see "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)").
 
 With that, decide:
 
@@ -265,7 +265,7 @@ Lower ratio means better compression, more information per context window.
 
 ### 3. Impact on retrieval signals
 
-Tokenization interacts with how you chunk documents and build embeddings. If you followed the recommendations from "Chunking Strategies for RAG Pipelines" and "Hybrid Search: Combining Dense and Sparse Retrieval", you likely:
+Tokenization interacts with how you chunk documents and build embeddings. If you followed the recommendations from "Chunking Strategies for RAG Pipelines" and "[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)", you likely:
 
 - Chunk based on tokens instead of characters.
 - Mix dense retrieval with BM25 or keyword search.
@@ -302,7 +302,7 @@ If you control model training, this is the cleanest approach.
 2. Train from scratch or further pretrain on your domain corpus.
 3. Fine-tune for your tasks (classification, QA, RAG augmentation).
 
-In "Fine-Tuning LLMs on Custom Data: A Practical Guide" I covered the downstream fine-tuning step. The key additional piece is aligning the tokenizer when you start pretraining.
+In "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)" I covered the downstream fine-tuning step. The key additional piece is aligning the tokenizer when you start pretraining.
 
 Example with Hugging Face Transformers:
 
@@ -421,3 +421,9 @@ Keep a single source of truth for tokenization across agents that operate on the
 - Carefully consider privacy: tokenization affects anonymization strategies and differential privacy behavior.
 - Evaluate tokenizer impact end to end on retrieval metrics, task accuracy, and operational costs, not just vocabulary stats.
 - Treat tokenizers as versioned, monitored artifacts integrated into your CI/CD and deployment pipelines, just like models and vector indexes.
+
+## Related Articles
+
+- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
+- [Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai)
+- [Introduction to Differential Privacy for NLP](/blog/introduction-to-differential-privacy-for-nlp)

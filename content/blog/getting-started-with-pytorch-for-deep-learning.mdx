@@ -13,7 +13,7 @@ Getting your first deep learning model to actually run, train, and converge can 
 
 I have been there. The good news is that PyTorch makes the core ideas of deep learning much more approachable than they first appear. Once you understand a handful of concepts - tensors, computation graphs, automatic differentiation, and the training loop - the rest is mostly variations on a theme.
 
-In this guide I will walk through a practical, beginner friendly path to using PyTorch. The focus is on getting you to a working model quickly, not on covering every feature. If you have read my posts on topics like "Understanding Transformer Architectures" or "Embedding Models Compared: OpenAI vs Open-Source", you will recognize the same building blocks at a smaller scale here.
+In this guide I will walk through a practical, beginner friendly path to using PyTorch. The focus is on getting you to a working model quickly, not on covering every feature. If you have read my posts on topics like "Understanding Transformer Architectures" or "[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)", you will recognize the same building blocks at a smaller scale here.
 
 
 ## 1. Why PyTorch for Deep Learning
@@ -342,11 +342,11 @@ You then define a CNN or reuse a pretrained model, and the training loop looks a
 
 For NLP tasks like text classification or question answering, modern workflows often build on pretrained transformer models. These models are usually trained in PyTorch and exposed via frameworks like Hugging Face Transformers.
 
-When you work on applications such as RAG systems, semantic search, or hybrid retrieval (which I cover in "Retrieval-Augmented Generation: A Complete Guide", "Semantic Search vs Keyword Search: When to Use What" and "Hybrid Search: Combining Dense and Sparse Retrieval"), you will often:
+When you work on applications such as RAG systems, semantic search, or hybrid retrieval (which I cover in "Retrieval-Augmented Generation: A Complete Guide", "[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)" and "[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)"), you will often:
 
 - Load a pretrained transformer encoder.
 - Use it to compute embeddings for texts.
-- Store those in a vector database, like I discuss in "Understanding Vector Databases: A Beginner's Guide" and "Vector Database Performance Benchmarks".
+- Store those in a vector database, like I discuss in "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)" and "Vector Database Performance Benchmarks".
 
 The PyTorch basics you learned here, especially tensors, models, and training loops, carry over directly.
 
@@ -382,7 +382,7 @@ Even in small projects, track metrics like accuracy or F1. For more complex syst
 
 ### 9.4 Think About Privacy Early
 
-If you work with real user data, start thinking about privacy from the beginning. Techniques like those I describe in "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" become relevant quickly once you move beyond toy datasets.
+If you work with real user data, start thinking about privacy from the beginning. Techniques like those I describe in "Introduction to Differential Privacy for NLP" and "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" become relevant quickly once you move beyond toy datasets.
 
 
 ## Key Takeaways
@@ -394,3 +394,9 @@ If you work with real user data, start thinking about privacy from the beginning
 - Evaluation mode with `model.eval()` and `torch.no_grad()` is critical for correct, efficient inference.
 - The same PyTorch fundamentals scale from simple MLPs to transformers, RAG systems, and production grade ML services.
 - Good engineering practices around structure, reproducibility, and privacy matter as soon as you leave toy examples behind.
+
+## Related Articles
+
+- [Building a RAG Chatbot from Scratch with Python](/blog/building-a-rag-chatbot-from-scratch-with-python)
+- [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)
+- [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity)
