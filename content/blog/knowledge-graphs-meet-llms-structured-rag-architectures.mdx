@@ -1,0 +1,519 @@
+---
+title: "Knowledge Graphs Meet LLMs: Structured RAG Architectures"
+description: "How to combine knowledge graphs with LLMs for structured RAG architectures, with patterns, code, and tradeoffs for production systems."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["RAG", "Knowledge Graphs", "LLMs", "Python", "Vector Databases", "NLP"]
+difficulty: "advanced"
+readTime: "13 min read"
+author: "Hélain Zimmermann"
+---
+
+LLMs are astonishing at pattern matching and synthesis, but they are still bad at one thing traditional knowledge systems excel at: structure. Real-world domains have entities, relations, constraints, and provenance. Plain vector-based RAG often flattens all of that into anonymous chunks.
+
+Knowledge graphs give us exactly what LLMs are missing: explicit structure, typed relations, and queryable context. Combining them yields what I like to call structured RAG architectures - retrieval pipelines that know what they are retrieving and why.
+
+In this post I will walk through practical patterns for integrating knowledge graphs with LLM-centric systems, with a focus on production-grade RAG like the ones I describe in "Building Production-Ready RAG Systems" and "Retrieval-Augmented Generation: A Complete Guide".
+
+
+## Why vector-only RAG hits a ceiling
+
+If you have built vanilla vector-based RAG before, you have probably seen some of these issues in practice:
+
+- Hallucinated relationships, even when the raw facts are present
+- Inconsistent use of domain vocabulary and ontology
+- Poor handling of multi-hop questions ("What depends on X that is used by Y?")
+- Difficulty enforcing business constraints (e.g. legal rules, pricing logic)
+- Limited explainability, because you only retrieve chunks, not structured concepts
+
+Previous posts like "Chunking Strategies for RAG Pipelines" and "Hybrid Search: Combining Dense and Sparse Retrieval" show how to improve recall and ranking with better retrieval. But retrieval is still untyped text.
+
+Knowledge graphs address this by:
+
+- Explicitly modeling entities (Product, Customer, Contract)
+- Encoding relations (uses, belongs_to, depends_on, contradicts)
+- Capturing provenance (source document, timestamp, confidence)
+- Supporting graph queries (paths, neighborhoods, constraints)
+
+Structured RAG is what you get when you:
+
+1. Use LLMs to build and maintain a knowledge graph from raw data
+2. Use that graph to drive retrieval and reasoning for LLM responses
+3. Keep vectors in the loop for fuzzy matching and semantic recall
+
+
+## Architectural overview: Structured RAG
+
+At a high level, a structured RAG pipeline augments the usual "query - retrieve - generate" loop from "Retrieval-Augmented Generation: A Complete Guide" with explicit graph steps.
+
+### High-level flow
+
+1. **Ingestion**
+   - Raw documents are chunked and embedded as usual
+   - An LLM (or extraction model) identifies entities and relations
+   - A knowledge graph store is updated with nodes, edges, and metadata
+
+2. **Query understanding**
+   - User query is parsed into an intent and graph-centric representation
+   - Optionally: a symbolic query is generated, like Cypher or SPARQL
+
+3. **Graph retrieval**
+   - Graph query fetches relevant entities, relations, and neighborhoods
+   - Optional vector search enriches the candidate set with semantically similar nodes or chunks
+
+4. **Context assembly**
+   - Retrieved graph fragments are turned into structured context (tables, triples, JSON)
+   - Relevant text snippets from documents are attached as evidence
+
+5. **LLM generation**
+   - LLM answers using both the graph context and raw snippets
+   - Optionally: LLM outputs an updated graph diff, which is validated and applied
+
+You can implement this with:
+
+- A graph database (Neo4j, ArangoDB, JanusGraph, or RDF store)
+- A vector database (see "Vector Database Performance Benchmarks" and "Understanding Vector Databases: A Beginner's Guide")
+- An LLM for extraction and generation
+
+The key design choice is how tight the coupling between the LLM and graph is: do you keep the LLM "graph-aware" through structured prompts, or do you use it mostly as a text backend behind a symbolic reasoning layer?
+
+
+## From text to knowledge graph
+
+The ingestion pipeline is where most of the engineering work happens. Here is a practical pattern that has worked well for me.
+
+### 1. Chunk and embed as usual
+
+Reuse your existing RAG ingestion setup from "Building Production-Ready RAG Systems".
+
+```python
+from uuid import uuid4
+from dataclasses import dataclass
+
+@dataclass
+class Chunk:
+    id: str
+    doc_id: str
+    text: str
+    metadata: dict
+
+
+def chunk_document(doc_id: str, text: str, max_tokens: int = 512) -> list[Chunk]:
+    # Placeholder: use your tokenizer and chunking logic
+    # See "Chunking Strategies for RAG Pipelines" for better approaches
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), max_tokens):
+        chunk_text = " ".join(words[i:i+max_tokens])
+        chunks.append(Chunk(id=str(uuid4()), doc_id=doc_id, text=chunk_text, metadata={}))
+    return chunks
+```
+
+Then embed chunks and store them in your vector database.
+
+### 2. LLM-based entity and relation extraction
+
+We use an LLM in structured output mode to turn text into candidate nodes and edges.
+
+```python
+import json
+from typing import Any
+
+EXTRACTION_PROMPT = """
+You extract a knowledge graph from text.
+
+Return JSON with:
+- entities: [{"id": string, "type": string, "name": string, "attributes": object}]
+- relations: [{"source_id": string, "target_id": string, "type": string, "attributes": object}]
+
+Use stable local IDs within the chunk. Do not invent facts.
+Text:
+"""{text}"""
+"""
+
+
+def extract_kg_from_chunk(llm_client, chunk: Chunk) -> dict[str, Any]:
+    prompt = EXTRACTION_PROMPT.format(text=chunk.text)
+    response = llm_client(prompt)  # replace with your LLM call
+    # Ideally use function calling or JSON mode
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError:
+        # Fallback, or log for review
+        data = {"entities": [], "relations": []}
+    return data
+```
+
+I strongly recommend using function calling or tools if your provider supports it. That approach pairs nicely with the patterns from "Prompt Engineering Best Practices for Production".
+
+### 3. Canonicalization and deduplication
+
+If every chunk creates fresh entities, your graph will explode. You need entity resolution.
+
+Simple pattern:
+
+1. For each extracted entity, do a vector search over existing entity embeddings
+2. If similarity > threshold (e.g. 0.85) and types match, link to that existing node
+3. Otherwise create a new node
+
+```python
+def resolve_or_create_entity(db, embed_fn, entity: dict) -> str:
+    # entity: {"type": "Product", "name": "AlphaWidget", ...}
+    query_vec = embed_fn(entity["name"])
+
+    # Search in entity index, filtered by type
+    candidates = db.search_entities(embedding=query_vec, type=entity["type"], k=5)
+
+    for cand in candidates:
+        if cand["score"] > 0.85:
+            return cand["id"]
+
+    # Create new graph node
+    new_id = db.create_entity(
+        type=entity["type"],
+        name=entity["name"],
+        attributes=entity.get("attributes", {}),
+    )
+
+    # Store embedding for future resolution
+    db.store_entity_embedding(new_id, query_vec)
+    return new_id
+```
+
+Fusion of graph and vector search here is very similar in spirit to "Hybrid Search: Combining Dense and Sparse Retrieval".
+
+### 4. Writing to the graph store
+
+Once entities are resolved, you translate chunk-local IDs into global graph IDs and create edges.
+
+```python
+def ingest_chunk_to_graph(db, embed_fn, chunk: Chunk, kg_data: dict):
+    id_map: dict[str, str] = {}
+
+    # Resolve entities
+    for ent in kg_data.get("entities", []):
+        global_id = resolve_or_create_entity(db, embed_fn, ent)
+        id_map[ent["id"]] = global_id
+
+    # Create relations
+    for rel in kg_data.get("relations", []):
+        src = id_map.get(rel["source_id"])
+        tgt = id_map.get(rel["target_id"])
+        if not src or not tgt:
+            continue
+        db.create_relation(
+            source=src,
+            target=tgt,
+            type=rel["type"],
+            attributes={
+                **rel.get("attributes", {}),
+                "source_chunk_id": chunk.id,
+                "doc_id": chunk.doc_id,
+            },
+        )
+```
+
+At this point, your ingestion pipeline is producing both:
+
+- Chunk-level embeddings for classic RAG
+- A structured, growing knowledge graph
+
+
+## Query-time: Orchestrating graph and vector retrieval
+
+Once you have a graph, the main challenge is coordination. You need to avoid building a complex system that is impossible to debug.
+
+A practical design is a small orchestrator function that decides:
+
+- When to use graph queries vs plain vector search
+- How to construct graph queries from natural language
+- How to merge results into a single, well-structured context
+
+### 1. Intent and query type detection
+
+Use a lightweight classifier or LLM prompt to tag the query as:
+
+- factoid (single hop)
+- multi-hop reasoning
+- aggregation / summarization
+- exploratory / open ended
+
+For the first two, the graph is strongly valuable.
+
+```python
+QUERY_ROUTING_PROMPT = """
+Classify the user query into one of: [factoid, multi_hop, aggregation, open_ended].
+Return only the label.
+
+Query: "{query}"
+"""
+
+
+def classify_query(llm_client, query: str) -> str:
+    resp = llm_client(QUERY_ROUTING_PROMPT.format(query=query)).strip().lower()
+    if resp not in {"factoid", "multi_hop", "aggregation", "open_ended"}:
+        return "open_ended"
+    return resp
+```
+
+### 2. From natural language to graph query
+
+For graph-friendly queries, you want a symbolic query. You can either:
+
+- Expose a fixed set of graph query templates
+- Let the LLM generate a Cypher or SPARQL query then validate it
+
+For systems with strong safety or privacy requirements like those discussed in "Data Privacy in the Age of Large Language Models", I usually prefer a template-based or constrained approach.
+
+Example: generate a Cypher query for multi-hop dependency questions.
+
+```python
+CYPHER_PROMPT = """
+You translate natural language questions into Cypher, querying a graph with nodes
+(type, name) and relationships (type) such as USES, DEPENDS_ON, OWNED_BY.
+
+Return only the Cypher query.
+
+Question: "{query}"
+"""
+
+
+def nl_to_cypher(llm_client, query: str) -> str:
+    cypher = llm_client(CYPHER_PROMPT.format(query=query)).strip()
+    # Add minimal validation or sandboxing here
+    return cypher
+```
+
+Example orchestrator:
+
+```python
+def retrieve_context(db_graph, db_vector, llm_client, embed_fn, query: str) -> dict:
+    q_type = classify_query(llm_client, query)
+
+    # 1. Vector search over documents or entity names
+    query_vec = embed_fn(query)
+    vector_results = db_vector.search(query_vec, k=10)
+
+    graph_results = []
+
+    if q_type in {"factoid", "multi_hop", "aggregation"}:
+        cypher = nl_to_cypher(llm_client, query)
+        graph_results = db_graph.run_cypher(cypher)
+
+    return {
+        "query_type": q_type,
+        "vector_results": vector_results,
+        "graph_results": graph_results,
+    }
+```
+
+### 3. Building a structured prompt context
+
+You do not want to just paste Cypher rows into the prompt. Instead, translate graph results into a compact, structured representation.
+
+For example:
+
+- A list of entities with their attributes
+- A list of relations between those entities
+- A short explanation of which paths were used
+
+```python
+import textwrap
+
+
+def format_graph_context(graph_rows: list[dict]) -> str:
+    entities = {}
+    relations = []
+
+    for row in graph_rows:
+        # Assuming Neo4j style rows: {"n": node, "m": node, "r": rel}
+        n = row.get("n")
+        m = row.get("m")
+        r = row.get("r")
+        if n:
+            entities[n.id] = {"type": n["type"], "name": n["name"], **n}
+        if m:
+            entities[m.id] = {"type": m["type"], "name": m["name"], **m}
+        if r:
+            relations.append({
+                "source": r.start_node.id,
+                "target": r.end_node.id,
+                "type": r["type"],
+            })
+
+    entity_lines = []
+    for eid, e in entities.items():
+        entity_lines.append(f"- {eid} [{e['type']}]: {e['name']}")
+
+    relation_lines = []
+    for rel in relations:
+        relation_lines.append(
+            f"- {rel['source']} -({rel['type']})-> {rel['target']}"
+        )
+
+    return textwrap.dedent(
+        f"""
+        Entities:
+        {chr(10).join(entity_lines)}
+
+        Relations:
+        {chr(10).join(relation_lines)}
+        """
+    ).strip()
+```
+
+Then combine text snippets from vector retrieval with the structured graph summary.
+
+```python
+def build_llm_prompt(query: str, context: dict) -> str:
+    vector_snippets = [r["text"] for r in context["vector_results"]]
+    text_ctx = "\n\n".join(vector_snippets[:5])
+
+    graph_ctx = format_graph_context(context["graph_results"])
+
+    system_instructions = """
+You are an assistant that must answer using only the provided knowledge.
+Prefer structured relations from the knowledge graph when reasoning.
+If information is missing or inconsistent, say you do not know.
+""".strip()
+
+    return f"""{system_instructions}
+
+Question: {query}
+
+Knowledge graph context:
+{graph_ctx}
+
+Text snippets:
+{text_ctx}
+"""
+```
+
+This structure gives you better control and debuggability, similar to the observability patterns from "Monitoring ML Models in Production".
+
+
+## Structured RAG patterns that work well in practice
+
+### 1. Constraint-aware answering
+
+If you encode constraints or rules as nodes and edges (or as a separate rule engine that references graph entities), the LLM can check answers against them.
+
+Pattern:
+
+1. Retrieve candidate answer entities via graph + vector
+2. Retrieve relevant constraints (e.g. legal rules, eligibility conditions)
+3. Provide both as context and ask the LLM to verify compliance
+
+This is especially useful in regulated domains where hallucinated compliance is unacceptable.
+
+### 2. Multi-hop question answering
+
+Plain RAG often struggles when the answer depends on 2-3 hops: "Which projects depend on a library that has a critical vulnerability?".
+
+Here the graph excels:
+
+- Encode dependencies as edges
+- Attach vulnerability information to packages or components
+- Run a graph query to find all paths that match the pattern
+- Let the LLM summarize and explain the result set
+
+Your LLM is now summarizing over a precise subgraph instead of trying to discover the structure from raw text at query time.
+
+### 3. Provenance and explainability
+
+Store provenance metadata on nodes and edges:
+
+- Source document ID
+- Paragraph or chunk ID
+- Timestamp
+- Confidence score from extraction
+
+At answer time you can:
+
+- Show which paths contributed to the answer
+- Link back to the original documents and sections
+- Ask the LLM to generate a step-by-step reasoning trace using only those paths
+
+This is very similar in spirit to the monitoring and tracing ideas in "Monitoring ML Models in Production" and is crucial when you need human trust in the system.
+
+
+## Privacy, security, and governance considerations
+
+If you are dealing with sensitive or personal data, knowledge graphs amplify both value and risk.
+
+Some patterns from "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" transfer directly:
+
+1. **Data minimization**: do you really need to store PII as graph nodes, or can you store pseudonymized IDs and keep the mapping in a separate secure service?
+2. **Attribute-level access control**: graph stores often support fine-grained ACLs. Use them. For example, allow engineers to see service dependency edges but not customer-related nodes.
+3. **Differential privacy at query time**: for aggregated statistics over the graph (counts, averages), add noise to protect individual nodes, similar to DP for NLP corpora.
+4. **Auditability**: log which graph queries were generated by the LLM, and which nodes or edges were touched.
+
+In a structured RAG stack, your LLM is no longer the only sensitive component. The graph layer becomes just as important from a security standpoint.
+
+
+## Implementation notes and pitfalls
+
+### Do not over-model too early
+
+It is tempting to design a beautiful ontology up front. In practice, start with a minimal schema:
+
+- 5-10 key entity types
+- 5-15 relation types
+- Basic attributes
+
+Iterate as you observe real queries and failure modes.
+
+### Keep graph and text in sync
+
+You now maintain two views of reality:
+
+- Raw text in your document store + vector DB
+- Structured graph in your graph store
+
+You need:
+
+- Idempotent ingestion jobs
+- Clear versioning of documents and their extracted graph segments
+- Periodic consistency checks (e.g. sample documents and re-extract to compare)
+
+### Evaluate both retrieval and reasoning
+
+Extend ideas from "Evaluating RAG System Performance" to structured RAG:
+
+- Graph coverage: how often are relevant entities and relations present?
+- Path correctness: are the graph paths used by the LLM factually correct?
+- Answer quality: does using the graph improve factual accuracy on multi-hop questions compared to text-only RAG?
+
+A/B test a text-only pipeline vs the structured RAG variant.
+
+### Tooling and libraries
+
+Some building blocks that work well in Python setups:
+
+- `networkx` for offline prototyping of graph logic
+- Official drivers for Neo4j / other graph DBs
+- LangChain or LangGraph (see "Building AI Agents with LangChain and LangGraph") for tool-based or agentic orchestration, where graph querying is a tool and the LLM plans which tools to call
+
+
+## Where this fits in the broader LLM stack
+
+If you zoom out across the topics of "Agentic RAG: The Next Evolution", "Building a Multi-Agent AI System", and "Fine-Tuning LLMs on Custom Data: A Practical Guide", structured RAG is complementary:
+
+- **Fine-tuning**: improves the base model's ability to follow your ontology and relation vocabulary
+- **Agentic systems**: agents can use the graph as a world model, planning over entities and relations instead of raw text
+- **Hybrid search**: the graph itself can be indexed with vectors for fuzzy linking of nodes and documents
+
+The core idea does not change: use LLMs for high-level reasoning and generation, but give them explicit, queryable structure to think with.
+
+
+## Key Takeaways
+
+- Vector-only RAG flattens structure and struggles with multi-hop reasoning, constraints, and explainability, especially at production scale.
+- Knowledge graphs model entities, relations, and provenance explicitly, which pairs naturally with LLM reasoning in structured RAG architectures.
+- A practical structured RAG pipeline has two main loops: LLM-driven graph construction at ingestion time and graph-driven retrieval at query time.
+- Use LLMs for entity and relation extraction, then resolve entities with vector search to avoid graph explosion and maintain canonical nodes.
+- At query time, classify query type, translate natural language into graph queries (e.g. Cypher), then merge graph and vector results into a structured prompt.
+- Graph-aware prompts that expose entities, relations, and provenance lead to more reliable answers and better debuggability than raw chunk dumps.
+- Start with a minimal ontology, keep graph and text views in sync, and evaluate both retrieval and reasoning improvements over text-only RAG.
+- Treat the graph layer as a first-class security and privacy surface, with minimization, access control, and auditing similar to your LLM layer.
+- Structured RAG complements fine-tuning and agentic systems, providing a stable world model that LLMs can plan and reason over effectively.

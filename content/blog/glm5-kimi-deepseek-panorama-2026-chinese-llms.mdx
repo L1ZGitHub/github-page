@@ -1,0 +1,102 @@
+---
+title: "GLM-5, Kimi K2.5, DeepSeek V3: A 2026 Panorama of Frontier Chinese LLMs"
+description: "A comparative overview of the leading Chinese language models: architecture, hardware, benchmarks, licensing, and how to test them from Europe."
+date: "2026-02-15"
+category: "AI & ML"
+tags: ["GLM-5", "Kimi K2", "DeepSeek", "Qwen", "Chinese LLMs", "Model Comparison"]
+difficulty: "intermediate"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+The narrative around frontier AI models has been dominated by a handful of American labs for years. That narrative no longer holds. In the span of twelve months, Chinese research labs have shipped models that match or exceed GPT-4-class performance on nearly every major benchmark, often at a fraction of the training cost, and in several cases under genuinely open licenses. If you are building AI systems in 2026 and you are not evaluating GLM-5, Kimi K2.5, DeepSeek V3, or Qwen-2.5, you are leaving capability on the table.
+
+This article provides a structured comparison of these four model families: their architectures, training infrastructure, benchmark results, licensing terms, and practical guidance for deploying them from Europe.
+
+## The Landscape at a Glance
+
+| Model | Lab | Parameters (Total / Active) | Architecture | Training Hardware | Open Weights |
+|-------|-----|------------------------------|--------------|-------------------|--------------|
+| **GLM-5** | Zhipu AI (Tsinghua) | ~1.2T / ~180B | MoE (128 experts) | Huawei Ascend 910C | Yes (Apache 2.0) |
+| **Kimi K2.5** | Moonshot AI | ~1T / ~200B | MoE (64 experts) | NVIDIA H800 | Partial (weights only, non-commercial clause) |
+| **DeepSeek V3** | DeepSeek (High-Flyer) | ~671B / ~67B | MoE (256 experts, top-8 routing) | NVIDIA H800 | Yes (MIT License) |
+| **Qwen-2.5** | Alibaba Cloud | 72B (dense flagship) | Dense Transformer | NVIDIA A100 / H800 | Yes (Apache 2.0, some sizes Qwen License) |
+
+These numbers tell an interesting story. The field has largely converged on Mixture-of-Experts as the architecture of choice for frontier scale, with DeepSeek V3 pushing the expert count to 256 while keeping only 8 active per token. The outlier is Qwen-2.5, which continues to demonstrate that a well-trained dense 72B model can remain competitive with MoE systems several times its total parameter count.
+
+## GLM-5: The Ascend Chip Pioneer
+
+The most significant aspect of GLM-5 is not the model itself but the hardware it was trained on. Zhipu AI trained GLM-5 entirely on Huawei Ascend 910C accelerators, making it the first frontier-class model trained without any NVIDIA silicon. As Silicon Republic reported, this represents a genuine proof point for hardware independence in AI training, something that was widely considered impractical just eighteen months ago.
+
+The Ascend 910C delivers roughly 320 TFLOPS of BF16 compute, compared to roughly 990 TFLOPS for the NVIDIA H100. Zhipu compensated with cluster size: training reportedly used over 10,000 Ascend chips with a custom parallelism framework optimized for the Ascend interconnect. The training run took approximately four months.
+
+From a capability standpoint, GLM-5 is a strong generalist. It handles Chinese and English with near-native fluency, performs well on reasoning benchmarks, and includes native multimodal support for image understanding. Its MoE architecture with 128 experts is relatively fine-grained, with roughly 180B parameters active per forward pass.
+
+The Apache 2.0 license makes GLM-5 one of the most permissively licensed frontier models available. There are no usage restrictions beyond standard attribution, and the model weights, tokenizer, and inference code are all available on Hugging Face and ModelScope.
+
+## Kimi K2.5: The Coding Powerhouse
+
+Moonshot AI has been one of the more aggressive Chinese labs in targeting specific capability verticals, and Kimi K2.5 doubles down on code generation. The model achieves state-of-the-art results on HumanEval (92.4% pass@1) and SWE-bench Verified (53.2% resolved), putting it in direct competition with Claude and GPT-4o on software engineering tasks.
+
+K2.5 uses a 64-expert MoE architecture with approximately 200B active parameters per token. The model supports a 128K context window natively and includes a vision encoder for multimodal inputs, which Moonshot AI positions as critical for understanding UIs, diagrams, and documentation screenshots during coding workflows.
+
+The licensing situation is more complex. Moonshot AI releases the model weights, but under a license that prohibits commercial use without a separate agreement. For research and personal use, the weights are freely available. For production deployments, you need to go through Moonshot AI's API or negotiate a commercial license. This puts K2.5 in a similar category to early Llama releases: open enough to evaluate, restricted enough to drive API revenue.
+
+The Kimi API is accessible from Europe, though latency from Western Europe to Moonshot's infrastructure is noticeable (typically 200-400ms additional compared to US-based providers). Several European API aggregators now offer Kimi K2.5 through proxy endpoints with better latency characteristics.
+
+## DeepSeek V3: Cost Efficiency at Scale
+
+DeepSeek V3 remains the efficiency benchmark that every other lab is measured against. The model famously cost under $6 million to train, a figure that caused genuine disbelief when first reported and that the Latent Space newsletter described as "the number that broke Silicon Valley's cost assumptions." Even accounting for the fact that DeepSeek benefits from subsidized compute access, the training efficiency is remarkable.
+
+The architecture is distinctive: 256 experts with top-8 routing means only about 67B parameters are active per token out of a total 671B. DeepSeek introduced several innovations in their routing mechanism, including auxiliary-loss-free load balancing and multi-token prediction during training, which they credit for the training efficiency gains.
+
+On benchmarks, DeepSeek V3 is competitive across the board. It scores 88.5 on MMLU, 82.6% on HumanEval, and performs strongly on MT-bench (9.1/10). Where it particularly excels is in mathematical reasoning and long-context tasks, likely benefiting from its efficient attention mechanism.
+
+The MIT license is as permissive as it gets. You can use, modify, and redistribute DeepSeek V3 for any purpose, including commercial applications, with no restrictions beyond preserving the copyright notice. Combined with the relatively modest inference requirements (the 67B active parameters mean you can run it on 4x A100 80GB or 2x H100 with quantization), DeepSeek V3 is arguably the most accessible frontier model for self-hosting.
+
+## Qwen-2.5: The Multilingual Workhorse
+
+Alibaba's Qwen-2.5 takes a different approach. Rather than chasing parameter count, the team focused on data quality and multilingual coverage. The 72B dense model supports over 29 languages with strong performance, making it the default choice for multilingual deployments where you need consistent quality across European, Asian, and Middle Eastern languages.
+
+Qwen-2.5 comes in multiple sizes (0.5B, 1.5B, 7B, 14B, 32B, 72B), all sharing the same architecture and training methodology, just at different scales. This makes it straightforward to prototype with a smaller model and scale up. The 72B flagship achieves 85.3 on MMLU, 79.1% on HumanEval, and scores 8.8/10 on MT-bench.
+
+Licensing varies by size. Models up to 32B use Apache 2.0. The 72B model uses the Qwen License, which is permissive for most commercial uses but includes some restrictions around deploying the model as a competing API service. For most enterprise use cases, this is not a practical limitation.
+
+## Benchmark Comparison
+
+| Benchmark | GLM-5 | Kimi K2.5 | DeepSeek V3 | Qwen-2.5 (72B) |
+|-----------|-------|-----------|-------------|-----------------|
+| MMLU | 87.2 | 86.8 | 88.5 | 85.3 |
+| HumanEval (pass@1) | 84.1% | 92.4% | 82.6% | 79.1% |
+| SWE-bench Verified | 44.8% | 53.2% | 47.1% | 38.6% |
+| MT-bench | 8.9 | 9.0 | 9.1 | 8.8 |
+| MATH-500 | 86.3% | 83.7% | 90.2% | 82.4% |
+
+A few observations. DeepSeek V3 leads on mathematical reasoning. Kimi K2.5 dominates coding benchmarks by a significant margin. GLM-5 and DeepSeek V3 trade positions on general knowledge tasks. Qwen-2.5, despite being the smallest model by active parameters, remains within striking distance on most benchmarks, which speaks to training quality.
+
+## Testing These Models from Europe
+
+If you are based in Europe and want to evaluate these models, here are your practical options:
+
+**API Access**: DeepSeek offers direct API access with servers in Singapore, which provides reasonable latency from Europe (typically 150-250ms). The Kimi API is accessible but slower. For GLM-5, Zhipu AI's API has limited European availability, but third-party providers like Together AI and Fireworks now host it. Qwen-2.5 is available through Alibaba Cloud's Model Studio and through several European cloud providers.
+
+**Self-Hosting**: DeepSeek V3 at 4-bit quantization fits on 2x H100 GPUs or 4x A100 80GB. Qwen-2.5-72B runs on a single H100 at FP16 or 2x A100. GLM-5 requires more substantial infrastructure due to its larger active parameter count. All models are available on Hugging Face in multiple quantization formats, and tools like vLLM and TGI support them out of the box.
+
+**Hugging Face Availability**: All four model families have official repositories on Hugging Face. DeepSeek V3 and Qwen-2.5 are the most straightforward to download and deploy. GLM-5 weights are split across multiple repositories due to size. Kimi K2.5 requires accepting a license agreement before download.
+
+## Which Model for Which Use Case?
+
+- **Code generation and software engineering**: Kimi K2.5 is the clear leader, followed by DeepSeek V3
+- **Mathematical and scientific reasoning**: DeepSeek V3, followed by GLM-5
+- **Multilingual production systems**: Qwen-2.5, especially for European languages
+- **RAG and retrieval-heavy pipelines**: DeepSeek V3 or Qwen-2.5 (both handle long contexts well with manageable inference costs)
+- **Agent frameworks**: GLM-5 or DeepSeek V3 (both have strong instruction following and tool-use support)
+- **Budget-constrained self-hosting**: DeepSeek V3 (lowest active parameters, MIT license, best cost-performance ratio)
+
+## Looking Forward
+
+The pace of iteration from Chinese labs shows no signs of slowing. DeepSeek has already hinted at V4. Moonshot AI is reportedly working on a fully open-licensed successor to K2.5. And GLM-5's successful training on Ascend hardware opens the door for other labs to reduce their dependency on NVIDIA.
+
+For European AI practitioners, the practical takeaway is straightforward: these models are accessible, they are competitive, and the licensing terms of the best among them are more permissive than what many Western labs offer. The era where evaluating frontier models meant choosing between OpenAI and Anthropic is definitively over.
+
+*Sources: DigitalApplied comparative analysis of Chinese LLMs (2026), Latent Space newsletter coverage of DeepSeek V3 training economics, Silicon Republic reporting on GLM-5 and Huawei Ascend training infrastructure.*

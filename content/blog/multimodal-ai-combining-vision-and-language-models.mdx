@@ -1,0 +1,341 @@
+---
+title: "Multimodal AI: Combining Vision and Language Models"
+description: "Learn how to build practical multimodal AI systems that combine vision and language models, from architectures to PyTorch and CLIP code examples."
+date: "2026-02-09"
+category: "AI & ML"
+tags: ["Multimodal", "Vision-Language", "RAG", "PyTorch", "Contrastive Learning", "Embeddings"]
+difficulty: "intermediate"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+Modern AI systems are finally starting to see.
+
+Once you plug images into the same pipeline as text, everything from search to agents to RAG feels very different. Interfaces get simpler, edge cases vanish, and entirely new products appear: visual search, image-grounded copilots, multimodal RAG over PDFs, or agents that can read dashboards and UIs.
+
+From an engineering perspective, multimodal AI is not magic. It is mostly: embeddings, alignment losses, shared latent spaces, plus the same production concerns I cover in Building Production-Ready RAG Systems and Monitoring ML Models in Production.
+
+In this post I will walk through how to combine vision and language models in practical ways, with code, and how to think about architectures that actually ship.
+
+
+## Why combine vision and language?
+
+Multimodal systems are useful when:
+
+- Text alone is incomplete or ambiguous
+- Users naturally provide images (screenshots, photos, plots, scans)
+- Knowledge is locked inside visual formats (diagrams, UI states, PDFs with bad OCR)
+
+Some concrete product patterns:
+
+- Visual search: “show me shoes like this photo”
+- Image-grounded assistants: “explain this error on my CNC machine display”
+- Document copilots: upload a 200-page technical PDF, then ask questions that require reading tables and plots
+- UI agents: “click the Export button, then download the CSV” from a screenshot or remote session
+
+If you have already read Retrieval-Augmented Generation: A Complete Guide or Scaling RAG Systems to Millions of Documents, you can almost reuse that entire toolbox for multimodal, with one upgrade: image embeddings.
+
+
+## Core multimodal architectures
+
+### 1. Dual encoders with a shared embedding space
+
+This is the CLIP-style approach:
+
+- A vision encoder maps images to vectors
+- A text encoder maps text to vectors
+- A contrastive loss aligns related image-text pairs
+
+You end up with a shared latent space where similarity works across modalities. This is extremely powerful, because everything you know from Embedding Models Compared: OpenAI vs Open-Source and Semantic Search vs Keyword Search now also applies to images.
+
+Typical usage patterns:
+
+- Image retrieval from text query
+- Text retrieval from image query
+- Zero-shot classification by comparing an image embedding to embeddings of textual labels
+
+High-level architecture:
+
+1. Pretrained encoders (ViT for images, Transformer for text)
+2. Project both to the same dimension
+3. Train with a contrastive loss (InfoNCE-style)
+
+
+### 2. Encoder-decoder: images as context for generation
+
+Here you want the model to produce language conditioned on an image:
+
+- Image captioning
+- Visual question answering (VQA)
+- Multimodal chat (“what is happening in this picture?”)
+
+Modern systems usually:
+
+1. Encode the image into a grid of visual tokens with a vision transformer
+2. Optionally project visual tokens to the LLM hidden size
+3. Feed visual tokens as additional context tokens to the LLM
+
+This is quite similar to RAG: the image acts like retrieved context chunks, just in a different embedding basis. The mental model is very close to Chunking Strategies for RAG Pipelines plus an additional projection layer.
+
+
+### 3. Multimodal RAG
+
+Once you treat image embeddings as just another vector type, you can build:
+
+- RAG over screenshots and PDFs
+- Hybrid search mixing text, tables, diagrams, and UI states
+
+The pipeline resembles what I described in Hybrid Search: Combining Dense and Sparse Retrieval and Building a Multi-Agent AI System, with these additions:
+
+1. Ingestion extracts text, images, tables from documents
+2. Text encoder processes text chunks
+3. Vision encoder processes images or image patches
+4. You store both in a vector database (see Vector Database Performance Benchmarks)
+5. At query time, you convert the query to text and maybe also accept an image
+6. Retrieve multimodal neighbors and feed them as context to an LLM
+
+
+## A practical CLIP-style dual encoder in PyTorch
+
+Let us make the core idea concrete with a toy dual encoder, close to the classic CLIP setup.
+
+We want:
+
+- `ImageEncoder` -> image to embedding
+- `TextEncoder` -> text to embedding
+- A contrastive training loop
+
+This example is intentionally simplified for clarity.
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import models
+
+class ImageEncoder(nn.Module):
+    def __init__(self, embed_dim: int = 256):
+        super().__init__()
+        base = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.backbone = nn.Sequential(*list(base.children())[:-1])  # remove fc
+        self.proj = nn.Linear(base.fc.in_features, embed_dim)
+
+    def forward(self, x):  # x: (B, 3, H, W)
+        feats = self.backbone(x).squeeze(-1).squeeze(-2)  # (B, C)
+        emb = self.proj(feats)
+        emb = F.normalize(emb, dim=-1)
+        return emb
+
+class TextEncoder(nn.Module):
+    def __init__(self, vocab_size: int, embed_dim: int = 256):
+        super().__init__()
+        self.token_emb = nn.Embedding(vocab_size, embed_dim)
+        self.encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=embed_dim, nhead=8), num_layers=2
+        )
+
+    def forward(self, tokens):  # tokens: (T, B)
+        x = self.token_emb(tokens)  # (T, B, D)
+        x = self.encoder(x)        # (T, B, D)
+        x = x.mean(dim=0)          # (B, D) simple pooling
+        x = F.normalize(x, dim=-1)
+        return x
+
+def clip_loss(image_emb, text_emb, temperature: float = 0.07):
+    # image_emb, text_emb: (B, D)
+    logits = image_emb @ text_emb.t() / temperature  # (B, B)
+    labels = torch.arange(len(image_emb), device=image_emb.device)
+    loss_i2t = F.cross_entropy(logits, labels)
+    loss_t2i = F.cross_entropy(logits.t(), labels)
+    return (loss_i2t + loss_t2i) / 2
+```
+
+You would train this on image-text pairs `(img, caption_tokens)` and optimize `clip_loss`. In practice you will use a larger backbone, better text encoder, and careful batching, but the core idea is this symmetric contrastive loss.
+
+At inference time, you can:
+
+```python
+@torch.inference_mode()
+def build_image_index(image_loader, image_encoder):
+    all_embs, all_ids = [], []
+    for batch_imgs, batch_ids in image_loader:
+        embs = image_encoder(batch_imgs.cuda())
+        all_embs.append(embs.cpu())
+        all_ids.extend(batch_ids)
+    return torch.cat(all_embs, dim=0), all_ids
+
+@torch.inference_mode()
+def search_images(text_query_tokens, text_encoder, image_embs, image_ids, k=5):
+    q_emb = text_encoder(text_query_tokens.cuda()).cpu()  # (1, D)
+    sims = (q_emb @ image_embs.t()).squeeze(0)            # (N,)
+    topk = sims.topk(k)
+    return [image_ids[i] for i in topk.indices]
+```
+
+For large scale, you will move this into a vector database as discussed in Understanding Vector Databases: A Beginner's Guide.
+
+
+## Practical multimodal RAG pipeline
+
+Let us sketch a production-style multimodal RAG over PDFs with diagrams and screenshots. This builds on concepts from Building Production-Ready RAG Systems and Evaluating RAG System Performance.
+
+### 1. Ingestion and chunking
+
+For each document:
+
+1. Extract text with OCR where needed
+2. Detect figures, tables, diagrams, and crop them as separate images
+3. Apply chunking for text (see Chunking Strategies for RAG Pipelines)
+4. For each text chunk, store its page number and bounding boxes
+5. For each image, store page number and caption or nearby text
+
+
+### 2. Encoding and storage
+
+```python
+from sentence_transformers import SentenceTransformer
+import torch
+
+text_model = SentenceTransformer("all-MiniLM-L6-v2")
+vision_model = ...  # CLIP image encoder or similar
+
+# text_chunks: list[str]
+text_embs = text_model.encode(text_chunks, batch_size=64, show_progress_bar=True)
+
+# images: list[PIL.Image]
+vision_model.eval().cuda()
+
+@torch.inference_mode()
+def encode_images(images):
+    # transform to tensors, batch, etc.
+    # here we assume you already have a DataLoader
+    all_embs = []
+    for batch in image_loader:
+        embs = vision_model(batch.cuda())
+        all_embs.append(embs.cpu())
+    return torch.cat(all_embs)
+
+image_embs = encode_images(images)
+
+# Persist to vector DB with metadata
+```
+
+Metadata should include:
+
+- Document id
+- Page number
+- Type ("text" or "image")
+- Bounding boxes or coordinates
+- Section header if available
+
+
+### 3. Query handling
+
+A query can be:
+
+- Pure text: “Explain the loss function used in figure 3”
+- Text + image: screenshot of a figure plus “what does this chart say about model performance?”
+
+You can route queries:
+
+1. Always embed the text with the text encoder
+2. If an image is present, embed it with the vision encoder
+3. Run retrieval separately against the text index and the image index
+4. Merge results with a simple score fusion, for example
+
+```python
+def fuse_scores(text_hits, image_hits, alpha=0.6):
+    # Each hit: {"id": ..., "score": ...}
+    from collections import defaultdict
+    scores = defaultdict(float)
+
+    for h in text_hits:
+        scores[h["id"]] += alpha * h["score"]
+    for h in image_hits:
+        scores[h["id"]] += (1 - alpha) * h["score"]
+
+    fused = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return fused
+```
+
+Then feed the top-k context items to an LLM as text. For images you can:
+
+- Caption them with a vision-language model
+- Or use an LLM that directly accepts image inputs
+
+This is very similar to the agentic patterns I described in Agentic RAG: The Next Evolution and Building AI Agents with LangChain and LangGraph, just with an extra vision tool.
+
+
+## Design choices and tradeoffs
+
+### Encoder choice and cost
+
+You need to pick encoders that match your budget and latency constraints.
+
+- OpenAI and other hosted multimodal models: great quality, but with privacy and cost tradeoffs. For sensitive data, see Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
+- Open source CLIP or SigLIP models: good for search and retrieval, easy to self host
+- Larger multimodal LLMs: best quality for rich reasoning, but expensive
+
+As discussed in Embedding Models Compared: OpenAI vs Open-Source, there is usually a sweet spot with mid size open models fine tuned on your domain.
+
+
+### Alignment and evaluation
+
+Multimodal systems fail in new ways:
+
+- Hallucinating visual content that is not present
+- Misreading charts or UI text
+- Ignoring the image and answering from priors only
+
+For evaluation you can extend the ideas in Evaluating RAG System Performance:
+
+- Retrieval metrics per modality: recall@k for image vs text
+- Faithfulness metrics conditioned on both text and image context
+- Human eval on subsets that heavily rely on visuals, for example reading tables
+
+Monitor in production like any ML system (see Monitoring ML Models in Production):
+
+- Log inputs with image hashes and feature summaries
+- Track performance per modality mix (text only vs image + text)
+
+
+### Privacy and compliance
+
+Images can contain sensitive data: faces, license plates, screens with PII. Many principles from Introduction to Differential Privacy for NLP and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models carry over:
+
+- Mask or blur sensitive regions before encoding
+- Avoid storing raw images unless strictly necessary
+- Consider hashing and access controls for image content
+- If you store embeddings, treat them as potentially re-identifiable
+
+If you are building internal tools that process screenshots of internal dashboards, this is not optional.
+
+
+## A lightweight multimodal assistant pattern
+
+Combining all of this, a simple but powerful architecture looks like this:
+
+1. User uploads an image and optional text query
+2. Backend:
+   - Embeds the text
+   - Embeds the image
+   - Retrieves relevant text chunks and similar images
+3. The system builds a prompt for a multimodal LLM:
+
+   - Includes the text query
+   - Provides the retrieved text as context
+   - Attaches the user image and maybe top-k retrieved images
+
+4. LLM responds with a grounded explanation or action plan
+
+You can implement steps 2-3 with the same FastAPI patterns described in Deploying ML Models with FastAPI and Docker and the general engineering practices in Python Best Practices for ML Engineers and CI/CD Pipelines for Machine Learning Projects.
+
+
+## Key Takeaways
+
+- Multimodal AI is mostly about aligning image and text embeddings into a shared space and then reusing familiar retrieval and generation patterns.
+- Dual encoders like CLIP are the workhorses for image-text retrieval and zero-shot classification, with simple contrastive losses.
+- Multimodal RAG extends classic RAG pipelines to images by treating figures and screenshots as retrievable units alongside text.
+- Production systems must address encoder choice, latency, and evaluation, just like text-only RAG, but with new failure modes around visual hallucinations.
+- Privacy risks increase with images, so masking, storage policies, and access control are critical for screenshots and sensitive documents.
+- A practical starting point is a lightweight multimodal assistant that retrieves over both text and images and uses a multimodal LLM to generate grounded answers.

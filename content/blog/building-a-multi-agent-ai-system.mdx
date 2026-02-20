@@ -1,0 +1,417 @@
+---
+title: "Building a Multi-Agent AI System"
+description: "Learn how to design, coordinate, and deploy robust multi-agent AI systems, from architecture and tools to failure modes and production concerns."
+date: "2026-02-09"
+category: "AI & ML"
+tags: ["AI Agents", "RAG", "LangGraph", "LLMs", "Python", "Distributed Systems"]
+difficulty: "advanced"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Multi-agent systems are what you reach for when a single LLM prompt and a long context window stop being enough. You start needing specialization, parallelism, tool orchestration, and long-running workflows that behave more like software systems than chatbots.
+
+I have hit this wall multiple times building production RAG systems and AI agents at Ailog. The good news is that most of the hard problems of multi-agent design are familiar from distributed systems, classic software architecture, and the topics I already covered in Building Production-Ready RAG Systems and Building AI Agents with LangChain and LangGraph.
+
+This post is about going from "I have one agent with tools" to "I have a coordinated team of agents that actually gets work done".
+
+## When do you actually need multiple agents?
+
+Before wiring graphs and message buses, it is worth asking whether multiple agents are justified. Often, better prompt engineering or a solid RAG setup is enough. The following are strong signals that you might benefit from multi-agent design:
+
+1. **Distinct skill domains**  
+   Example: a system that must combine legal reasoning, code generation, and product requirement synthesis. A single system prompt tends to dilute these skills.
+
+2. **Different tools, different security boundaries**  
+   Some tasks need access to private customer data, others should only see anonymized aggregates. Tying this to different agents is easier than trying to conditionally constrain one giant agent.
+
+3. **Workflow-like processes**  
+   For example: retrieve documents using RAG, summarize, then run consistency checks. In my Retrieval-Augmented Generation: A Complete Guide article I show that this pipeline logic already looks like a graph. Multi-agent orchestration generalizes that.
+
+4. **Need for parallelism**  
+   You want multiple subtasks (retrieval, code execution, evaluation) in parallel to reduce latency.
+
+If your use case matches at least two of these, multi-agent is probably worth the complexity.
+
+## Core architectural patterns
+
+At a high level, a multi-agent system is just:
+
+- A set of agents (LLM + tools + local state)
+- A communication protocol (messages, shared memory, or both)
+- A scheduler or orchestrator (who talks to whom, in what order)
+
+You can implement this with raw Python and queues, or with frameworks like LangGraph which I discussed in Building AI Agents with LangChain and LangGraph.
+
+### Pattern 1: Orchestrator + specialists
+
+The simplest useful pattern is a **manager agent** that delegates to specialist agents.
+
+- Manager: receives the user request, breaks it into subtasks, routes them
+- Specialists: each have a narrow skill, tools, and system prompt
+
+This pattern keeps control and logging centralized, which is valuable for observability and debugging.
+
+### Pattern 2: Blackboard (shared memory)
+
+In the blackboard pattern, agents interact indirectly through a shared state store:
+
+- A central state (the "blackboard") contains tasks, intermediate artifacts, and decisions
+- Agents read from and write to this shared state
+
+For RAG systems, this shared state often includes:
+
+- Retrieved documents
+- Intermediate summaries
+- Structured plans
+- Evaluation feedback
+
+This maps nicely to graphs in LangGraph, or to explicit Python dicts stored in Redis.
+
+### Pattern 3: Peer-to-peer agents
+
+Agents address each other directly, more like microservices. This can be powerful but is harder to reason about and secure. I usually start with orchestrator or blackboard patterns and introduce peer communication only when really needed.
+
+## Defining agents in practice
+
+An "agent" in this context is not just an LLM. It is a combination of:
+
+- System prompt defining its role and constraints
+- Toolset it can call
+- Local memory or state
+- Policies (max steps, safety guards, logging)
+
+Here is a minimal but practical agent abstraction in Python using LangChain-like primitives, but you can adapt the idea to any stack.
+
+```python
+from typing import List, Dict, Any, Callable
+from pydantic import BaseModel
+
+class Tool(BaseModel):
+    name: str
+    description: str
+    func: Callable[[Dict[str, Any]], Dict[str, Any]]
+
+class Agent(BaseModel):
+    name: str
+    system_prompt: str
+    tools: List[Tool]
+    llm: Any  # wrap your LLM client
+
+    def _tool_spec(self) -> str:
+        return "\n".join(
+            f"- {t.name}: {t.description}" for t in self.tools
+        )
+
+    def _build_prompt(self, message: str, state: Dict[str, Any]) -> str:
+        return f"""You are {self.name}.
+
+{self.system_prompt}
+
+Available tools:
+{self._tool_spec()}
+
+Conversation state:
+{state}
+
+User request:
+{message}
+
+If tools are needed, respond with a JSON object:
+{{"tool": <tool_name>, "args": <json args>}}
+Otherwise, respond with natural language.
+"""  # no em dash
+
+    def __call__(self, message: str, state: Dict[str, Any]) -> Dict[str, Any]:
+        prompt = self._build_prompt(message, state)
+        raw_output = self.llm(prompt)
+
+        # Simple tool routing logic (pseudo-code)
+        try:
+            parsed = json.loads(raw_output)
+            tool_name = parsed.get("tool")
+            if tool_name:
+                tool = next(t for t in self.tools if t.name == tool_name)
+                result = tool.func(parsed.get("args", {}))
+                return {"type": "tool_result", "tool": tool_name, "result": result}
+        except Exception:
+            pass
+
+        return {"type": "response", "content": raw_output}
+```
+
+This is intentionally minimal, but the core idea is important: tools, state, and message parsing are part of the agent, not scattered across your code.
+
+## A concrete multi-agent use case
+
+Let us build something realistic: a **requirements assistant** for a SaaS product.
+
+The workflow:
+
+1. User describes a feature
+2. System analyzes feasibility and architecture
+3. System retrieves relevant internal docs and tickets (RAG) to find related work
+4. System drafts a detailed spec and acceptance criteria
+5. A critic agent evaluates and suggests improvements
+
+This involves at least four agents:
+
+- **Planner** - understands the request and decomposes it
+- **Retriever** - uses semantic search over internal docs (see Semantic Search vs Keyword Search: When to Use What)
+- **Spec Writer** - writes the specification
+- **Critic** - reviews and tightens acceptance criteria
+
+### State model and orchestrator
+
+We use a blackboard-like state that all agents can read and write.
+
+```python
+from typing import Literal
+from pydantic import BaseModel
+
+class SystemState(BaseModel):
+    user_request: str
+    plan: str | None = None
+    retrieved_context: List[str] = []
+    spec_draft: str | None = None
+    spec_final: str | None = None
+    review_comments: str | None = None
+    status: Literal[
+        "received", "planned", "retrieved", "drafted", "reviewed", "completed"
+    ] = "received"
+```
+
+Now a very explicit orchestrator:
+
+```python
+class Orchestrator:
+    def __init__(self, planner, retriever, spec_writer, critic):
+        self.planner = planner
+        self.retriever = retriever
+        self.spec_writer = spec_writer
+        self.critic = critic
+
+    def run(self, user_request: str) -> SystemState:
+        state = SystemState(user_request=user_request)
+
+        # 1. Planning
+        res = self.planner(
+            message="Create a concise numbered plan of steps to handle this request.",
+            state=state.dict(),
+        )
+        state.plan = res["content"]
+        state.status = "planned"
+
+        # 2. Retrieval (RAG)
+        res = self.retriever(
+            message=(
+                "Find related features, design docs, and tickets that may impact "
+                "this request. Output IDs and short summaries."
+            ),
+            state=state.dict(),
+        )
+        state.retrieved_context = parse_retrieval_output(res["content"])
+        state.status = "retrieved"
+
+        # 3. Draft spec
+        res = self.spec_writer(
+            message=(
+                "Using the plan and retrieved context, write a detailed spec with "
+                "sections: Overview, User Stories, Non-Functional Requirements, "
+                "Risks, Open Questions."
+            ),
+            state=state.dict(),
+        )
+        state.spec_draft = res["content"]
+        state.status = "drafted"
+
+        # 4. Critique
+        res = self.critic(
+            message=(
+                "Review the spec draft. Point out missing edge cases and unclear "
+                "requirements. Then propose an improved version."
+            ),
+            state=state.dict(),
+        )
+        state.review_comments = res["content"]
+        state.spec_final = extract_final_spec(res["content"])
+        state.status = "completed"
+
+        return state
+```
+
+This is deliberately synchronous and simple, but it illustrates the key design principle: isolate agent responsibilities and make orchestration explicit.
+
+Notice how this uses techniques from:
+
+- Retrieval-Augmented Generation: A Complete Guide for the retriever
+- Chunking Strategies for RAG Pipelines for how we index internal docs
+- Prompt Engineering Best Practices for Production for the system and task prompts
+
+## RAG and multi-agent systems
+
+Multi-agent design synergizes with RAG in several ways.
+
+### Dedicated retrieval agents
+
+Instead of every agent doing its own retrieval, create a specialized retrieval agent that:
+
+- Knows which vector database to use (see Vector Database Performance Benchmarks and Understanding Vector Databases: A Beginner's Guide)
+- Knows which collections to query
+- Applies filtering based on tenant, region, or privacy policies
+
+This centralizes retrieval logic, which is crucial when you have compliance or privacy constraints such as those I described in Data Privacy in the Age of Large Language Models.
+
+### Confidential and public contexts
+
+With strong privacy boundaries, I often split agents into:
+
+- **Private context agent** - has access to sensitive user data, uses privacy-preserving NLP techniques similar to those in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models
+- **Public context agent** - uses public docs, general knowledge, maybe internet search
+
+A manager agent can ask both, then selectively merge their outputs, sometimes after anonymization.
+
+### Cross-checking and evaluation agents
+
+Evaluation is where multi-agent truly shines. For example, a **fact-checker agent** can:
+
+- Take the final answer
+- Independently re-run retrieval
+- Flag unsupported claims
+
+This is especially powerful in RAG systems where hallucinations can still occur if retrieval is weak.
+
+## Coordination, control, and failure modes
+
+Once you have several agents, complexity shifts from prompts to coordination. Treat this as an engineering problem.
+
+### Step limits and recursion control
+
+Agents that can call other agents can easily fall into infinite loops.
+
+- Enforce a **max depth** of nested calls
+- Track a **step count** in the shared state
+- Make the orchestrator responsible for deciding whether to continue
+
+```python
+class SafeOrchestrator(Orchestrator):
+    def run(self, user_request: str, max_steps: int = 10) -> SystemState:
+        state = SystemState(user_request=user_request)
+        steps = 0
+
+        # Pseudocode - suppose each step is a decision by the planner
+        while steps < max_steps and state.status != "completed":
+            # decide next action based on state
+            # call appropriate agent
+            steps += 1
+
+        if state.status != "completed":
+            # fallback path
+            state.spec_final = (
+                "System stopped due to step limit. Partial results only. "
+                "Please refine your request or contact a human."
+            )
+        return state
+```
+
+### Observability
+
+Logging is essential. At minimum:
+
+- Log each agent call with: input, state summary, output, latency
+- Log the orchestration decisions (which agent was chosen and why)
+
+I often store these traces in a simple Postgres table or time series database so I can later analyze:
+
+- Which agents cause the most cost
+- Where errors cluster
+- How often fallbacks are triggered
+
+### Error handling
+
+Have explicit error strategies per agent:
+
+- Retry with backoff for transient failures
+- Fall back to a simpler agent or path
+- Escalate to a human if impact is high
+
+In practice this means wrapping each agent call and tagging the state with error metadata.
+
+```python
+def safe_call(agent, message, state, retries=2):
+    for attempt in range(retries + 1):
+        try:
+            return agent(message=message, state=state)
+        except Exception as e:
+            if attempt == retries:
+                return {
+                    "type": "error",
+                    "error": str(e),
+                    "message": f"Agent {agent.name} failed after retries."
+                }
+``` 
+
+## From prototype to production
+
+Once a multi-agent system works on your laptop, getting it to production involves many of the engineering considerations I covered in Deploying ML Models with FastAPI and Docker.
+
+### Serving architecture
+
+Common architecture:
+
+- **HTTP / gRPC API** gateway: FastAPI is an excellent choice
+- **Orchestrator service**: stateless, reads/writes state to Redis or a DB
+- **Workers for heavy tools**: e.g. code execution, large batch retrieval
+
+Example FastAPI skeleton:
+
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Request(BaseModel):
+    query: str
+
+class Response(BaseModel):
+    result: str
+    trace_id: str
+
+orchestrator = Orchestrator(...)
+
+@app.post("/feature-spec", response_model=Response)
+async def feature_spec(request: Request):
+    trace_id = generate_trace_id()
+    state = orchestrator.run(request.query)
+    store_trace(trace_id, state)  # for debugging & analytics
+    return Response(result=state.spec_final, trace_id=trace_id)
+```
+
+### Caching and idempotency
+
+Multi-agent flows can be long and expensive. Caching saves cost and reduces latency:
+
+- Cache retrieval results by query + filters
+- Cache intermediate artifacts like plan or summarizations
+- Make requests idempotent with a client-supplied request ID
+
+### Evaluation and continuous improvement
+
+Use multi-agent evaluation loops:
+
+- Automatic evaluators (agents) that score outputs along dimensions like correctness, style, safety
+- Compare variants of prompts, tools, or routing policies
+
+This is where articles like Embedding Models Compared: OpenAI vs Open-Source and Fine-Tuning LLMs on Custom Data: A Practical Guide become relevant. The better your base models and embeddings, the more reliable each agent becomes.
+
+## Key Takeaways
+
+- Use multi-agent systems when you have distinct skills, tools, or security boundaries that a single agent struggles to handle.
+- Start with simple patterns: an orchestrator plus specialist agents, or a blackboard with explicit shared state.
+- Treat each agent as a combination of system prompt, tools, state, and policies, not just an LLM call.
+- Combine multi-agent design with solid RAG foundations, including good chunking, retrieval, and privacy constraints.
+- Make orchestration explicit in code, with clear state transitions and limits on depth and steps.
+- Invest early in observability, logging, and error handling, since debugging interactions is harder than debugging single prompts.
+- When moving to production, reuse good practices from web services: FastAPI, Docker, caching, idempotency, and monitoring.
+- Leverage agents not only for doing work but also for evaluation, cross-checking, and continuous improvement of the system.

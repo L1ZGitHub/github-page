@@ -1,0 +1,395 @@
+---
+title: "Retrieval-Augmented Generation: A Complete Guide"
+description: "Beginner-friendly guide to Retrieval-Augmented Generation, with architecture, tradeoffs, vector DBs, privacy tips, and Python code examples."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["RAG", "LLMs", "Vector Databases", "Python", "NLP", "Machine Learning"]
+difficulty: "beginner"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Most people hit the same wall with large language models: they sound confident, but they hallucinate, forget your data, and are out of date. Retrieval-Augmented Generation (RAG) is how I consistently turn those models into grounded, reliable tools that can actually work in production.
+
+RAG is not magic. It is a pattern. Once you understand its moving parts, you can design systems that are accurate, controllable, and privacy-aware, instead of hoping the model just “gets it right”.
+
+## What is Retrieval-Augmented Generation?
+
+RAG is a way to connect a language model to your own data.
+
+Instead of fine-tuning the model on your documents, you:
+
+1. Store your knowledge in a searchable format (usually vectors in a vector database)
+2. At query time, retrieve the most relevant pieces of information
+3. Feed those into the model as context so it can generate an answer grounded in that data
+
+So the model does not have to “know” everything in its parameters. It learns how to *use* external knowledge.
+
+If you are completely new to vector search, my article "Understanding Vector Databases: A Beginner's Guide" is a good starting point to understand embeddings, similarity search, and why we use them at all.
+
+### RAG vs fine-tuning
+
+RAG and fine-tuning solve related but different problems:
+
+- RAG is best for: keeping answers up to date, grounding responses in specific documents, giving citations, respecting access control.
+- Fine-tuning is best for: adapting behavior and style, specializing to domain-specific formats, improving reasoning on a stable domain.
+
+In practice I often combine both. You can fine-tune for behavior and use RAG for knowledge. If you want a deeper dive into fine-tuning, see "Fine-Tuning LLMs on Custom Data: A Practical Guide".
+
+## The Core RAG Architecture
+
+Conceptually, a basic RAG system has two phases:
+
+1. **Indexing pipeline** - prepare and store your documents.
+2. **Query pipeline** - answer user questions using retrieval.
+
+### 1. Indexing pipeline
+
+This is mostly offline work.
+
+1. **Collect documents** (PDFs, HTML, markdown, database rows, etc.)
+2. **Chunk** documents into smaller pieces (e.g. 200-1000 tokens)
+3. **Embed** each chunk into a vector using an embedding model
+4. **Store** the vectors and metadata in a vector database
+
+Chunking and metadata design are often more important than which LLM you pick.
+
+### 2. Query pipeline
+
+This is what runs for each user query.
+
+1. User asks a question
+2. Embed the query
+3. Retrieve top-k most similar chunks from the vector database
+4. Build a prompt that includes the question and the retrieved chunks
+5. Ask the LLM to answer using only that context
+
+This is the minimal “production-ready” pattern that I described more formally in "Building Production-Ready RAG Systems".
+
+## A Minimal RAG Example in Python
+
+Let us build a tiny RAG system using:
+
+- `sentence-transformers` for embeddings
+- `faiss` for vector search
+- An LLM API (e.g. OpenAI, or any similar client) for generation
+
+### Setup
+
+```bash
+pip install sentence-transformers faiss-cpu openai tiktoken
+```
+
+> You can swap `openai` with any compatible LLM client. The structure stays the same.
+
+### Indexing: documents to vectors
+
+```python
+import os
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+
+# 1. Load embedding model
+embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# 2. Your documents (in practice, load and chunk them)
+DOCUMENTS = [
+    {
+        "id": "doc1",
+        "text": "Ailog is a company focusing on privacy-preserving NLP and RAG systems.",
+        "source": "company_overview.md",
+    },
+    {
+        "id": "doc2",
+        "text": "Retrieval-Augmented Generation combines vector search with language models.",
+        "source": "rag_guide.md",
+    },
+]
+
+# 3. Embed documents
+texts = [d["text"] for d in DOCUMENTS]
+embeddings = embed_model.encode(texts, normalize_embeddings=True)
+embeddings = np.array(embeddings).astype("float32")
+
+# 4. Build FAISS index
+dimension = embeddings.shape[1]
+index = faiss.IndexFlatIP(dimension)  # inner product works with normalized vectors
+index.add(embeddings)
+
+# Keep metadata aligned with index rows
+metadata = DOCUMENTS
+```
+
+### Query: retrieve + generate
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+
+def retrieve(query: str, k: int = 3):
+    query_emb = embed_model.encode([query], normalize_embeddings=True)
+    query_emb = np.array(query_emb).astype("float32")
+
+    scores, indices = index.search(query_emb, k)
+    results = []
+    for score, idx in zip(scores[0], indices[0]):
+        if idx == -1:
+            continue
+        doc = metadata[idx]
+        results.append({
+            "score": float(score),
+            "text": doc["text"],
+            "source": doc["source"],
+        })
+    return results
+
+
+def build_prompt(question: str, contexts):
+    context_text = "\n\n".join(f"Source: {c['source']}\n{c['text']}" for c in contexts)
+
+    system_msg = (
+        "You are a helpful assistant. Answer the question using only the provided context. "
+        "If the answer is not in the context, say you do not know."
+    )
+
+    user_msg = (
+        f"Context:\n{context_text}\n\n"
+        f"Question: {question}\n"
+        f"Answer in a concise paragraph."
+    )
+
+    return system_msg, user_msg
+
+
+def answer_question(question: str, k: int = 3) -> str:
+    contexts = retrieve(question, k=k)
+    system_msg, user_msg = build_prompt(question, contexts)
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",  # or similar
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.1,
+    )
+
+    return response.choices[0].message.content
+
+
+if __name__ == "__main__":
+    q = "What does Ailog focus on?"
+    print(answer_question(q))
+```
+
+This is deliberately small, but the pattern is exactly what I use in larger production systems, with more careful engineering around chunking, privacy, and observability.
+
+## Getting Chunking and Metadata Right
+
+In many failed RAG systems I review, the root cause is usually poor chunking or missing metadata, not the LLM itself.
+
+### Chunk size and overlap
+
+Tradeoffs:
+
+- Too small (e.g. 50 tokens): good recall but context becomes fragmented.
+- Too big (e.g. 3000 tokens): fewer chunks, but you might miss the relevant part or exceed context limits.
+
+A practical starting point:
+
+- Chunk size: 300-800 tokens
+- Overlap: 10-20 percent
+
+You can use a tokenizer like `tiktoken` to count tokens.
+
+```python
+import tiktoken
+
+enc = tiktoken.get_encoding("cl100k_base")
+
+
+def tokenize_len(text: str) -> int:
+    return len(enc.encode(text))
+```
+
+### Metadata design
+
+Metadata is how you keep track of:
+
+- `source` (file name, URL, database table)
+- `section` or `heading`
+- `created_at` / `updated_at`
+- `access_level` or `tenant_id` for permissions
+
+With good metadata you can:
+
+- Filter results (e.g. only documents from team X)
+- Implement row-level security
+- Debug wrong answers by tracing which chunk was used
+
+This connects directly with privacy concerns. In "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" I talk more about how metadata and access control prevent leaking cross-tenant data.
+
+## Improving Retrieval Quality
+
+Naive similarity search works, but you can get much better results with a few extra techniques.
+
+### Better query formulation
+
+Users often type vague queries. You can improve retrieval by:
+
+- Rewriting the query into a more explicit search query
+- Expanding acronyms or aliases
+
+You can even ask the LLM to rewrite the query before embedding.
+
+```python
+REWRITE_SYSTEM = "Rewrite the question into a concise search query, no more than 20 words."
+
+
+def rewrite_query(raw_question: str) -> str:
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": REWRITE_SYSTEM},
+            {"role": "user", "content": raw_question},
+        ],
+        temperature=0.2,
+    )
+    return resp.choices[0].message.content.strip()
+```
+
+Then call `retrieve(rewrite_query(user_question))` instead of using the raw question.
+
+### Combining keyword and vector search
+
+Vector search is great for semantic similarity, but sometimes you need:
+
+- Exact matches (IDs, codes, names)
+- Filtering on structured fields
+
+In real systems I often:
+
+1. Use a traditional search engine (e.g. PostgreSQL `tsvector`, Elasticsearch) for keyword + filters
+2. Use a vector database for semantic search
+3. Merge or re-rank results
+
+If you want a more systematic breakdown of vector database capabilities, the "Understanding Vector Databases" article covers indexes, distance metrics, and scaling.
+
+### Reranking
+
+One powerful trick is to retrieve more documents than you need (e.g. top 20) then re-rank them with a stronger model.
+
+Two simple options:
+
+- Use a cross-encoder model from `sentence-transformers` to score (query, chunk) pairs
+- Use the LLM itself to select the most relevant chunks
+
+Reranking often gives more improvement than switching to a bigger LLM.
+
+## Prompting Strategies for RAG
+
+Even with perfect retrieval, the model can still hallucinate or ignore the context. Prompting matters.
+
+### Grounding instructions
+
+Always:
+
+- Explicitly tell the model to use only the context
+- Allow it to say “I do not know”
+- Ask for references to sources
+
+Example system message:
+
+```text
+You are an assistant answering questions about internal company documentation.
+Use only the information in the CONTEXT. If the answer is not in the context,
+respond: "I do not know based on the provided documents." Cite the source filenames.
+```
+
+### Structured outputs
+
+For production systems I prefer structured JSON outputs rather than free text. It makes integration with other services much more reliable.
+
+```python
+SYSTEM_STRUCTURED = """
+You are a helpful assistant. Use only the provided context.
+Return a JSON object with keys: "answer" (string), "sources" (list of strings).
+If you don't know, set answer to "unknown" and sources to [].
+"""
+```
+
+This is similar to patterns I use in "Building Production-Ready RAG Systems" where validation and downstream processing matter.
+
+## RAG and Privacy
+
+RAG is powerful but also dangerous if you ignore privacy. You are literally feeding user queries and internal documents into a third-party model.
+
+From a privacy-preserving NLP perspective there are a few key practices:
+
+- **Data minimization**: send only the minimal chunks required for an answer, not entire documents.
+- **Anonymization / pseudonymization**: remove or mask identifiable information before storage or at retrieval time.
+- **Tenant isolation**: ensure retrieval only pulls from the correct tenant or access group.
+- **Auditability**: log which documents were used to answer which query.
+
+In the privacy article I go into techniques like on-premise inference, encryption, and policy enforcement that can coexist nicely with RAG.
+
+## When to Use RAG vs Other Approaches
+
+Use RAG when:
+
+- Your knowledge changes frequently
+- You need transparent links to sources
+- You have more data than fits in model parameters
+
+Consider fine-tuning when:
+
+- You want the model to follow very specific formats or workflows
+- Your domain is stable and you have high-quality labeled data
+
+For many real-world products I build something like:
+
+- A RAG layer for documents and factual answers
+- A light fine-tune or system prompt engineering for style and domain reasoning
+
+## Common Pitfalls I See in RAG Projects
+
+A few frequent mistakes:
+
+- **Indexing raw PDFs without parsing**: you get garbage chunks, unreliable answers.
+- **No monitoring**: you do not track retrieval quality, hallucination rate, or latency.
+- **Ignoring context window limits**: stuffing 50 chunks into a prompt and hoping for the best.
+- **No evaluation**: shipping without test questions and acceptance criteria.
+
+In production setups I like to:
+
+- Maintain a set of representative queries with expected answers
+- Periodically run evaluations over the RAG pipeline
+- Log retrieved contexts and outcomes for error analysis
+
+These practices are aligned with the approach I outlined in "Building Production-Ready RAG Systems".
+
+## Where to Go Next
+
+If you are just starting, I would suggest this progression:
+
+1. Build a minimal prototype similar to the Python example above.
+2. Replace the in-memory documents with a real vector database (Qdrant, Pinecone, Milvus, or PostgreSQL with pgvector).
+3. Add proper chunking, metadata, and access control.
+4. Add evaluation scripts with a small test set of Q&A pairs.
+5. Start integrating privacy practices from "Privacy-Preserving NLP" if you are handling sensitive data.
+
+From there, you can explore more advanced RAG variations like multi-hop retrieval, tool-augmented agents, or hybrid search.
+
+## Key Takeaways
+
+- RAG connects language models to your own data by retrieving relevant chunks at query time and feeding them into the prompt.
+- A basic RAG system has two main pipelines: indexing (chunk, embed, store) and query (embed, retrieve, generate).
+- Chunking strategy and good metadata design matter more than which LLM you pick in many cases.
+- Retrieval quality can be improved with query rewriting, hybrid search, and reranking.
+- Strong prompting that enforces grounding and allows “I do not know” significantly reduces hallucinations.
+- Privacy-preserving design is critical: minimize data sent to the model, enforce access control, and log retrievals.
+- RAG and fine-tuning are complementary: use RAG for fresh knowledge, fine-tuning for behavior and domain adaptation.
+- Start small with a minimal prototype, then layer in vector databases, evaluations, and privacy protections as you move toward production.

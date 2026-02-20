@@ -1,0 +1,118 @@
+---
+title: "AI Alignment and Safety in a Multipolar World"
+description: "As the US, China, and the open-source community each push frontier AI forward, can we agree on safety standards, or are we heading for fragmented norms?"
+date: "2026-02-16"
+category: "NLP & Privacy"
+tags: ["AI Safety", "AI Alignment", "Geopolitics", "AI Standards", "China AI", "Regulation"]
+difficulty: "advanced"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+The AI safety conversation has operated, for most of its history, under an implicit assumption: the organizations building the most capable AI systems broadly agree on what "safe" means and are motivated to achieve it. This assumption was always fragile. In 2026, it is no longer tenable.
+
+Three distinct poles of frontier AI development have emerged, each with different technical approaches to safety, different institutional incentives, and different cultural assumptions about what alignment even means. The US-based labs (OpenAI, Anthropic, Google DeepMind) frame safety through the lens of existential risk and constitutional values. Chinese labs (Zhipu, DeepSeek, Alibaba, Baidu) operate within a state-regulated framework focused on social stability and content control. And the open-source community (spanning Meta's releases, academic labs, and independent researchers globally) operates without any centralized safety authority at all.
+
+As a Nature analysis of AI governance challenges has explored, the fragmentation of safety norms across these poles is one of the most consequential and least discussed dynamics in AI development. This article examines the technical and institutional dimensions of this divergence and asks whether convergence is possible, or even desirable.
+
+## The Three Poles of AI Safety
+
+### The US Lab Approach
+
+American frontier labs have invested heavily in alignment research, driven by a combination of genuine concern about advanced AI risks and the reputational necessity of demonstrating responsible development. The technical portfolio includes Reinforcement Learning from Human Feedback (RLHF), Constitutional AI (Anthropic's approach of training models against explicit principles), red-teaming, and increasingly sophisticated evaluation frameworks for dangerous capabilities.
+
+The philosophical orientation is broadly consequentialist and focused on long-term risk. Anthropic's published research emphasizes "catastrophic risk" from misaligned advanced systems. OpenAI's charter references the goal of ensuring AGI "benefits all of humanity." Google DeepMind invests in formal approaches to AI safety, including interpretability research aimed at understanding model internals.
+
+This approach has real strengths: it is technically sophisticated, well-funded, and produces published research that advances the field. But it also has blind spots. The focus on existential risk can crowd out attention to present-day harms. The safety standards are set unilaterally by each company, with limited external accountability. And the entire framework assumes a Western liberal democratic value system that is not universal.
+
+### The Chinese Lab Approach
+
+Chinese AI labs operate within a regulatory framework that prescribes specific safety requirements, particularly around content that could threaten social stability, national security, or China's political system. The Interim Measures for the Management of Generative AI Services, effective since August 2023, require that AI-generated content adhere to "socialist core values" and prohibit content that "subverts state power" or "undermines national unity."
+
+This is a fundamentally different alignment target. Where US labs optimize for helpfulness within bounds defined by broad ethical principles, Chinese labs optimize for compliance within bounds defined by specific regulatory requirements. The technical mechanisms overlap, both use RLHF and post-training filtering, but the objective functions diverge significantly.
+
+It would be a mistake to dismiss Chinese AI safety as purely censorship. The regulatory framework also addresses issues that Western frameworks handle less systematically: deepfake regulation, algorithmic recommendation transparency, and requirements for AI systems to clearly identify themselves as non-human. In some areas, Chinese regulation is more concrete and enforceable than anything in the US or EU.
+
+But the alignment divergence is real. A model aligned to Chinese regulatory requirements will refuse to engage with topics that a model aligned to Western values would discuss freely, and vice versa. The question of what constitutes "safe" output is inseparable from the question of what constitutes acceptable discourse, and that is a cultural and political question, not a technical one.
+
+### The Open-Source Approach
+
+The open-source AI ecosystem has no unified approach to safety because it has no unified governance. When Meta releases LLaMA weights, they include an acceptable use policy. When academic researchers fine-tune and redistribute those weights, they may or may not preserve that policy. When someone removes safety guardrails through further fine-tuning, a trivially easy process, there is no enforcement mechanism.
+
+This is not an oversight; it is a structural feature of open systems. The code is free to modify. The weights are free to fine-tune. No central authority can revoke access or mandate behavior. The safety properties of any given deployment depend entirely on the choices of the deployer.
+
+Some view this as an existential vulnerability: frontier-capable AI systems with no safety guarantees, available to anyone. Others view it as the only credible path to safety: models whose behavior can be fully inspected, tested, and modified by independent researchers, without relying on corporate promises.
+
+## The Technical Divergence in Alignment Methods
+
+Beyond the philosophical differences, the three poles are developing divergent technical approaches to alignment that may become increasingly incompatible.
+
+US labs are pushing toward scalable oversight: techniques for aligning systems that may eventually exceed human capability in specific domains. This includes debate (having AI systems argue opposing positions for human judges), recursive reward modeling (using AI systems to help evaluate other AI systems), and interpretability research aimed at understanding what models "know" and "want." The implicit assumption is that alignment is a technical problem with technical solutions.
+
+Chinese labs are investing more heavily in structured output control: ensuring that model outputs conform to specific requirements through a combination of training-time constraints, inference-time filtering, and retrieval-augmented generation with curated knowledge bases. This approach is less concerned with the model's "internal alignment" and more concerned with observable output compliance. It is pragmatic and effective for its stated goals.
+
+The open-source community is fragmented but gravitating toward evaluation-driven safety: building comprehensive benchmark suites that test for specific harmful behaviors, and releasing those benchmarks publicly so that any model can be assessed. Projects like the AI Safety Benchmark from MLCommons represent this approach, standardized tests that any developer can run against any model.
+
+Each approach has merits. Each is also insufficient on its own. Scalable oversight is theoretically elegant but practically unproven at scale. Output control is effective but brittle and can be circumvented. Evaluation-driven safety is transparent but reactive, it tests for known failure modes, not unknown ones.
+
+## The Benchmark Fragmentation Risk
+
+A particularly concerning dimension of this divergence is the fragmentation of safety evaluation itself. If each pole uses different benchmarks to assess safety, meaningful comparison becomes impossible, and "safe" becomes a term that means entirely different things depending on context.
+
+US labs evaluate models against criteria like toxicity, bias, harmful instruction following, and deception. Chinese regulators evaluate against criteria like political sensitivity, social stability, and content conformity. Open-source benchmarks evaluate a mix of both, with no standardized weighting.
+
+Consider a concrete example. GLM-5, trained on Ascend hardware and aligned to Chinese regulatory standards, will handle a question about a politically sensitive historical event differently than GPT-4, aligned to Western values and safety criteria. An unaligned open model, with guardrails removed through fine-tuning, will handle it differently still. Which response is "safest"? The answer depends entirely on whose safety framework you are using.
+
+This is not a hypothetical problem. It has practical consequences for international AI deployment. A multinational company deploying an AI assistant across markets must navigate the fact that "safe" model behavior in one jurisdiction may be "unsafe" in another, not due to technical failure, but due to fundamental disagreement about alignment targets.
+
+## The Race Dynamics Problem
+
+The multipolar structure creates a race dynamic that may undermine safety investment across all poles. If one pole moves faster and invests less in safety, others face competitive pressure to do the same.
+
+This is not merely theoretical. The rapid capability improvements from Chinese labs, DeepSeek's efficient training, GLM-5's Ascend-based frontier performance, create pressure on US labs to accelerate deployment. Conversely, the massive compute investments by US companies create pressure on Chinese labs to match capability. The open-source community, motivated by access rather than profit, pushes capability without any institutional brake.
+
+In arms race dynamics, safety is a competitive disadvantage. Every month spent on alignment research is a month where competitors advance. Every safety restriction on model behavior is a capability restriction that competitors may not impose. The Nash equilibrium, the stable outcome when all parties act in self-interest, may involve less safety investment than any individual pole would choose in isolation.
+
+The AI Safety Summits (Bletchley Park 2023, Seoul 2024, Paris 2025) represent attempts to coordinate against this dynamic. The results have been modest: non-binding commitments to pre-deployment testing, voluntary reporting of capability thresholds, and aspirational statements about international cooperation. No enforcement mechanisms. No binding standards. No consequences for defection.
+
+## Can Safety Standards Be Universal?
+
+The deepest question is whether universal AI safety standards are even coherent. Safety is not a purely technical property, it is a normative judgment about acceptable behavior, and normative judgments are culturally contingent.
+
+The analogy to other international standards is instructive. Aviation safety standards (ICAO) are genuinely universal because the physics of flight is universal: a plane that is safe in one country is safe in another. Pharmaceutical safety standards (ICH) are broadly harmonized because human biology is universal, though cultural differences in risk tolerance create some variation. Financial regulatory standards (Basel) are partially harmonized, with significant national variation reflecting different economic philosophies.
+
+AI safety is closer to financial regulation than to aviation. The "physics" of AI, the mathematics of neural networks, is universal, but the definition of safe behavior is deeply contextual. A universal standard would need to abstract away from specific value judgments and focus on properties that all poles can agree on: reliability (the model does what the user intends), robustness (the model behaves predictably under adversarial conditions), and transparency (the model's capabilities and limitations are accurately communicated).
+
+These are necessary but insufficient. They say nothing about what the model should or should not be willing to do, the core question of alignment. And it is precisely this question where the poles diverge most sharply.
+
+## The Open-Source Wildcard
+
+Open-source AI complicates every aspect of international safety governance. You cannot regulate a model that anyone can download, modify, and deploy. You cannot enforce content restrictions on weights that are freely redistributable. You cannot hold a creator liable for harms caused by a fine-tuned derivative they did not create.
+
+This is the strongest argument against open weights for frontier models: they make governance unenforceable. It is also the strongest argument for open weights: they make governance transparent. When model weights are available for independent inspection, researchers can study failure modes, verify safety claims, and develop mitigations without relying on the model creator's good faith.
+
+The tension is real and unresolvable through purely technical means. Open weights simultaneously enable the best safety research (full access to the system under study) and the worst safety outcomes (full access to modify the system for harmful purposes). Any policy position must grapple with both sides of this tradeoff.
+
+## A Realistic Path Forward
+
+Complete convergence on AI safety standards is unlikely in the near term. The value differences between the three poles are deep, and the competitive dynamics discourage unilateral restraint. But partial convergence on specific, well-defined properties is achievable and worth pursuing.
+
+**Shared evaluation infrastructure.** All poles benefit from rigorous, transparent evaluation of model capabilities and failure modes. Building shared benchmark suites, focused on measurable properties like factual accuracy, robustness to adversarial input, and calibration of uncertainty, creates a common language for discussing safety even where alignment targets differ.
+
+**Mutual red-teaming.** Adversarial testing is universally valuable. A model that is robust to red-teaming by diverse international teams is more robust than one tested only by its creators. Structured programs for cross-border red-teaming, with appropriate protections for sensitive findings, could improve safety across all poles.
+
+**Minimum safety floors.** While maximum safety standards may be irreconcilable, minimum floors are more achievable. Properties like "the model should not help users synthesize chemical weapons" command broad agreement across cultures and political systems. Defining and enforcing a narrow set of universally agreed-upon prohibitions is more tractable than harmonizing entire alignment frameworks.
+
+**Incident sharing.** When AI systems fail in dangerous ways, sharing information about those failures benefits everyone. The aviation industry's safety record is built on mandatory incident reporting and transparent investigation. A comparable mechanism for AI incidents, maintained by an international body with participation from all poles, could improve safety globally.
+
+## Conclusion
+
+AI alignment in a multipolar world is not a problem that will be solved by any single technical breakthrough or policy framework. It is an ongoing negotiation between different visions of what AI should be, conducted through a combination of technical research, institutional design, and diplomatic engagement.
+
+The optimistic scenario is not convergence on a single safety standard, that is neither realistic nor necessarily desirable. It is the development of enough shared infrastructure, mutual understanding, and minimum agreements to prevent the worst outcomes while allowing each pole to pursue its own vision of beneficial AI.
+
+The pessimistic scenario is a world where safety standards fragment entirely, where competitive pressure drives a race to the bottom, and where the open-source community inadvertently provides the tools for the worst actors to cause the most harm. Preventing this outcome requires engagement from all three poles, not agreement, but engagement.
+
+For AI engineers and technical leaders, the implication is that alignment is not just a research problem to be delegated to specialist teams. It is a design decision embedded in every system you build, shaped by values you should be explicit about, and operating in a geopolitical context you cannot ignore. Building safe AI in a multipolar world requires not just technical skill but strategic awareness, and the humility to recognize that your safety framework is one among several, each reflecting legitimate but different priorities.
+
+The world is not converging on a single vision of AI safety. Learning to navigate that divergence, productively and without catastrophe, is one of the defining challenges of this decade.

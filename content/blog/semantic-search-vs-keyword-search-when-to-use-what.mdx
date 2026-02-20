@@ -1,0 +1,388 @@
+---
+title: "Semantic Search vs Keyword Search: When to Use What"
+description: "Understand the differences between keyword and semantic search, when to use each, and how to implement basic semantic search in Python."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["Semantic Search", "Information Retrieval", "RAG", "Python", "Vector Databases", "NLP"]
+difficulty: "beginner"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Good search is where users decide whether your product feels smart or frustrating. A fast interface is useless if people cannot find what they need. The tricky part is that “search” is no longer just about matching words, it is about understanding meaning.
+
+As an engineer working on retrieval-augmented generation (RAG) systems and privacy-preserving NLP, I have had to make the “keyword vs semantic search” decision many times. The right choice depends much more on your data, your constraints, and your users than on hype.
+
+In this article I will walk through how both approaches work, their trade-offs, and practical rules for deciding when to use which. I will also show how to implement a simple semantic search in Python.
+
+
+## What is keyword search?
+
+Keyword search is the classic approach: search engines look for documents that contain the same terms as the query.
+
+At its core, keyword search treats text as a bag of words. It ignores most of the structure and meaning, and focuses on:
+
+- Which words appear
+- How often they appear
+- Where they appear (title, body, tags)
+
+### A simple keyword search example
+
+A minimal keyword search implementation looks like this:
+
+```python
+from collections import Counter
+from typing import List, Tuple
+import math
+
+# Simple TF-IDF for illustration
+
+def tokenize(text: str) -> List[str]:
+    return text.lower().split()
+
+corpus = [
+    "I love developing retrieval augmented generation systems",
+    "Keyword search is simple but powerful",
+    "Semantic search uses embeddings to capture meaning",
+]
+
+tokens_list = [tokenize(doc) for doc in corpus]
+
+# Build vocabulary
+vocab = sorted(set(token for tokens in tokens_list for token in tokens))
+index = {word: i for i, word in enumerate(vocab)}
+
+# Compute term frequencies
+
+def tf(tokens: List[str]) -> List[float]:
+    counts = Counter(tokens)
+    total = len(tokens)
+    return [counts.get(word, 0) / total for word in vocab]
+
+# Compute document frequencies
+
+df = Counter(word for tokens in tokens_list for word in set(tokens))
+N = len(corpus)
+
+# Compute IDF
+
+idf = {word: math.log(N / (1 + df[word])) for word in vocab}
+
+# TF-IDF vectors
+
+def tfidf_vector(tokens: List[str]) -> List[float]:
+    tf_vals = tf(tokens)
+    return [tf_vals[i] * idf[word] for i, word in enumerate(vocab)]
+
+from math import sqrt
+
+def cosine_sim(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    na = sqrt(sum(x * x for x in a))
+    nb = sqrt(sum(y * y for y in b))
+    return dot / (na * nb + 1e-9)
+
+# Build index
+vectors = [tfidf_vector(tokens) for tokens in tokens_list]
+
+def keyword_search(query: str, top_k: int = 3) -> List[Tuple[int, float]]:
+    q_vec = tfidf_vector(tokenize(query))
+    scores = [(i, cosine_sim(q_vec, v)) for i, v in enumerate(vectors)]
+    return sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
+
+results = keyword_search("simple search")
+for idx, score in results:
+    print(f"Score: {score:.3f} | Doc: {corpus[idx]}")
+```
+
+This is a toy implementation of TF-IDF, a classic weighting scheme for keyword search. Production systems usually rely on Lucene-based engines (Elasticsearch, OpenSearch, Solr) with better tokenization, ranking, and query languages.
+
+### Strengths of keyword search
+
+Keyword search shines when:
+
+- You care about exact terms, like in log search, code search, or legal text
+- Your queries are short and specific, such as “status:pending user:123”
+- You have strict latency and resource constraints
+- You want predictable, debuggable behavior
+
+It is also:
+
+- Mature and battle-tested
+- Easy to reason about: if a word is missing from the document, it will not match
+- Cost-efficient: no embedding models, no vector stores
+
+### Weaknesses of keyword search
+
+Keyword search struggles with meaning. Some typical problems:
+
+- Synonyms: “doctor” vs “physician” vs “medical practitioner”
+- Paraphrases: “how to fix iPhone screen” vs “iPhone display repair tutorial”
+- Typos or morphological variants: “run”, “runs”, “running”
+
+You can patch some of this with stemming, lemmatization, fuzzy matching, or query expansion, but it becomes complex. Even then, keyword search is still tied closely to surface form, not semantic similarity.
+
+This is where semantic search enters the picture.
+
+
+## What is semantic search?
+
+Semantic search uses vector representations of text, called embeddings, to capture meaning instead of just words. Two texts with similar meaning will be close in the embedding space, even if they share no words.
+
+This is the core building block of modern RAG systems and is discussed more deeply in “Retrieval-Augmented Generation: A Complete Guide” and “Embedding Models Compared: OpenAI vs Open-Source”.
+
+### How semantic search works
+
+At a high level:
+
+1. You choose an embedding model (OpenAI, Sentence Transformers, or another open-source model).
+2. You encode each document into a fixed-length vector (for example, 768 dimensions).
+3. You store these vectors in a vector database.
+4. For a query, you encode it to a vector and retrieve nearest neighbors by cosine similarity or dot product.
+
+Unlike keyword search, there is no direct term matching. Everything happens in embedding space.
+
+### A minimal semantic search example in Python
+
+Here is a simple implementation using Sentence Transformers and a naive in-memory index. In a real system you would plug into a vector database like those covered in “Understanding Vector Databases: A Beginner's Guide”.
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from typing import List, Tuple
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+corpus = [
+    "I love building RAG systems for production",
+    "Traditional keyword search matches exact words",
+    "Semantic search finds results that mean the same thing",
+    "We use vector databases to store document embeddings",
+]
+
+# Encode documents
+doc_embeddings = model.encode(corpus, normalize_embeddings=True)
+
+def semantic_search(query: str, top_k: int = 3) -> List[Tuple[int, float]]:
+    q_emb = model.encode([query], normalize_embeddings=True)[0]
+    scores = np.dot(doc_embeddings, q_emb)
+    # Higher dot product means more similar
+    top_indices = np.argsort(scores)[::-1][:top_k]
+    return [(int(i), float(scores[i])) for i in top_indices]
+
+results = semantic_search("how to store embeddings for search")
+for idx, score in results:
+    print(f"Score: {score:.3f} | Doc: {corpus[idx]}")
+```
+
+Even with a tiny corpus, you will see that queries like “meaning-based search” can surface documents about “semantic search” and “vector databases” even if the exact phrase does not appear.
+
+### Strengths of semantic search
+
+Semantic search is powerful when:
+
+- Users phrase queries in natural language
+- Synonyms and paraphrases are common
+- Content is unstructured: support tickets, docs, emails, chats
+- You want “smart” retrieval for LLMs (RAG, agents, summarization)
+
+Concrete advantages:
+
+- Robust to vocabulary mismatch
+- More forgiving to user mistakes
+- Better ranking quality for many natural language tasks
+
+In “Building Production-Ready RAG Systems” and “Chunking Strategies for RAG Pipelines” I go deeper into how semantic search interacts with chunking, indexing strategies, and retrieval quality.
+
+### Weaknesses of semantic search
+
+Semantic search is not a magic replacement. It has limitations:
+
+- Less transparent: harder to explain why a document matched
+- More expensive: you must run an embedding model for every document and every query
+- Infrastructure complexity: vector databases, monitoring embedding drift, model versioning
+- Potential privacy and compliance issues if you send data to third-party APIs
+
+For privacy-sensitive workloads, you might want to combine semantic search with techniques from “Privacy-Preserving NLP: Protecting Sensitive Data in Language Models”, like on-premise models, anonymization, and encryption.
+
+
+## When to use keyword search
+
+I like to start from the problem, not the tool. Keyword search is a solid default in many situations.
+
+### Scenario 1: Enterprise log and metric search
+
+Use keyword search when:
+
+- Operators search for error codes, IDs, stack traces
+- Queries contain complex filters (time ranges, fields)
+- Exact token matching is critical
+
+Here, semantic search would add little value and a lot of complexity.
+
+### Scenario 2: E-commerce with structured filters
+
+If most users:
+
+- Filter by category, price, brand
+- Use short queries like “iphone 13 case”
+
+Then keyword search plus good ranking is often enough. You might eventually add light semantic reranking, but it is not required from day one.
+
+### Scenario 3: Legal, compliance, or exact phrase search
+
+If users need to find:
+
+- Specific clauses or citations
+- Exact mentions of terms
+
+Keyword search is more predictable and auditable. You can still use proximity and phrase queries to refine results.
+
+
+## When to use semantic search
+
+Semantic search makes sense when user intent is fuzzy or varied, and language is natural.
+
+### Scenario 1: Knowledge bases and documentation
+
+For internal wikis, support centers, and developer docs, users rarely know the exact terms used in the documentation. Queries might be like:
+
+- “how to reset my password if I forgot the email”
+- “api limit errors when sending many requests”
+
+Here semantic search can surface relevant articles even if the wording does not match. This is exactly the kind of retrieval you want for LLM-based support bots or documentation assistants, as covered in “Building AI Agents with LangChain and LangGraph”.
+
+### Scenario 2: RAG systems and LLM applications
+
+If you are building RAG systems, semantic search is almost mandatory. The whole point is to retrieve context that is semantically relevant to the user query or the agent’s subtask.
+
+From my experience, common patterns include:
+
+- Semantic search over chunked documents (see “Chunking Strategies for RAG Pipelines”)
+- Hybrid retrieval that mixes semantic and keyword signals
+- Using semantic search first, then re-ranking with a cross-encoder or an LLM
+
+### Scenario 3: Similarity and recommendation
+
+Semantic search is also useful beyond classic search:
+
+- “Show me similar articles to this one”
+- “Find users with similar profiles or preferences”
+- “Cluster support tickets by topic”
+
+All of these are variations of similarity search in embedding space.
+
+
+## Hybrid search: best of both worlds
+
+In many real systems the best answer is not “keyword or semantic” but “both”.
+
+Hybrid search combines:
+
+- A keyword score, typically from TF-IDF or BM25
+- A semantic score, from embeddings
+
+You then combine these scores, for example with a weighted sum.
+
+### Simple hybrid scoring example
+
+```python
+from typing import List, Tuple
+import numpy as np
+
+# Assume we already have:
+# - bm25_scores(query) -> List[float]
+# - semantic_scores(query) -> List[float]
+# aligned with the same corpus
+
+alpha = 0.6  # weight for keyword
+beta = 0.4   # weight for semantic
+
+
+def hybrid_search(query: str, top_k: int = 5) -> List[Tuple[int, float]]:
+    kw_scores = np.array(bm25_scores(query))
+    sem_scores = np.array(semantic_scores(query))
+
+    # Normalize to [0,1]
+    def norm(x):
+        x = x - x.min()
+        return x / (x.max() + 1e-9)
+
+    kw_norm = norm(kw_scores)
+    sem_norm = norm(sem_scores)
+
+    final_scores = alpha * kw_norm + beta * sem_norm
+    indices = np.argsort(final_scores)[::-1][:top_k]
+    return [(int(i), float(final_scores[i])) for i in indices]
+```
+
+This pattern is useful when:
+
+- You want the robustness of semantic search but must honor exact matches
+- Your data has important fields that keyword search handles well, like IDs, codes, or tags
+
+In production you would tune `alpha` and `beta` using evaluation sets or online experiments.
+
+
+## Practical decision checklist
+
+Here is the checklist I actually use with teams.
+
+### Start with keyword search if
+
+- Users write short, precise queries
+- Exact terms matter a lot (IDs, codes, legal phrases)
+- You are constrained in budget or cannot run heavy models
+- You do not yet have good relevance judgments for training and tuning
+
+You can still later add semantic reranking on the top N keyword results.
+
+### Start with semantic or hybrid search if
+
+- Queries are natural language and diverse
+- Content is long-form and unstructured
+- You are building RAG systems or AI assistants
+- You care more about “did I answer the question correctly” than “did I match all the words”
+
+In that case:
+
+- Pick an embedding model using insights from “Embedding Models Compared: OpenAI vs Open-Source”
+- Use a vector database as described in “Understanding Vector Databases: A Beginner's Guide”
+- Pay attention to privacy and data residency, especially if using third-party APIs, and consider techniques from “Privacy-Preserving NLP: Protecting Sensitive Data in Language Models”
+
+
+## Implementation tips from practice
+
+A few battle-tested lessons I wish I had early on.
+
+### For keyword search
+
+- Invest in good tokenization and analyzers (language-specific, handling accents, stemming)
+- Use BM25 instead of plain TF-IDF in production
+- Add field boosts so titles and tags weigh more than body text
+- Log queries and clicks, then refine ranking rules using real behavior
+
+### For semantic search
+
+- Normalize embeddings to unit length if you use cosine similarity or dot product
+- Decide on a chunking strategy first, as it strongly affects retrieval quality
+- Cache frequent query embeddings to reduce latency and cost
+- Monitor embedding distributions when you change models to avoid silent degradation
+
+### For both
+
+- Build an evaluation set: queries plus “good” documents
+- Track relevance metrics like NDCG or MRR, not just “system feels better”
+- Provide result explanations where possible to build user trust
+
+
+## Key Takeaways
+
+- Keyword search matches words, semantic search matches meaning
+- Keyword search is ideal when you need exact matches, filters, and predictable behavior
+- Semantic search is better for natural language, synonyms, and RAG-style applications
+- Hybrid search often gives the best trade-off in real-world systems
+- Keyword search is cheaper and simpler to operate, semantic search is more resource-intensive
+- Use vector databases for scalable semantic search and retrieval pipelines
+- For privacy-sensitive data, consider on-premise models and privacy-preserving NLP techniques
+- Always start from user needs and evaluation data, not from the latest hype in search technology

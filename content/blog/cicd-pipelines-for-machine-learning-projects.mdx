@@ -1,0 +1,472 @@
+---
+title: "CI/CD Pipelines for Machine Learning Projects"
+description: "Learn how to design practical CI/CD pipelines for ML projects, covering testing, data checks, model evaluation, deployment and MLOps tooling."
+date: "2026-02-09"
+category: "Engineering"
+tags: ["MLOps", "CI/CD", "Machine Learning", "Python", "RAG", "DevOps"]
+difficulty: "intermediate"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Software engineers have enjoyed solid CI/CD practices for years, while many ML teams still copy models by hand to servers and tweak things in production. The result is fragile systems, hard-to-reproduce bugs, and inconsistent results between experiments and deployment.
+
+In ML, the challenge is not just deploying code. We also deploy data, models, and infrastructure. That makes CI/CD more complex, but also more valuable when it is done well.
+
+In this post I will walk through how I approach CI/CD for ML projects, from simple research repos to production RAG systems, connecting concepts from model evaluation, deployment, and privacy-aware NLP.
+
+## Why CI/CD for ML is different
+
+Traditional CI/CD focuses on building, testing, and deploying code. In ML projects, we need to think in terms of four moving pieces:
+
+1. **Code** - model definitions, data pipelines, API servers, RAG orchestration logic.
+2. **Data** - training data, evaluation datasets, prompts, retrieval corpora.
+3. **Models** - versioned artifacts, checkpoints, embedding models, LLM adapters.
+4. **Infrastructure** - vector databases, GPUs, workers, API gateways.
+
+This aligns with themes from *Building Production-Ready RAG Systems* and *Retrieval-Augmented Generation: A Complete Guide*. A robust ML CI/CD pipeline needs to:
+
+- Keep experiments reproducible.
+- Prevent regressions in prediction quality.
+- Protect user data, as in *Data Privacy in the Age of Large Language Models*.
+- Make deployments boring and reversible.
+
+I like to think of it in three stages:
+
+1. **CI for research** - fast feedback on notebooks and experiments.
+2. **CI for production** - serious tests, checks, and quality gates.
+3. **CD for production** - safe, automated deployment of models and services.
+
+Let's walk through a concrete architecture.
+
+## Repository structure for ML CI/CD
+
+A clean repo layout makes CI/CD much easier. For a typical ML service or RAG system, something like this works well:
+
+```text
+.
+├── src/
+│   ├── app/              # FastAPI / Flask app, RAG orchestration
+│   ├── models/           # Model definitions, wrappers, inference logic
+│   └── data/             # Data loaders, feature extraction, chunking
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── regression/       # Model quality tests
+├── pipelines/
+│   ├── train.py          # Training / fine-tuning entrypoint
+│   ├── evaluate.py       # Evaluation and metrics
+│   ├── preprocess.py     # Data clean / chunk / index
+│   └── export.py         # Create deployable model artifact
+├── configs/
+│   ├── model.yaml
+│   ├── data.yaml
+│   └── deployment.yaml
+├── docker/
+│   ├── Dockerfile.api
+│   └── Dockerfile.worker
+├── .github/workflows/    # Or .gitlab-ci.yml, etc
+└── requirements.txt / pyproject.toml
+``
+
+Good structure plays well with tests and deployment. If you have RAG-specific components, you might also mirror concepts from *Chunking Strategies for RAG Pipelines* and *Understanding Vector Databases: A Beginner's Guide* in `src/data` and `pipelines/preprocess.py`.
+
+## Continuous Integration (CI) for ML projects
+
+### 1. Basic CI: linting, formatting, unit tests
+
+This part is similar to what I outlined in *Python Best Practices for ML Engineers*.
+
+Typical steps:
+
+- Install dependencies.
+- Run formatting (black, isort).
+- Run static analysis (mypy, ruff).
+- Run unit tests (pytest) with coverage.
+
+Example GitHub Actions workflow (simplified):
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install -e .[dev]
+
+      - name: Lint and type-check
+        run: |
+          ruff check src tests
+          mypy src
+
+      - name: Run tests
+        run: pytest -q
+```
+
+Nothing ML specific yet, but this is your foundation.
+
+### 2. Data and schema checks
+
+Data is one of the most common failure points. The CI should reject PRs that change data format or violate basic assumptions.
+
+Useful techniques:
+
+- Schema checks with pydantic models.
+- Statistical checks (null ratios, category coverage).
+- Consistency checks for RAG corpora (no empty chunks, correct metadata).
+
+Example: pydantic-based schema for an input sample.
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+
+class DocumentChunk(BaseModel):
+    id: str
+    text: str = Field(min_length=1)
+    source: str
+    metadata: dict
+
+
+class QueryRequest(BaseModel):
+    query: str = Field(min_length=3)
+    top_k: int = Field(gt=0, le=50)
+    filters: Optional[dict]
+```
+
+You can then add tests that verify your data pipeline respects these schemas:
+
+```python
+from src.data.loader import load_indexed_documents
+from src.schemas import DocumentChunk
+
+
+def test_loaded_documents_match_schema():
+    docs = load_indexed_documents(limit=100)
+    for d in docs:
+        DocumentChunk(**d)  # raises if invalid
+```
+
+For larger projects, libraries like `great_expectations` can formalize these expectations and integrate into CI.
+
+### 3. Model quality regression tests
+
+Here is where ML-specific CI starts.
+
+You do not want a PR to silently degrade model quality. I usually maintain:
+
+- A small **golden dataset** for fast checks on every PR.
+- Larger **evaluation datasets** for nightly or pre-release runs.
+
+This is aligned with the evaluation patterns in *Evaluating RAG System Performance*.
+
+At minimum, you can:
+
+1. Commit a small labeled dataset to the repo (or fetch from a secure artifact store).
+2. Write an evaluation script that outputs metrics.
+3. Fail CI if metrics drop beyond a threshold compared to the main branch or baseline.
+
+Example evaluation in Python:
+
+```python
+import json
+from pathlib import Path
+
+from src.models import load_model
+from src.metrics import accuracy_score
+
+
+def evaluate_on_golden_set(model_path: str) -> float:
+    model = load_model(model_path)
+    data = json.loads(Path("tests/data/golden_set.json").read_text())
+
+    y_true, y_pred = [], []
+    for sample in data:
+        y_true.append(sample["label"])
+        y_pred.append(model.predict(sample["text"]))
+
+    return accuracy_score(y_true, y_pred)
+
+
+if __name__ == "__main__":
+    score = evaluate_on_golden_set("artifacts/latest/model.pt")
+    print(f"accuracy={score:.3f}")
+```
+
+Then in CI, run this script and parse the result.
+
+```bash
+python pipelines/evaluate.py > metrics.txt
+ACC=$(grep "accuracy=" metrics.txt | cut -d'=' -f2)
+
+MIN_ACC=0.85
+
+python - <<EOF
+acc = float("$ACC")
+min_acc = float("$MIN_ACC")
+if acc < min_acc:
+    raise SystemExit(f"Accuracy {acc:.3f} below threshold {min_acc:.3f}")
+EOF
+```
+
+For RAG, quality checks could cover:
+
+- Retrieval hit rate on a QA set.
+- Exact match / F1 for answers.
+- Latency and cost per request.
+
+These metrics echo the frameworks described in *Retrieval-Augmented Generation: A Complete Guide* and *Semantic Search vs Keyword Search: When to Use What*.
+
+### 4. Privacy and security checks
+
+If you work with sensitive data, your CI/CD pipeline must help enforce privacy commitments, as discussed in *Introduction to Differential Privacy for NLP* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models*.
+
+Ideas:
+
+- Static checks to prevent logging of raw PII.
+- Unit tests for anonymization / pseudonymization functions.
+- Verifying that differential privacy parameters stay within acceptable ranges.
+
+Example unit test to ensure logging does not expose raw user text:
+
+```python
+from src.logging_utils import sanitize_log
+
+
+def test_sanitize_log_removes_emails_and_phones():
+    raw = "User john.doe@example.com called from +1-555-123-4567"
+    sanitized = sanitize_log(raw)
+
+    assert "john.doe@example.com" not in sanitized
+    assert "+1-555-123-4567" not in sanitized
+```
+
+CI should run these tests on every change to the relevant modules.
+
+## Continuous Delivery (CD) of ML models and services
+
+Once CI passes, you want a reliable way to ship models and services. For many teams, the deployment pattern in *Deploying ML Models with FastAPI and Docker* is a strong baseline.
+
+A typical ML CD pipeline involves:
+
+1. Building a Docker image with the serving code and environment.
+2. Downloading or embedding a specific model artifact.
+3. Pushing the image to a registry.
+4. Updating the deployment (Kubernetes, ECS, serverless, etc.).
+5. Running smoke tests and rolling out gradually.
+
+### 1. Reproducible model artifacts
+
+Separate **model training** from **model serving**.
+
+- Training pipeline outputs a versioned artifact (model weights, tokenizer, config).
+- Serving container pulls the exact artifact_version.
+
+You can store artifacts in:
+
+- S3 / GCS
+- MLflow Model Registry
+- Weights & Biases Artifacts
+
+Example `export.py` to package a model for serving:
+
+```python
+import joblib
+from pathlib import Path
+from src.models import MyModel, load_trained_model
+
+
+def export_model(model_dir: str, version: str) -> str:
+    model = load_trained_model()
+    path = Path(model_dir) / f"model_{version}.joblib"
+    joblib.dump(model, path)
+    return str(path)
+
+
+if __name__ == "__main__":
+    version = "2024-02-09-01"
+    artifact_path = export_model("artifacts/", version)
+    print(f"exported_path={artifact_path}")
+```
+
+CD will then reference this `version` when building and deploying.
+
+### 2. Docker-based deployment
+
+A simplified `Dockerfile` for a FastAPI inference service:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install -U pip && pip install -r requirements.txt
+
+COPY src ./src
+COPY configs ./configs
+
+# Environment variable to select model artifact
+ENV MODEL_VERSION="latest"
+
+CMD ["uvicorn", "src.app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+Your CD pipeline can build the image and tag it with both the git SHA and model version.
+
+```bash
+MODEL_VERSION=2024-02-09-01
+GIT_SHA=$(git rev-parse --short HEAD)
+
+IMAGE_TAG="registry.example.com/ml-service:${MODEL_VERSION}-${GIT_SHA}"
+
+docker build -t "$IMAGE_TAG" -f docker/Dockerfile.api .
+docker push "$IMAGE_TAG"
+```
+
+This ties nicely into the patterns covered in *Deploying ML Models with FastAPI and Docker*.
+
+### 3. Environment-specific deployment stages
+
+A classic pattern:
+
+- **staging**: deployed on every merge to `main`, used for QA.
+- **production**: deployed on manual approval or tag.
+
+In GitHub Actions, you might define two workflows or two jobs:
+
+```yaml
+jobs:
+  deploy-staging:
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # build & push image
+      # apply k8s manifests to staging
+
+  deploy-production:
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      # build & push image with prod tag
+      # apply k8s manifests to production
+```
+
+For Kubernetes, use separate namespaces and configs. `deployment.yaml` can reference different resource limits, vector DB endpoints, and feature flags for each environment.
+
+### 4. Smoke tests and canary releases
+
+Blindly deploying a new model to all users is risky. Two improvements:
+
+1. **Smoke tests** - run a set of test requests against the newly deployed service.
+2. **Canary release** - route a small percentage of traffic to the new version.
+
+Smoke tests can be a simple Python script:
+
+```python
+import requests
+
+
+def smoke_test(base_url: str) -> None:
+    r = requests.post(
+        f"{base_url}/predict",
+        json={"text": "Test input"},
+        timeout=5,
+    )
+    r.raise_for_status()
+    data = r.json()
+    assert "prediction" in data
+
+
+if __name__ == "__main__":
+    smoke_test("https://staging.example.com")
+```
+
+Run this from CD right after deployment. If it fails, roll back automatically.
+
+For canaries, the implementation depends on your stack (Kubernetes, API gateway, service mesh), but the CI/CD side can:
+
+- Label the new deployment as `canary`.
+- Trigger traffic-splitting rules.
+- Collect metrics (latency, error rate, key model metrics) for a few minutes.
+
+This pattern is powerful for RAG systems where new embedding models, prompt templates, or chunking strategies can change behavior in unexpected ways. It combines ideas from *Embedding Models Compared: OpenAI vs Open-Source*, *Chunking Strategies for RAG Pipelines*, and *Prompt Engineering Best Practices for Production*.
+
+## CI/CD for RAG and multi-agent systems
+
+When dealing with RAG or multi-agent setups as in *Building a Multi-Agent AI System* and *Building AI Agents with LangChain and LangGraph*, there are extra moving parts:
+
+- Indexing pipelines for the document store.
+- Multiple services (retriever API, generator API, orchestrator).
+- Vector DB migrations and performance constraints, related to *Vector Database Performance Benchmarks*.
+
+In CI/CD, you should:
+
+- Version your **index build pipeline**. A new index should be built and validated in staging before promoting it to production.
+- Add performance tests for retrieval latency and throughput.
+- Include integration tests that exercise realistic flows (multi-step tools, agents calling retrievers, etc.).
+
+Example integration test for a RAG pipeline:
+
+```python
+from src.app.client import RAGClient
+
+
+def test_rag_answer_contains_source():
+    client = RAGClient(base_url="http://localhost:8080")
+
+    resp = client.ask("What is the return policy?")
+
+    assert "answer" in resp
+    assert resp["sources"], "RAG must return at least one source"
+
+    for s in resp["sources"]:
+        assert "url" in s and "snippet" in s
+```
+
+This type of test can run in CI using docker-compose to spin up the API and vector DB.
+
+## Making CI/CD sustainable for ML teams
+
+A few practical tips so your pipeline does not collapse under its own weight:
+
+- **Keep fast checks fast**: under 10 minutes for PRs. Push heavy evaluations to nightly jobs.
+- **Cache aggressively**: Python wheels, model downloads, built Docker layers.
+- **Make failures actionable**: if a quality gate fails, show a clear diff vs previous metrics.
+- **Automate reproducibility**: store config files and random seeds with model artifacts.
+- **Document the flow**: developers should know what happens when they open a PR or tag a release.
+
+I have found that once teams experience the peace of mind of a well tuned ML CI/CD pipeline, they rarely want to go back to manual experiments and ad hoc deployments.
+
+## Key Takeaways
+
+- Treat ML CI/CD as managing code, data, models, and infrastructure together.
+- Start with standard CI practices, then add data validation and model quality checks.
+- Maintain small golden datasets for fast regression tests on every PR.
+- Enforce privacy constraints in CI with tests for logging and anonymization.
+- Separate training from serving, and version model artifacts explicitly.
+- Use Docker-based deployments with environment-specific configs and stages.
+- Add smoke tests and, where possible, canary releases to catch bad deployments.
+- For RAG and multi-agent systems, test the full pipeline, not just individual components.
+- Keep PR pipelines fast, push heavy evaluations and benchmarks to scheduled jobs.
+- Document the pipeline so that every engineer understands how models reach production.

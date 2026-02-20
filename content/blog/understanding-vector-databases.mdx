@@ -1,0 +1,139 @@
+---
+title: "Understanding Vector Databases: A Beginner's Guide"
+description: "Learn what vector databases are, how they work under the hood, and which one to choose for your AI application."
+date: "2026-02-01"
+category: "AI & ML"
+tags: ["Vector Databases", "AI", "Embeddings", "Infrastructure"]
+difficulty: "beginner"
+readTime: "6 min read"
+author: "Hélain Zimmermann"
+---
+
+## What Are Vector Databases?
+
+If you have worked with AI applications recently, you have probably heard the term "vector database" come up constantly. But what exactly are they, and why do they matter?
+
+A vector database is a specialized database designed to store, index, and query high-dimensional vectors, which are numerical representations of data like text, images, or audio. Traditional databases excel at exact matches (find all users named "Alice"), but vector databases excel at similarity searches (find all documents that are semantically similar to this query).
+
+## How Do They Work?
+
+### Step 1: Embedding
+
+Before storing data in a vector database, you convert your data into vectors using an embedding model. For text, models like OpenAI's `text-embedding-3-small` convert sentences into arrays of 1536 floating-point numbers. Similar texts end up with similar vectors.
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+response = client.embeddings.create(
+    input="What is machine learning?",
+    model="text-embedding-3-small"
+)
+
+vector = response.data[0].embedding
+# [0.0023, -0.0142, 0.0312, ...] (1536 dimensions)
+```
+
+### Step 2: Indexing
+
+The vector database builds an index over your vectors to enable fast similarity search. The most common indexing algorithms are:
+
+- **HNSW (Hierarchical Navigable Small World)**: Builds a multi-layer graph where each node connects to nearby vectors. Fast queries with good recall.
+- **IVF (Inverted File Index)**: Clusters vectors into groups and only searches relevant clusters at query time.
+- **PQ (Product Quantization)**: Compresses vectors to reduce memory usage, trading some accuracy for efficiency.
+
+### Step 3: Querying
+
+When you search, the database converts your query into a vector and finds the nearest neighbors using distance metrics like cosine similarity or Euclidean distance.
+
+```python
+# Conceptual example
+results = vector_db.search(
+    query_vector=embed("How does deep learning work?"),
+    top_k=5,
+    filter={"category": "tutorials"}
+)
+```
+
+## Popular Vector Databases Compared
+
+Here is a comparison of the most popular options available today:
+
+| Feature | Pinecone | Weaviate | Qdrant | Chroma | pgvector |
+|---|---|---|---|---|---|
+| **Hosting** | Managed only | Managed + Self-hosted | Managed + Self-hosted | Self-hosted | Self-hosted |
+| **Language** | Proprietary | Go | Rust | Python | C (PG extension) |
+| **Hybrid Search** | Yes | Yes (BM25) | Yes | No | Limited |
+| **Metadata Filtering** | Yes | Yes | Yes (advanced) | Yes | Yes (SQL) |
+| **Max Dimensions** | 20,000 | Unlimited | 65,536 | Unlimited | 2,000 |
+| **Best For** | Quick start, scale | Complex queries | High performance | Prototyping | Existing PG stack |
+| **Pricing** | Pay per usage | Free tier + paid | Free tier + paid | Free (OSS) | Free (OSS) |
+
+## When to Use Each
+
+### Pinecone
+Best for teams that want zero infrastructure management. You get a fully managed service with automatic scaling. The downside is vendor lock-in and cost at scale.
+
+### Weaviate
+Excellent choice if you need hybrid search combining vector similarity with traditional keyword matching. Its GraphQL API is powerful for complex queries. Available as both managed cloud and self-hosted.
+
+### Qdrant
+Written in Rust, Qdrant offers excellent performance and advanced filtering. Its payload (metadata) filtering is particularly powerful, supporting nested conditions and geo-spatial queries. Great for performance-critical applications.
+
+### Chroma
+The easiest to get started with. Runs in-memory or with persistent storage, perfect for prototyping and small applications. Not recommended for large-scale production without additional infrastructure.
+
+### pgvector
+If your application already uses PostgreSQL, pgvector lets you add vector search without introducing a new database. You get the benefit of ACID transactions and can join vector results with relational data. Performance is lower than dedicated solutions but often sufficient.
+
+## Real-World Use Cases
+
+### Semantic Search
+Replace keyword-based search with meaning-based search. Users can find relevant documents even when they use different terminology than what is in the documents.
+
+### Recommendation Systems
+Store user and item embeddings, then find similar items or users. Netflix, Spotify, and Amazon all use vector similarity for recommendations.
+
+### RAG (Retrieval-Augmented Generation)
+The most common use case in the LLM era. Store your knowledge base as vectors and retrieve relevant context when answering user questions. This is the backbone of most enterprise AI chatbots.
+
+### Image Search
+Store image embeddings and find visually similar images. Used in e-commerce (find similar products) and content moderation.
+
+### Anomaly Detection
+Normal data points cluster together in vector space. Points far from any cluster indicate anomalies, useful in fraud detection and system monitoring.
+
+## Getting Started
+
+If you are just starting out, here is a simple setup with Chroma:
+
+```python
+import chromadb
+
+client = chromadb.Client()
+collection = client.create_collection("my_documents")
+
+# Add documents (Chroma handles embedding automatically)
+collection.add(
+    documents=[
+        "Machine learning is a subset of AI",
+        "Neural networks are inspired by the brain",
+        "Python is popular for data science"
+    ],
+    ids=["doc1", "doc2", "doc3"]
+)
+
+# Query
+results = collection.query(
+    query_texts=["What is AI?"],
+    n_results=2
+)
+print(results["documents"])
+# [['Machine learning is a subset of AI',
+#   'Neural networks are inspired by the brain']]
+```
+
+## Conclusion
+
+Vector databases are a foundational piece of modern AI infrastructure. Whether you are building a chatbot, a search engine, or a recommendation system, understanding how they work will help you make better architectural decisions. Start with Chroma for prototyping, evaluate Qdrant or Weaviate for production, and consider pgvector if you want to keep your stack simple.

@@ -1,0 +1,369 @@
+---
+title: "End-to-End Multi-Agent Systems: Design Patterns from IEEE CAI 2026"
+description: "Design patterns for production multi-agent systems from IEEE CAI 2026 covering planning, execution, fault tolerance, and scaling"
+date: "2026-02-18"
+category: "Engineering"
+tags: ["Multi-Agent Systems", "Distributed Systems", "Federated Learning", "Python", "MLOps", "AI Agents"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+The conversations at IEEE CAI 2026 and the adjacent ICDCS and HPDC sessions made one thing clear: multi-agent AI systems are no longer research curiosities. They are production infrastructure. But the gap between a demo with three agents passing messages and a fault-tolerant distributed system serving real users is enormous, and most teams underestimate it.
+
+In my earlier post on *Building a Multi-Agent AI System*, I covered the foundational patterns: orchestrator plus specialists, blackboard architectures, and peer-to-peer agents. This article goes deeper into the design patterns that emerged from this year's conference discussions and from our own production experience at Ailog. The focus is on separation of concerns, fault tolerance, federated orchestration, and the monitoring infrastructure that makes it all debuggable.
+
+## The compound AI system mindset
+
+The term "compound AI systems" keeps surfacing in 2026 literature, and for good reason. A compound system is not a single model. It is a composition of models, retrievers, tools, validators, and orchestration logic that together solve a task. Multi-agent architectures are the natural way to structure these compositions.
+
+The key shift from earlier agent frameworks is treating the system as a distributed application first and an AI application second. That means applying decades of distributed systems knowledge, including consensus, fault isolation, observability, and graceful degradation, to agent coordination.
+
+## Pattern 1: Separation of planning, execution, and validation
+
+The single most impactful pattern is strict separation of three concerns that many teams collapse into one agent.
+
+### The planner
+
+The planner receives a user goal and produces a structured plan: a DAG of tasks with dependencies, estimated resource requirements, and success criteria. It does not execute anything.
+
+```python
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
+from enum import Enum
+
+
+class TaskStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+@dataclass
+class Task:
+    id: str
+    agent: str
+    action: str
+    params: Dict[str, Any] = field(default_factory=dict)
+    depends_on: List[str] = field(default_factory=list)
+    status: TaskStatus = TaskStatus.PENDING
+    result: Optional[Any] = None
+    retries: int = 0
+    max_retries: int = 2
+
+
+@dataclass
+class ExecutionPlan:
+    goal: str
+    tasks: List[Task]
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def ready_tasks(self) -> List[Task]:
+        """Return tasks whose dependencies are all completed."""
+        completed_ids = {
+            t.id for t in self.tasks if t.status == TaskStatus.COMPLETED
+        }
+        return [
+            t for t in self.tasks
+            if t.status == TaskStatus.PENDING
+            and all(dep in completed_ids for dep in t.depends_on)
+        ]
+
+    def is_complete(self) -> bool:
+        terminal = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.SKIPPED}
+        return all(t.status in terminal for t in self.tasks)
+```
+
+The planner generates an `ExecutionPlan` by calling an LLM with structured output constraints. The plan is data, not code. This makes it inspectable, serializable, and auditable, which are requirements that showed up repeatedly in the IEEE CAI fault tolerance sessions.
+
+### The executor
+
+The executor takes a plan and runs it. It manages concurrency, timeouts, and retries. It does not make strategic decisions about what to do next, it only follows the plan.
+
+```python
+import asyncio
+import logging
+from typing import Dict, Callable, Any
+
+logger = logging.getLogger(__name__)
+
+
+class PlanExecutor:
+    def __init__(self, agent_registry: Dict[str, Callable], timeout: float = 30.0):
+        self.agents = agent_registry
+        self.timeout = timeout
+
+    async def execute_task(self, task: Task) -> Task:
+        agent_fn = self.agents.get(task.agent)
+        if not agent_fn:
+            task.status = TaskStatus.FAILED
+            task.result = {"error": f"Unknown agent: {task.agent}"}
+            return task
+
+        for attempt in range(task.max_retries + 1):
+            try:
+                task.status = TaskStatus.RUNNING
+                result = await asyncio.wait_for(
+                    agent_fn(task.action, task.params),
+                    timeout=self.timeout,
+                )
+                task.status = TaskStatus.COMPLETED
+                task.result = result
+                return task
+            except asyncio.TimeoutError:
+                task.retries = attempt + 1
+                logger.warning(f"Task {task.id} timed out, attempt {attempt + 1}")
+            except Exception as e:
+                task.retries = attempt + 1
+                logger.error(f"Task {task.id} failed: {e}, attempt {attempt + 1}")
+
+        task.status = TaskStatus.FAILED
+        task.result = {"error": "Max retries exceeded"}
+        return task
+
+    async def run_plan(self, plan: ExecutionPlan) -> ExecutionPlan:
+        while not plan.is_complete():
+            ready = plan.ready_tasks()
+            if not ready:
+                # Deadlock or all remaining tasks depend on failed ones
+                for t in plan.tasks:
+                    if t.status == TaskStatus.PENDING:
+                        t.status = TaskStatus.SKIPPED
+                break
+
+            results = await asyncio.gather(
+                *[self.execute_task(t) for t in ready]
+            )
+            # Results are already written back to task objects
+
+        return plan
+```
+
+This executor runs independent tasks in parallel using `asyncio.gather`, respects dependency ordering, and handles retries with timeout enforcement. The pattern directly mirrors what was presented in the HPDC 2026 session on resilient task scheduling for AI workloads.
+
+### The validator
+
+After execution, a validator agent reviews the results against the original goal. It checks for completeness, consistency, and quality. If validation fails, it can request a replan.
+
+```python
+@dataclass
+class ValidationResult:
+    passed: bool
+    issues: List[str] = field(default_factory=list)
+    suggested_actions: List[str] = field(default_factory=list)
+
+
+def validate_plan_results(llm, plan: ExecutionPlan) -> ValidationResult:
+    completed = [t for t in plan.tasks if t.status == TaskStatus.COMPLETED]
+    failed = [t for t in plan.tasks if t.status == TaskStatus.FAILED]
+
+    summary = {
+        "goal": plan.goal,
+        "completed_tasks": [
+            {"id": t.id, "agent": t.agent, "result_preview": str(t.result)[:200]}
+            for t in completed
+        ],
+        "failed_tasks": [
+            {"id": t.id, "agent": t.agent, "error": str(t.result)}
+            for t in failed
+        ],
+    }
+
+    prompt = (
+        "You are a validation agent. Check if the completed tasks "
+        "achieve the stated goal. Identify gaps, inconsistencies, "
+        "or quality issues. Respond as JSON with keys: "
+        "passed (bool), issues (list of strings), "
+        "suggested_actions (list of strings).\n\n"
+        f"Plan summary:\n{json.dumps(summary, indent=2)}"
+    )
+
+    response = llm.generate(prompt)
+    parsed = json.loads(response)
+    return ValidationResult(**parsed)
+```
+
+The three-way separation, planning, execution, and validation, means each component can be tested independently, scaled differently, and replaced without affecting the others. It also creates natural checkpoints for human review in high-stakes applications.
+
+## Pattern 2: Fault-tolerant agent communication
+
+In distributed systems, network partitions and process failures are the norm. Multi-agent AI systems need the same resilience patterns.
+
+### Message queues over direct calls
+
+Instead of agents calling each other synchronously, route communication through a durable message queue. This decouples agent lifecycles and provides automatic retry semantics.
+
+```python
+import json
+from dataclasses import dataclass
+from typing import Any, Dict
+
+
+@dataclass
+class AgentMessage:
+    sender: str
+    recipient: str
+    payload: Dict[str, Any]
+    message_id: str
+    correlation_id: str  # Links related messages across a workflow
+    retry_count: int = 0
+
+
+class MessageBroker:
+    """Minimal abstraction over a message queue (Redis Streams, Kafka, etc.)."""
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    async def publish(self, message: AgentMessage):
+        channel = f"agent.{message.recipient}"
+        await self.backend.publish(
+            channel,
+            json.dumps({
+                "sender": message.sender,
+                "payload": message.payload,
+                "message_id": message.message_id,
+                "correlation_id": message.correlation_id,
+                "retry_count": message.retry_count,
+            }),
+        )
+
+    async def subscribe(self, agent_name: str, handler):
+        channel = f"agent.{agent_name}"
+        async for raw_msg in self.backend.listen(channel):
+            parsed = json.loads(raw_msg)
+            await handler(parsed)
+```
+
+This pattern came up in every ICDCS 2026 talk on multi-agent reliability. The message broker provides durability (messages survive agent restarts), ordering guarantees, and dead-letter queues for messages that repeatedly fail processing.
+
+### Circuit breakers for agent calls
+
+When an agent or external service starts failing, you do not want cascading failures across the entire system. Circuit breakers stop calling a failing component after a threshold and periodically test if it has recovered.
+
+```python
+import time
+
+
+class CircuitBreaker:
+    def __init__(self, failure_threshold: int = 3, reset_timeout: float = 60.0):
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failures = 0
+        self.last_failure_time = 0.0
+        self.state = "closed"  # closed = healthy, open = failing
+
+    def can_execute(self) -> bool:
+        if self.state == "closed":
+            return True
+        if time.time() - self.last_failure_time > self.reset_timeout:
+            self.state = "half-open"
+            return True
+        return False
+
+    def record_success(self):
+        self.failures = 0
+        self.state = "closed"
+
+    def record_failure(self):
+        self.failures += 1
+        self.last_failure_time = time.time()
+        if self.failures >= self.failure_threshold:
+            self.state = "open"
+```
+
+In our production systems at Ailog, every agent-to-agent call and every external tool invocation goes through a circuit breaker. This is standard practice in microservice architectures, and multi-agent AI systems should adopt it without hesitation.
+
+## Pattern 3: Federated orchestration
+
+For organizations with multiple teams or deployments, centralized orchestration becomes a bottleneck. The federated orchestration pattern, drawing from concepts in *Federated Learning for Privacy-Preserving AI*, distributes coordination across multiple orchestrators that share learned policies.
+
+Each team or deployment runs its own local orchestrator with local agents. A global coordination layer handles:
+
+- Cross-team task routing when a task requires capabilities from another team's agents
+- Policy synchronization so all orchestrators share updated routing rules and safety constraints
+- Aggregate monitoring for system-wide visibility
+
+This mirrors the federated learning pattern but applies it to control policies rather than model weights. Local orchestrators learn from their own traffic patterns, and periodically share aggregated routing statistics with the global coordinator.
+
+The practical benefit is autonomy: teams can add, remove, or update agents without coordinating with every other team, as long as they conform to the shared message protocol.
+
+## Monitoring multi-agent systems in production
+
+Observability in multi-agent systems is qualitatively harder than monitoring a single model endpoint, a point I made in *Monitoring ML Models in Production*. With agents, you need to track:
+
+- **Distributed traces**: a single user request may touch five agents across three services
+- **Agent-level metrics**: latency, token usage, tool call frequency, error rates per agent
+- **Plan-level metrics**: how often plans succeed on first attempt, average replanning cycles, task skip rates
+- **Quality signals**: validation pass rates, user feedback correlation with plan structure
+
+A structured logging approach works well:
+
+```python
+import time
+import json
+import logging
+
+logger = logging.getLogger("multi_agent_trace")
+
+
+class AgentTracer:
+    def __init__(self, trace_id: str):
+        self.trace_id = trace_id
+        self.spans = []
+
+    def start_span(self, agent: str, action: str) -> Dict[str, Any]:
+        span = {
+            "trace_id": self.trace_id,
+            "agent": agent,
+            "action": action,
+            "start_time": time.time(),
+            "status": "running",
+        }
+        self.spans.append(span)
+        return span
+
+    def end_span(self, span: Dict[str, Any], status: str, metadata: Dict = None):
+        span["end_time"] = time.time()
+        span["duration_ms"] = (span["end_time"] - span["start_time"]) * 1000
+        span["status"] = status
+        span["metadata"] = metadata or {}
+        logger.info(json.dumps(span))
+```
+
+Feed these traces into your existing observability stack, whether that is Prometheus plus Grafana, Datadog, or a custom setup. The key is correlating traces across agent boundaries using a shared `trace_id`, the same pattern used in microservice distributed tracing.
+
+## Scaling challenges and practical limits
+
+The IEEE CAI 2026 panels were refreshingly honest about scaling limits. Some patterns that emerged:
+
+**Agent count scaling**: most production systems use 3 to 8 specialized agents. Beyond that, coordination overhead dominates. If you need more specialization, consider hierarchical orchestration, where a top-level orchestrator delegates to sub-orchestrators, each managing a small team.
+
+**Context window pressure**: every agent that adds context to the shared state increases the prompt size for downstream agents. Aggressive summarization between agent steps is essential. Do not pass raw outputs forward; pass distilled summaries.
+
+**Cost management**: multi-agent systems multiply LLM API costs. Instrument token usage per agent, per task type, and set budgets. Some tasks do not need a frontier model, and routing simpler subtasks to smaller models reduces cost significantly.
+
+**Testing**: unit testing individual agents is straightforward. Integration testing the full system, with realistic failure modes, is where most teams struggle. Build a test harness that can simulate agent failures, slow responses, and malformed outputs. This ties directly to the CI/CD practices in *CI/CD Pipelines for Machine Learning Projects*, where you want automated regression tests that exercise the full agent graph.
+
+## Error recovery strategies
+
+Three recovery patterns proved most reliable in production discussions at the conference:
+
+1. **Local retry with backoff**: the executor retries failed tasks with exponential backoff before escalating. This handles transient failures in LLM APIs and external tools.
+
+2. **Partial replanning**: when a critical task fails after retries, send the partial results back to the planner and ask for an alternative path. The planner may route around the failed capability or decompose the task differently.
+
+3. **Graceful degradation**: if a non-critical agent is unavailable, skip it and mark the output as partial. A portfolio analysis without the sentiment agent is still useful if the quantitative agents succeeded. Always communicate the degradation to the user.
+
+## Key Takeaways
+
+- Separate planning, execution, and validation into distinct components that can be tested, scaled, and replaced independently.
+- Use durable message queues instead of synchronous agent calls to gain resilience, retry semantics, and lifecycle decoupling.
+- Apply circuit breakers to every agent call and external tool invocation to prevent cascading failures across the system.
+- Federated orchestration distributes coordination across teams while sharing routing policies and aggregate monitoring.
+- Instrument distributed traces with shared correlation IDs across all agent boundaries for effective debugging.
+- Keep agent count between 3 and 8 per orchestrator, and use hierarchical orchestration for larger systems.
+- Build integration tests that simulate realistic failure modes, including slow agents, malformed outputs, and partial availability.
+- Treat multi-agent AI systems as distributed applications first, applying proven patterns from microservice and distributed systems engineering.

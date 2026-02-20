@@ -1,0 +1,232 @@
+---
+title: "Neuromorphic Computing Meets Neurogenesis: Inspiring Plasticity in AI"
+description: "How biological neurogenesis and neuromorphic hardware are inspiring new approaches to plasticity, lifelong learning, and catastrophic forgetting in AI"
+date: "2026-02-19"
+category: "AI & ML"
+tags: ["Neuromorphic Computing", "Neurogenesis", "Deep Learning", "Lifelong Learning", "Catastrophic Forgetting", "Python"]
+difficulty: "advanced"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+The adult human brain generates roughly 700 new neurons per day in the hippocampus. These neurons do not simply replace dead cells. They integrate into existing circuits, reshape memory encoding, and enable a form of continual learning that no artificial system has managed to replicate. Meanwhile, neuromorphic chips like Intel's Loihi 2 and IBM's NorthPole are making spike-based computation practical at scale, but they still lack the one thing that makes biological brains truly adaptive: the ability to grow new computational units on the fly.
+
+The convergence of neurogenesis research and neuromorphic hardware design is one of the most promising, and least discussed, frontiers in AI. It sits at the intersection of neuroscience, chip architecture, and machine learning, and it has direct implications for anyone working on systems that need to learn continuously without forgetting.
+
+
+## Adult neurogenesis and why it matters for AI
+
+For decades, neuroscience assumed that the adult brain was a fixed structure. Santiago Ramon y Cajal's dictum, "the nerve paths are fixed, ended, immutable," held until the late 1990s when adult hippocampal neurogenesis was conclusively demonstrated in humans.
+
+We now know that the dentate gyrus of the hippocampus continuously produces new granule cells that:
+
+- **Integrate into existing circuits** over a period of weeks, forming synapses with mature neurons.
+- **Have enhanced plasticity** during their maturation window, with lower activation thresholds and stronger long-term potentiation.
+- **Support pattern separation**, the ability to distinguish similar but distinct memories, which directly prevents interference between old and new knowledge.
+- **Modulate forgetting**, selectively weakening old memories that conflict with new learning while preserving those that remain relevant.
+
+This is exactly the set of capabilities that artificial neural networks lack. The catastrophic forgetting problem, where training on new data destroys performance on old tasks, has been a central challenge in deep learning for years. Standard architectures like the transformers I discussed in Understanding Transformer Architectures have no built-in mechanism for growing new capacity or selectively protecting old knowledge.
+
+
+## Neuromorphic hardware: the substrate for brain-inspired computing
+
+Neuromorphic chips take a fundamentally different approach from GPUs and TPUs. Instead of clock-synchronized matrix multiplications, they implement networks of spiking neurons that communicate through discrete events.
+
+### Intel Loihi 2
+
+Loihi 2 implements 128 neuromorphic cores, each containing up to 8,192 spiking neurons with programmable plasticity rules. Key features include:
+
+- **On-chip learning** with programmable spike-timing-dependent plasticity (STDP).
+- **Sparse, event-driven computation** that only activates neurons when they receive spikes.
+- **Graded spikes** that can carry more information per event than binary spikes.
+- Energy consumption orders of magnitude lower than GPU inference for sparse workloads.
+
+### IBM NorthPole and successors
+
+NorthPole took a different approach, optimizing for inference rather than on-chip learning, but IBM's research roadmap includes neuromorphic architectures that support structural plasticity, the ability to rewire connections dynamically.
+
+### The gap
+
+Current neuromorphic hardware supports synaptic plasticity (changing connection weights) reasonably well. What it does not support is structural plasticity at the neuron level: adding new neurons, removing underperforming ones, and rewiring connectivity patterns. This is precisely what neurogenesis provides in biological systems.
+
+
+## Cortical columns and modular computation
+
+Jeff Hawkins' cortical column theory, detailed in his Thousand Brains framework, proposes that the neocortex is built from thousands of semi-independent processing units that each maintain a model of objects and concepts. This modular architecture has interesting parallels with:
+
+- **Mixture of Experts** models in deep learning, where only a subset of parameters is active for any given input.
+- **Multi-agent systems** like the ones I described in Building a Multi-Agent AI System, where independent agents collaborate on complex tasks.
+- **Federated learning** architectures from Federated Learning for Privacy-Preserving AI, where learning is distributed across independent nodes.
+
+The key insight is that modularity enables local adaptation without global disruption. A cortical column can update its model without interfering with neighboring columns. Neurogenesis takes this further by allowing the system to allocate entirely new modules when existing ones are saturated.
+
+
+## Translating neurogenesis to artificial systems
+
+How do we bring neurogenesis-inspired ideas into practical AI? Several approaches are emerging.
+
+### Dynamic network expansion
+
+Instead of fixing network architecture before training, allow the network to grow new neurons and layers when it detects that existing capacity is insufficient.
+
+```python
+import torch
+import torch.nn as nn
+
+
+class NeurogenesisLayer(nn.Module):
+    """A layer that can grow new neurons based on task demand."""
+
+    def __init__(self, input_dim: int, initial_neurons: int, max_neurons: int):
+        super().__init__()
+        self.input_dim = input_dim
+        self.max_neurons = max_neurons
+        self.active_neurons = initial_neurons
+
+        # Allocate max capacity but only use active_neurons
+        self.weight = nn.Parameter(torch.randn(max_neurons, input_dim) * 0.01)
+        self.bias = nn.Parameter(torch.zeros(max_neurons))
+        self.maturity = torch.zeros(max_neurons)  # tracks neuron age
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Only use active neurons
+        w = self.weight[: self.active_neurons]
+        b = self.bias[: self.active_neurons]
+        return torch.relu(x @ w.T + b)
+
+    def maybe_grow(self, loss_history: list[float], threshold: float = 0.01):
+        """Add neurons if learning has stalled."""
+        if len(loss_history) < 10:
+            return False
+
+        recent_improvement = abs(loss_history[-10] - loss_history[-1])
+        if recent_improvement < threshold and self.active_neurons < self.max_neurons:
+            new_count = min(self.active_neurons + 4, self.max_neurons)
+            # Initialize new neurons with small random weights
+            with torch.no_grad():
+                for i in range(self.active_neurons, new_count):
+                    nn.init.kaiming_normal_(self.weight[i : i + 1])
+                    self.maturity[i] = 0.0
+            self.active_neurons = new_count
+            return True
+        return False
+
+    def prune_inactive(self, activation_counts: torch.Tensor, min_activations: int = 5):
+        """Remove neurons that rarely activate, mimicking apoptosis."""
+        active_mask = activation_counts[: self.active_neurons] >= min_activations
+        if active_mask.all():
+            return
+
+        # Compact active neurons to the front
+        active_indices = torch.where(active_mask)[0]
+        with torch.no_grad():
+            self.weight[: len(active_indices)] = self.weight[active_indices]
+            self.bias[: len(active_indices)] = self.bias[active_indices]
+        self.active_neurons = len(active_indices)
+```
+
+### Critical period plasticity
+
+Biological new neurons have a maturation window during which they are more plastic than mature neurons. We can replicate this with per-neuron learning rate schedules.
+
+```python
+class CriticalPeriodOptimizer:
+    """Applies higher learning rates to recently added neurons."""
+
+    def __init__(self, base_lr: float = 1e-3, young_multiplier: float = 5.0,
+                 maturity_threshold: int = 1000):
+        self.base_lr = base_lr
+        self.young_multiplier = young_multiplier
+        self.maturity_threshold = maturity_threshold
+
+    def get_param_lr(self, layer: NeurogenesisLayer) -> torch.Tensor:
+        """Return per-neuron learning rates based on maturity."""
+        lrs = torch.full((layer.active_neurons,), self.base_lr)
+        for i in range(layer.active_neurons):
+            if layer.maturity[i] < self.maturity_threshold:
+                # Young neurons learn faster
+                scale = self.young_multiplier * (
+                    1 - layer.maturity[i] / self.maturity_threshold
+                )
+                lrs[i] = self.base_lr * max(scale, 1.0)
+        return lrs
+
+    def step(self, layer: NeurogenesisLayer):
+        """Age all neurons by one step."""
+        layer.maturity[: layer.active_neurons] += 1
+```
+
+### Complementary learning systems
+
+The hippocampus and neocortex form a complementary learning system. The hippocampus rapidly encodes new experiences (with new neurons contributing to pattern separation), while the neocortex slowly consolidates general knowledge. This maps to a dual-network architecture for continual learning.
+
+```python
+class ComplementaryLearningSystem:
+    """Fast hippocampal learner + slow neocortical consolidator."""
+
+    def __init__(self, fast_net, slow_net, replay_buffer_size: int = 10000):
+        self.fast_net = fast_net  # high LR, neurogenesis-enabled
+        self.slow_net = slow_net  # low LR, stable
+        self.replay_buffer = []
+        self.buffer_size = replay_buffer_size
+
+    def learn_new(self, x, y):
+        """Rapidly learn new experience in the fast network."""
+        loss = self.fast_net.train_step(x, y)
+        self.replay_buffer.append((x.detach(), y.detach()))
+        if len(self.replay_buffer) > self.buffer_size:
+            self.replay_buffer.pop(0)
+        return loss
+
+    def consolidate(self, n_replay: int = 32):
+        """Slowly transfer knowledge to the stable network via replay."""
+        if len(self.replay_buffer) < n_replay:
+            return
+
+        indices = torch.randint(0, len(self.replay_buffer), (n_replay,))
+        for idx in indices:
+            x, y = self.replay_buffer[idx]
+            # Train slow net on replayed experiences
+            self.slow_net.train_step(x, y, lr_scale=0.1)
+            # Also distill fast net predictions into slow net
+            with torch.no_grad():
+                soft_targets = self.fast_net(x)
+            self.slow_net.distill_step(x, soft_targets)
+```
+
+
+## Spike-based computing and event-driven plasticity
+
+On neuromorphic hardware, plasticity rules operate directly on spike timing. Spike-Timing-Dependent Plasticity (STDP) strengthens connections when a pre-synaptic spike arrives just before a post-synaptic spike, and weakens them when the order is reversed.
+
+This is fundamentally different from backpropagation. STDP is local, requiring no global loss signal, and it operates continuously rather than in discrete training epochs. For lifelong learning, this is attractive because:
+
+- New patterns can be learned without reprocessing old data.
+- The learning rule naturally balances stability and plasticity.
+- Energy cost scales with activity, not with model size.
+
+The challenge is bridging the gap between STDP-based learning and the task performance we expect from deep learning. Recent work on surrogate gradient methods allows training spiking neural networks with backpropagation-like algorithms while still deploying them on neuromorphic hardware for efficient inference.
+
+
+## Perspectives for the field
+
+Several research directions are likely to shape this space over the next few years:
+
+**Hardware-software co-design.** As neuromorphic chips gain structural plasticity support, we will need programming models that expose neuron creation and deletion as first-class operations, not just weight updates.
+
+**Scaling neurogenesis-inspired methods.** Current dynamic network expansion works well on small benchmarks. Making it work reliably at the scale of modern transformers and the deep architectures discussed in Getting Started with PyTorch for Deep Learning requires solving hard optimization problems around when and where to add capacity.
+
+**Biological fidelity vs. engineering pragmatism.** Not every detail of hippocampal neurogenesis will translate usefully to silicon. The field needs rigorous ablation studies to identify which biological mechanisms (pattern separation, critical periods, complementary learning) provide real benefits and which are implementation details of wetware.
+
+**Integration with existing paradigms.** Neurogenesis-inspired methods are not a replacement for transformers, reinforcement learning, or federated approaches. The most promising path is integration: using dynamic capacity allocation within attention mechanisms, adding structural plasticity to RL agents, or enabling neuromorphic edge devices to participate in federated learning networks.
+
+
+## Key Takeaways
+
+- Adult hippocampal neurogenesis provides a biological blueprint for **continual learning** that artificial systems currently lack, including dynamic capacity allocation, critical period plasticity, and selective forgetting.
+- Neuromorphic hardware (Intel Loihi 2, IBM NorthPole successors) enables spike-based, energy-efficient computation but still lacks full support for **structural plasticity** at the neuron level.
+- **Dynamic network expansion**, where networks grow new neurons when learning stalls and prune inactive ones, is a practical technique that can be implemented today in standard deep learning frameworks.
+- **Critical period plasticity**, applying higher learning rates to recently added parameters, mirrors the enhanced plasticity of young biological neurons and improves continual learning performance.
+- The **complementary learning systems** theory (fast hippocampal learning plus slow neocortical consolidation) maps directly to dual-network architectures that balance rapid adaptation with long-term stability.
+- The most promising path forward is **integration**: combining neurogenesis-inspired methods with existing transformer, RL, and federated learning architectures rather than treating them as replacements.
+- Bridging biological insight with engineering pragmatism requires careful ablation studies to identify which neuroscience mechanisms yield real performance benefits in artificial systems.

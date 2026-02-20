@@ -1,0 +1,413 @@
+---
+title: "Building a RAG Chatbot from Scratch with Python"
+description: "Learn how to build a Retrieval-Augmented Generation (RAG) chatbot from scratch in Python, from data loading to retrieval and LLM integration."
+date: "2026-02-10"
+category: "Tutorials"
+tags: ["Python", "RAG", "LLMs", "Vector Databases", "AI Engineering", "NLP"]
+difficulty: "beginner"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Most people meet RAG systems through polished products: a chat window, a clean UI, answers that magically reference internal docs. Behind that magic is a surprisingly simple idea - give an LLM the right context at the right time. In this guide, we will build a minimal but real RAG chatbot in Python, step by step.
+
+If you have already read my pieces on *Retrieval-Augmented Generation: A Complete Guide* or *Building Production-Ready RAG Systems*, think of this as the "hello world" implementation that ties those concepts together in code.
+
+## What We Are Building
+
+At a high level, our chatbot will:
+
+1. Ingest a small set of documents
+2. Split them into chunks (crucial for RAG, as discussed in *Chunking Strategies for RAG Pipelines*)
+3. Convert chunks to embeddings
+4. Store embeddings in a simple vector store
+5. At query time, retrieve the most relevant chunks
+6. Feed those chunks into an LLM prompt to answer the user
+
+We will use Python, open-source tools, and a simple in-memory vector store so you can run everything locally.
+
+### Tech Stack
+
+- Python 3.10+
+- `sentence-transformers` for embeddings
+- `faiss-cpu` as vector index (a lightweight alternative to full vector databases; see *Understanding Vector Databases: A Beginner's Guide*)
+- `transformers` or an API client for the LLM
+
+You can later swap components out for production setups as in *Scaling RAG Systems to Millions of Documents* or *Vector Database Performance Benchmarks*.
+
+## Step 1 - Setting Up the Environment
+
+Install the dependencies:
+
+```bash
+pip install "sentence-transformers>=3.0.0" faiss-cpu "transformers>=4.38.0" torch
+```
+
+If you use an external LLM API (OpenAI, Anthropic, etc.), install the relevant SDK instead of `transformers` or in addition to it.
+
+To keep things clean, I recommend following some of the structure and discipline I describe in *Python Best Practices for ML Engineers*, even for simple projects.
+
+A basic project layout:
+
+```text
+rag_chatbot/
+  data/
+    docs/
+      doc1.txt
+      doc2.txt
+  rag/
+    __init__.py
+    loader.py
+    chunker.py
+    embeddings.py
+    store.py
+    retriever.py
+    llm.py
+    chatbot.py
+  main.py
+```
+
+We will not fill every file exhaustively, but this shows how you might organize a growing RAG codebase.
+
+## Step 2 - Loading and Chunking Documents
+
+Retrieval performance lives and dies by chunking. As covered in *Chunking Strategies for RAG Pipelines*, good chunks are:
+
+- small enough to fit in the context window comfortably
+- large enough to preserve meaning
+- aligned with natural document structure when possible
+
+For a beginner system, a simple character-based chunking with overlap works fine.
+
+Create `rag/loader.py`:
+
+```python
+from pathlib import Path
+from typing import List
+
+
+def load_documents(folder_path: str) -> List[str]:
+    folder = Path(folder_path)
+    docs = []
+    for path in folder.glob("*.txt"):
+        text = path.read_text(encoding="utf-8")
+        docs.append(text)
+    return docs
+```
+
+Create `rag/chunker.py`:
+
+```python
+from typing import List
+
+
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> List[str]:
+    chunks = []
+    start = 0
+    text_length = len(text)
+
+    while start < text_length:
+        end = min(start + chunk_size, text_length)
+        chunk = text[start:end]
+        chunks.append(chunk)
+        if end == text_length:
+            break
+        start = end - overlap
+
+    return chunks
+
+
+def chunk_documents(docs: List[str], chunk_size: int = 500, overlap: int = 100) -> List[str]:
+    all_chunks = []
+    for doc in docs:
+        all_chunks.extend(chunk_text(doc, chunk_size, overlap))
+    return all_chunks
+```
+
+This is intentionally simple. In production, you will likely want token-based chunking and structure-aware splitting, as I discuss in the RAG series and in *Building Custom Tokenizers for Domain-Specific NLP*.
+
+## Step 3 - Embedding Text Chunks
+
+Embeddings convert text into numerical vectors that capture semantic meaning. If you read *Embedding Models Compared: OpenAI vs Open-Source*, you know there is a tradeoff between quality, latency, and privacy.
+
+For a local beginner setup, we will use `sentence-transformers` with an open model.
+
+Create `rag/embeddings.py`:
+
+```python
+from typing import List
+from sentence_transformers import SentenceTransformer
+
+
+class EmbeddingModel:
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        self.model = SentenceTransformer(model_name)
+
+    def encode(self, texts: List[str]) -> List[list]:
+        # Returns a list of embedding vectors
+        embeddings = self.model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
+        return embeddings
+```
+
+This gives us a reusable embedding component. If you later move to an API-based embedding model, you can keep the same interface.
+
+## Step 4 - Building a Simple Vector Store with FAISS
+
+Vector databases such as Pinecone, Weaviate or Milvus add scalability and durability, but for a small chatbot you can start with `faiss` in memory. For large scale architectures, refer to *Vector Database Performance Benchmarks* and *Scaling RAG Systems to Millions of Documents*.
+
+Create `rag/store.py`:
+
+```python
+from typing import List, Tuple
+import faiss
+import numpy as np
+
+
+class VectorStore:
+    def __init__(self, dim: int):
+        self.index = faiss.IndexFlatL2(dim)
+        self.texts: List[str] = []
+
+    def add(self, embeddings: np.ndarray, texts: List[str]):
+        if embeddings.ndim == 1:
+            embeddings = embeddings.reshape(1, -1)
+        self.index.add(embeddings.astype("float32"))
+        self.texts.extend(texts)
+
+    def search(self, query_embedding: np.ndarray, k: int = 5) -> List[Tuple[str, float]]:
+        if query_embedding.ndim == 1:
+            query_embedding = query_embedding.reshape(1, -1)
+        distances, indices = self.index.search(query_embedding.astype("float32"), k)
+
+        results = []
+        for idx, dist in zip(indices[0], distances[0]):
+            if idx == -1:
+                continue
+            text = self.texts[idx]
+            results.append((text, float(dist)))
+        return results
+```
+
+FAISS uses Euclidean distance by default in this configuration. For many sentence embedding models cosine similarity works well, but for small experiments L2 is usually fine. You can normalize vectors to approximate cosine.
+
+## Step 5 - Wiring Up a Retriever
+
+The retriever is the component that, given a query, finds the most relevant chunks. It combines the embedding model and the vector store.
+
+Create `rag/retriever.py`:
+
+```python
+from typing import List, Tuple
+import numpy as np
+
+from .embeddings import EmbeddingModel
+from .store import VectorStore
+
+
+class Retriever:
+    def __init__(self, embedding_model: EmbeddingModel, vector_store: VectorStore):
+        self.embedding_model = embedding_model
+        self.vector_store = vector_store
+
+    def add_documents(self, chunks: List[str]):
+        embeddings = self.embedding_model.encode(chunks)
+        embeddings = np.array(embeddings)
+        self.vector_store.add(embeddings, chunks)
+
+    def retrieve(self, query: str, k: int = 5) -> List[Tuple[str, float]]:
+        query_emb = self.embedding_model.encode([query])
+        query_emb = np.array(query_emb)
+        results = self.vector_store.search(query_emb, k=k)
+        return results
+```
+
+Notice how each piece is small and composable. In more advanced RAG designs, such as the structured architectures from *Knowledge Graphs Meet LLMs: Structured RAG Architectures* or the hybrid strategies in *Hybrid Search: Combining Dense and Sparse Retrieval*, this composability becomes essential.
+
+## Step 6 - Adding the LLM Layer
+
+For the LLM, you have two main choices:
+
+- Local open-source model via `transformers` and PyTorch
+- Hosted API such as OpenAI, Anthropic, etc.
+
+For beginners and laptops, an API is often easier. For privacy-sensitive applications, the themes from *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models* and *Data Privacy in the Age of Large Language Models* become very important when making this choice.
+
+Below is an example using a generic `transformers` model, but you can replace the `LLMClient` with your own API client.
+
+Create `rag/llm.py`:
+
+```python
+from typing import List
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+
+
+class LLMClient:
+    def __init__(self, model_name: str = "microsoft/Phi-3-mini-4k-instruct"):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16)
+        self.model.eval()
+
+    @torch.no_grad()
+    def generate(self, prompt: str, max_new_tokens: int = 256) -> str:
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=True,
+            temperature=0.2,
+        )
+        text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Simple heuristic to remove the prompt from the output
+        return text[len(prompt):].strip()
+```
+
+If you prefer an API model, keep the interface:
+
+```python
+class LLMClient:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        # init SDK client
+
+    def generate(self, prompt: str, max_new_tokens: int = 256) -> str:
+        # call your provider here
+        return "mock answer"
+```
+
+This separation lets you switch models easily, which is useful for evaluation and monitoring as described in *LLM Evaluation Frameworks: Beyond Perplexity* and *Monitoring ML Models in Production*.
+
+## Step 7 - Building the Chatbot Orchestrator
+
+Now we tie everything together into a simple chatbot class that:
+
+1. Takes a user question
+2. Retrieves top-k relevant chunks
+3. Builds a prompt with those chunks as context
+4. Calls the LLM
+5. Returns the answer
+
+Create `rag/chatbot.py`:
+
+```python
+from typing import List, Tuple
+
+from .retriever import Retriever
+from .llm import LLMClient
+
+
+SYSTEM_PROMPT = """You are a helpful assistant.
+Use only the provided context to answer the question.
+If the answer is not in the context, say you do not know.
+Provide concise, clear answers.
+"""
+
+
+def build_prompt(question: str, context_chunks: List[str]) -> str:
+    context_text = "\n\n".join(context_chunks)
+    prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context_text}\n\nQuestion: {question}\nAnswer:"
+    return prompt
+
+
+class RAGChatbot:
+    def __init__(self, retriever: Retriever, llm: LLMClient, k: int = 5):
+        self.retriever = retriever
+        self.llm = llm
+        self.k = k
+
+    def answer(self, question: str) -> Tuple[str, List[str]]:
+        results = self.retriever.retrieve(question, k=self.k)
+        context_chunks = [text for text, _dist in results]
+        prompt = build_prompt(question, context_chunks)
+        answer = self.llm.generate(prompt)
+        return answer, context_chunks
+```
+
+This is the core of a basic RAG system, just with fewer bells and whistles than the setups I explore in *Agentic RAG: The Next Evolution* or *Building a Multi-Agent AI System*.
+
+## Step 8 - Wiring Everything In `main.py`
+
+Now we instantiate the components, index our documents, and run a simple chat loop.
+
+Create `main.py`:
+
+```python
+from rag.loader import load_documents
+from rag.chunker import chunk_documents
+from rag.embeddings import EmbeddingModel
+from rag.store import VectorStore
+from rag.retriever import Retriever
+from rag.llm import LLMClient
+from rag.chatbot import RAGChatbot
+
+import numpy as np
+
+
+def build_rag_chatbot() -> RAGChatbot:
+    # 1. Load documents
+    docs = load_documents("data/docs")
+
+    # 2. Chunk documents
+    chunks = chunk_documents(docs, chunk_size=500, overlap=100)
+    print(f"Loaded {len(docs)} docs and created {len(chunks)} chunks")
+
+    # 3. Embedding model
+    embedding_model = EmbeddingModel()
+
+    # 4. Vector store
+    sample_emb = embedding_model.encode(["test"])
+    dim = np.array(sample_emb).shape[1]
+    vector_store = VectorStore(dim=dim)
+
+    # 5. Retriever
+    retriever = Retriever(embedding_model, vector_store)
+    retriever.add_documents(chunks)
+
+    # 6. LLM client
+    llm = LLMClient()
+
+    # 7. Chatbot
+    chatbot = RAGChatbot(retriever, llm, k=5)
+    return chatbot
+
+
+def main():
+    chatbot = build_rag_chatbot()
+
+    print("RAG Chatbot ready. Type 'exit' to quit.")
+    while True:
+        question = input("You: ")
+        if question.lower() in {"exit", "quit"}:
+            break
+        answer, _ctx = chatbot.answer(question)
+        print("Bot:", answer)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+At this point, you can copy a few `.txt` files into `data/docs`, run `python main.py`, and start asking questions. The answers will be grounded in your local documents instead of the model's pretraining alone.
+
+## Where To Go Next
+
+Once you have this minimal chatbot working, you can gradually introduce more advanced ideas from the other posts:
+
+- Upgrade retrieval by combining dense and sparse methods as in *Hybrid Search: Combining Dense and Sparse Retrieval* or *Semantic Search vs Keyword Search: When to Use What*.
+- Integrate retrieval-specific evaluation criteria from *Evaluating RAG System Performance* so you can measure improvements instead of guessing.
+- Add a simple API using FastAPI, inspired by *Deploying ML Models with FastAPI and Docker*, then containerize your chatbot.
+- Introduce streaming responses and real-time constraints following patterns from *Building Real-Time ML Inference Pipelines*.
+- If you handle user data, adopt techniques from *Federated Learning for Privacy-Preserving AI* and *Introduction to Differential Privacy for NLP* to reduce privacy risks.
+
+RAG systems are powerful precisely because they are composable. Once you understand each block - loading, chunking, embedding, storing, retrieving, prompting - you can iterate quickly and adapt the system to real-world constraints.
+
+## Key Takeaways
+
+- A RAG chatbot is mostly about plumbing: wiring retrieval and generation together cleanly.
+- Start small with local files, simple chunking, `sentence-transformers`, and FAISS before jumping to complex infrastructure.
+- Good chunking has a huge impact on answer quality; experiment with sizes and overlaps as discussed in the dedicated chunking article.
+- Keep components modular: loader, chunker, embeddings, store, retriever, LLM, and chatbot should be separable.
+- The LLM is often the easiest part to swap, so design an abstraction like `LLMClient` from the start.
+- Evaluation and monitoring are critical once you move beyond experiments; borrow ideas from the RAG and monitoring articles on this site.
+- Privacy considerations should be addressed early if you ingest sensitive data, using techniques explored in the privacy-preserving NLP series.
+- Once the basics work, you can explore structured RAG, hybrid search, and agentic workflows to push your chatbot toward production readiness.

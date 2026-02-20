@@ -1,0 +1,84 @@
+---
+title: "Chinese AI and Sovereign Hardware: GLM-5 on Huawei Ascend"
+description: "How Zhipu trained a frontier language model entirely on domestic Chinese chips, and what this means for AI geopolitics, sanctions, and infrastructure independence."
+date: "2026-02-16"
+category: "Engineering"
+tags: ["GLM-5", "Huawei Ascend", "AI Hardware", "Geopolitics", "GPU Sanctions", "Sovereign AI"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+In October 2022, the US Bureau of Industry and Security imposed sweeping export controls on advanced semiconductors destined for China, specifically targeting NVIDIA's A100 and H100 GPUs. The explicit goal was to deny Chinese organizations access to the compute needed to train frontier AI models. Three years later, Zhipu AI, a Beijing-based startup spun out of Tsinghua University, released GLM-5, a frontier language model trained entirely on Huawei Ascend 910B chips. No NVIDIA silicon involved. The sanctions, it turns out, did not prevent Chinese AI from reaching the frontier. They may have accelerated the development of an alternative hardware ecosystem.
+
+This article examines the technical realities of training large language models on non-NVIDIA hardware, the geopolitical implications of sovereign AI infrastructure, and what this shift means for Europe and the broader research community.
+
+## The Export Control Landscape
+
+The US export controls were not a single event but a cascading series of restrictions. The initial October 2022 rules targeted chips above certain performance thresholds for AI workloads. When NVIDIA responded with the A800 and H800, slightly detuned variants designed to comply, the rules were tightened again in October 2023 to close that gap. The message was clear: China should not have access to the hardware needed for frontier AI training.
+
+The logic rested on a reasonable assumption: NVIDIA's CUDA ecosystem represents decades of software investment, and no alternative could match it in the near term. Training a model at the scale of GPT-4 or Claude requires not just raw compute but a mature software stack for distributed training, mixed-precision arithmetic, and efficient memory management. CUDA provides all of this. Without it, the thinking went, Chinese labs would be stuck a generation or two behind.
+
+That assumption has not aged well.
+
+## Zhipu and the GLM-5 Breakthrough
+
+As reported by Silicon Republic, Zhipu AI trained GLM-5 entirely on Huawei's Ascend 910B accelerators, making it arguably the first frontier-class model developed without any reliance on US-designed AI chips. GLM-5 demonstrates performance competitive with leading Western models across standard benchmarks, including reasoning, code generation, and multilingual understanding.
+
+Zhipu's decision to commit to Ascend hardware was not purely ideological. It was a strategic bet that domestic hardware would mature fast enough to support frontier training, and that being an early adopter would give them privileged access to Huawei's engineering resources. That bet appears to have paid off.
+
+## The Ascend 910B: A Technical Assessment
+
+The Huawei Ascend 910B is built on a custom Da Vinci architecture, fabricated at TSMC's 7nm node (before further US restrictions pushed Huawei toward SMIC's domestic fabrication for newer designs). The chip delivers approximately 320 TFLOPS of FP16 performance and supports BF16, which has become the standard precision format for LLM training.
+
+For comparison, NVIDIA's H100 delivers around 990 TFLOPS of FP16 (with sparsity) and 1,979 TFLOPS of FP8. On raw compute density, the H100 is roughly 3x ahead. Memory bandwidth tells a similar story: the Ascend 910B provides around 64 GB of HBM2e at approximately 1.2 TB/s, while the H100 offers 80 GB of HBM3 at 3.35 TB/s.
+
+These numbers suggest a significant gap, and in isolation, they are. But raw chip specifications do not determine training outcomes, system-level engineering does. Zhipu's achievement lies not in matching NVIDIA's hardware specs but in building the software and infrastructure to use Ascend chips efficiently at scale.
+
+## The Software Challenge: MindSpore vs. CUDA
+
+This is where the real engineering story lives. NVIDIA's dominance in AI compute is only partially about hardware. The deeper moat is CUDA, the programming model, compiler toolchain, libraries (cuDNN, cuBLAS, NCCL), and the enormous body of optimized code that the research community has built on top of it. When a researcher writes a PyTorch training loop, CUDA handles the translation to GPU instructions. This stack has been refined over fifteen years.
+
+Huawei's equivalent is MindSpore, an open-source deep learning framework, combined with the CANN (Compute Architecture for Neural Networks) software stack for low-level kernel execution on Ascend hardware. MindSpore is functional but less mature. The ecosystem of pre-optimized kernels is smaller. The compiler must work harder to achieve the performance that CUDA delivers through hand-tuned libraries.
+
+Training GLM-5 required Zhipu to invest heavily in custom kernel development, particularly for attention mechanisms and communication primitives for distributed training. Efficient all-reduce operations across thousands of accelerators, routine on NVIDIA's NVLink and NVSwitch interconnects, demanded novel approaches on Ascend clusters using Huawei's HCCS (Huawei Cache Coherence System) interconnect.
+
+The distributed training challenge is arguably the hardest part. When you are training a model with hundreds of billions of parameters across thousands of chips, the interconnect bandwidth and the efficiency of your parallelism strategy (tensor parallelism, pipeline parallelism, data parallelism, and increasingly, expert parallelism for mixture-of-experts architectures) determine whether your hardware utilization is 30% or 60%. On NVIDIA hardware with Megatron-LM, well-optimized large-scale training runs achieve 40-50% model FLOPs utilization (MFU). Achieving comparable MFU on Ascend required significant custom engineering.
+
+## What the Results Prove
+
+GLM-5's frontier-level performance demonstrates several things simultaneously. First, the hardware gap between Ascend and NVIDIA, while real, is not insurmountable through software optimization and scale. If your chip is 3x slower per unit, you can compensate with 3x more chips, provided your distributed training software can scale efficiently. China has both the manufacturing capacity and the willingness to deploy hardware at that scale.
+
+Second, the CUDA moat is narrower than commonly assumed. It is a real advantage, particularly for researchers and startups who cannot afford to write custom kernels. But for well-funded organizations willing to invest in software infrastructure, alternative stacks can reach viable performance. This is a lesson that also applies to AMD's ROCm and Intel's oneAPI efforts.
+
+Third, and most provocatively, export controls created the market conditions for domestic alternatives to thrive. Before the sanctions, Chinese labs had no strong incentive to move away from NVIDIA. The hardware was superior, the software was mature, and the supply chain was functional. The sanctions removed the path of least resistance and forced investment into alternatives.
+
+## The Broader Chinese Hardware Ecosystem
+
+Zhipu is not an isolated case. DeepSeek, which released models competitive with GPT-4 using older NVIDIA GPUs (reportedly H800s acquired before the tighter restrictions), demonstrated that algorithmic efficiency can partially compensate for hardware constraints. Their mixture-of-experts architectures and multi-head latent attention innovations reduced the compute required for training, extracting more capability per FLOP.
+
+Alibaba's DAMO Academy has invested in custom chip development through its subsidiary T-Head, producing the Hanguang 800 for inference workloads. Baidu has its Kunlun chips. The Chinese semiconductor ecosystem is broad and accelerating.
+
+The pattern is consistent: sanctions created urgency, state funding provided capital, and a large domestic market guaranteed demand. The result is an emerging parallel infrastructure stack that, while still behind NVIDIA's in absolute performance, is closing the gap faster than most Western analysts predicted.
+
+## Implications for Europe
+
+For Europe, the GLM-5 story is a cautionary tale about dependency. European AI research and industry rely almost entirely on NVIDIA hardware, procured through US-controlled supply chains. There is no European equivalent of the Ascend 910B, no European CUDA alternative, and no sovereign AI chip program at meaningful scale.
+
+The EU Chips Act allocates significant funding to semiconductor manufacturing, but it is focused primarily on automotive and industrial chips, not AI accelerators. If geopolitical tensions escalate further, whether between the US and China or between the US and Europe on trade policy, European AI capacity could be constrained by hardware access, just as China's was supposed to be.
+
+The lesson from Zhipu is that hardware sovereignty matters, not because you need the absolute best chip, but because you need guaranteed access to sufficient compute. An Ascend 910B that you can actually procure is more valuable than an H100 that you cannot.
+
+## Open Weights as a Bridge
+
+One underappreciated aspect of GLM-5's release is that Zhipu published the model with open weights. This means researchers worldwide, including those in sanctioned or hardware-constrained environments, can use, fine-tune, and study a model trained entirely on non-NVIDIA hardware. The knowledge transfer flows in both directions: Chinese hardware R&D produces models that benefit global research, and global research community feedback improves those models.
+
+This openness also serves a strategic purpose. By releasing open weights, Zhipu builds international goodwill, attracts developer mindshare, and positions Ascend-trained models as viable alternatives in the global ecosystem. It is soft power through open source, a playbook that Meta pioneered with LLaMA and that Chinese labs are now executing with increasing sophistication.
+
+## Looking Forward
+
+The GLM-5 story is not a story about one model or one chip. It is a story about the limits of export controls in a world where knowledge diffuses rapidly, capital is abundant, and the incentive to build alternatives is strong enough. The US sanctions succeeded in imposing short-term costs on Chinese AI development. They failed to prevent frontier capability. And they may have created a more resilient, more diversified global hardware ecosystem in the process.
+
+For AI engineers and technical leaders, the practical takeaway is straightforward: the NVIDIA monoculture is ending. Whether through Ascend, AMD's MI300X, Intel's Gaudi, or custom ASICs, the next five years will see a fragmentation of the AI compute stack. The organizations that invest in hardware-agnostic training infrastructure, frameworks that can target multiple backends efficiently, will have a strategic advantage in a world where chip access is no longer guaranteed.
+
+The frontier of AI is no longer defined by who has the best GPU. It is defined by who can build the best system around whatever hardware is available. Zhipu just proved that.

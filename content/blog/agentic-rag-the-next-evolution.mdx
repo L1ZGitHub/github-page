@@ -1,0 +1,393 @@
+---
+title: "Agentic RAG: The Next Evolution"
+description: "Explore Agentic RAG, where LLM agents plan, search, and verify across tools. Design patterns, code, and pitfalls for production-ready systems."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["RAG", "AI Agents", "Python", "LLMs", "Production ML", "LangGraph"]
+difficulty: "advanced"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+LLMs that only answer questions from a single retrieval call already feel old. In production, users expect systems that search, compare, cross-check, and adapt their strategy when things look wrong. That is the promise of Agentic RAG.
+
+Agentic RAG combines Retrieval-Augmented Generation with multi-step reasoning and tool use. Instead of a single query to a vector database, you orchestrate an agent that can decide what to search, when to search again, which tools to call, how to validate answers, and when to ask for clarification.
+
+If you have read my guides on Retrieval-Augmented Generation, Building Production-Ready RAG Systems, and Building a Multi-Agent AI System, you can see Agentic RAG as the convergence of those ideas into a unified pattern.
+
+## What is Agentic RAG, concretely?
+
+Standard RAG looks roughly like this:
+
+1. Embed question
+2. Retrieve top-k documents from a vector database
+3. Stuff them into the LLM context
+4. Generate an answer
+
+Agentic RAG turns this into a loop:
+
+1. Interpret the user query and set an objective
+2. Plan a sequence of steps (search, filter, call APIs, compare, verify)
+3. Execute tool calls iteratively (vector DB, keyword search, calculators, proprietary APIs)
+4. Monitor intermediate results and adapt the plan
+5. Produce an answer together with justification or provenance
+
+In other words, you are embedding an agentic system inside your RAG pipeline. If you are familiar with Hybrid Search and Semantic Search vs Keyword Search, Agentic RAG is the control layer that decides when each technique is used.
+
+## Why classical RAG fails in the wild
+
+From real deployments, a few patterns keep showing up where vanilla RAG is not enough:
+
+- **Multi-hop questions**: "How did our Q3 revenue compare to the year when we first launched product X?" requires joining information from multiple documents and sometimes external tools.
+- **Underspecified queries**: Users often ask "What are our security requirements?" with no project context. The system needs to ask a clarification question.
+- **Tool coordination**: In non-trivial systems you have several tools: vector DB, SQL, search API, internal services. Someone needs to orchestrate them.
+- **Verification and safety**: You may want a second pass that rechecks the answer, especially in privacy-sensitive NLP scenarios which I covered in Data Privacy in the Age of Large Language Models.
+
+Agentic RAG addresses these by giving the LLM the ability to:
+
+- Plan (decompose tasks)
+- Use tools iteratively
+- Reflect and correct itself
+
+## Design principles for Agentic RAG
+
+From an engineering point of view, I think of Agentic RAG as:
+
+> RAG + Toolformer-style tool calls + Planning + Control over iteration
+
+A few principles guide the design.
+
+### 1. Keep retrieval as a first-class tool
+
+Do not bury retrieval logic deep inside an opaque agent. Retrieval is still your primary way of grounding the model and limiting hallucinations, as discussed in Retrieval-Augmented Generation: A Complete Guide and Chunking Strategies for RAG Pipelines.
+
+Treat retrieval as just another tool the agent can call, but with:
+
+- Clear interfaces (input: text query, output: list of documents or passages)
+- Configurable backends (dense, sparse, hybrid search)
+- Metrics and monitoring hooks (see Evaluating RAG System Performance and Monitoring ML Models in Production)
+
+### 2. Separate planning from execution
+
+The same model can do both planning and answering, but architecturally, keep the phases distinct:
+
+- **Planner**: decides which tools to call and in what order
+- **Executor**: actually runs tool calls, tracks state, and performs safety checks
+- **Answerer**: synthesizes a final answer from the evidence
+
+This separation makes the system easier to test and reason about and aligns with the ideas from Building a Multi-Agent AI System.
+
+### 3. Keep the control loop outside the LLM
+
+Even in Agentic RAG, I do not let the LLM fully control the loop. Instead, the LLM emits *intent* and the orchestrator (your Python code or something like LangGraph) enforces:
+
+- Maximum number of tool calls
+- Timeouts and external cancellations
+- Security filters on tool parameters (important in privacy-preserving NLP)
+
+## A minimal Agentic RAG architecture
+
+Here is a simple mental model.
+
+**Components:**
+
+- `UserProxy` - handles user input, session state
+- `PlannerAgent` - turns user query + state into a plan or next action
+- `Tools` - retrieval, web search, company APIs, calculators
+- `JudgeAgent` (optional) - verifies or critiques the answer
+
+On each turn, the control loop is:
+
+1. Call `PlannerAgent` with current state
+2. If action is `ANSWER`, stop and respond
+3. If action is `CALL_TOOL`, run tool, append result to state
+4. If action is `ASK_CLARIFICATION`, send question to user and update state
+5. Repeat within budget
+
+### Example: tool calling loop in Python
+
+Assume you have:
+
+- An LLM that can emit structured JSON specifying the next action
+- A retrieval tool over a vector database, as in Understanding Vector Databases: A Beginner's Guide and Vector Database Performance Benchmarks
+
+```python
+import json
+from typing import List, Dict, Any
+
+class ToolResult(Exception):
+    pass
+
+# Dummy LLM interface
+class LLM:
+    def __init__(self, client):
+        self.client = client
+
+    def chat(self, messages: List[Dict[str, str]]) -> str:
+        # Replace with actual call, e.g. OpenAI, Anthropic, etc.
+        return self.client.generate(messages)
+
+
+def retrieval_tool(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """Your existing RAG retrieval function.
+
+    Returns a list of {"content": str, "metadata": {...}}.
+    """
+    # Use dense / sparse / hybrid search
+    return vector_db.search(query, top_k=top_k)
+
+
+tools = {
+    "retrieval": retrieval_tool,
+    # you can add "sql_query": sql_tool, "web_search": web_search_tool, etc.
+}
+
+
+def agent_step(llm: LLM, history: List[Dict[str, str]], tool_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ask the LLM what to do next.
+
+    Expects a JSON string describing {"action": ..., ...}.
+    """
+    system_prompt = {
+        "role": "system",
+        "content": (
+            "You are a planning agent for a RAG system. "
+            "You can choose to call tools or answer directly. "
+            "Respond strictly in JSON with keys: action, tool_name, tool_input, final_answer."
+        ),
+    }
+
+    tool_context = {
+        "role": "system",
+        "content": f"Tool results so far: {json.dumps(tool_results)[:4000]}",
+    }
+
+    messages = [system_prompt, tool_context] + history
+    raw = llm.chat(messages)
+
+    try:
+        action = json.loads(raw)
+    except json.JSONDecodeError:
+        # fallback: treat as final answer
+        action = {"action": "ANSWER", "final_answer": raw}
+
+    return action
+
+
+def run_agentic_rag(llm: LLM, user_query: str, max_steps: int = 5) -> str:
+    history = [{"role": "user", "content": user_query}]
+    tool_results: List[Dict[str, Any]] = []
+
+    for step in range(max_steps):
+        action = agent_step(llm, history, tool_results)
+        kind = action.get("action", "ANSWER")
+
+        if kind == "CALL_TOOL":
+            tool_name = action.get("tool_name")
+            tool_input = action.get("tool_input", "")
+
+            if tool_name not in tools:
+                tool_results.append({
+                    "tool_name": tool_name,
+                    "error": "Unknown tool",
+                })
+                continue
+
+            result = tools[tool_name](tool_input)
+            tool_results.append({
+                "tool_name": tool_name,
+                "input": tool_input,
+                "result": result,
+            })
+
+            history.append({
+                "role": "system",
+                "content": f"Tool {tool_name} returned: {str(result)[:2000]}",
+            })
+
+        elif kind == "ASK_CLARIFICATION":
+            question = action.get("question", "Could you clarify?")
+            # In a real system you would send this back to the user.
+            # Here we just log and break.
+            raise ToolResult(f"Clarification needed: {question}")
+
+        else:  # ANSWER
+            return action.get("final_answer", "")
+
+    # Fallback if max steps reached
+    return "I could not complete the reasoning within the step limit."
+```
+
+The interesting bit is not the LLM prompt, it is the loop. You control iterations, side effects, and safety policies.
+
+## Tooling patterns that work well
+
+### 1. Multi-retriever setup
+
+For serious RAG systems, a single vector index is rarely enough. Leveraging ideas from Hybrid Search, Semantic Search vs Keyword Search, and Scaling RAG Systems to Millions of Documents, I typically expose multiple retrieval tools:
+
+- `dense_retrieval` for semantic similarity
+- `sparse_retrieval` (BM25 or equivalent) for exact term match and rare tokens
+- `hybrid_retrieval` that combines both
+- `table_retrieval` or `sql_query` for structured data
+
+The planner chooses which to use based on the query. For compliance or privacy-sensitive data, you can expose a `pii_safe_retrieval` tool that filters or masks personal data, building on the patterns in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
+
+### 2. Verification agents
+
+A lightweight pattern is to add a JudgeAgent that checks answers for:
+
+- Consistency with retrieved evidence
+- Fabricated references or citations
+- Privacy policy violations (especially with Differential Privacy in NLP setups)
+
+At minimum, have a second LLM call that gets:
+
+- The final answer
+- The retrieved passages
+- A rubric: hallucinations, missing references, privacy issues, tone
+
+and outputs a risk score plus corrections.
+
+```python
+def judge_answer(llm: LLM, answer: str, evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    system_prompt = {
+        "role": "system",
+        "content": (
+            "You are a strict judge. Check if the answer is fully supported "
+            "by the evidence. Flag hallucinations and privacy risks. "
+            "Respond as JSON with keys: supported, issues, revised_answer."
+        ),
+    }
+    evidence_text = "\n\n".join(d["content"] for d in evidence)
+    user_msg = {
+        "role": "user",
+        "content": (
+            f"Answer: {answer}\n\nEvidence:\n{evidence_text}"
+        ),
+    }
+    raw = llm.chat([system_prompt, user_msg])
+    return json.loads(raw)
+```
+
+You can then conditionally replace the answer or display a warning.
+
+## Prompting strategies specific to Agentic RAG
+
+Prompting in Agentic RAG is less about style and more about *control*. Some tips building on Prompt Engineering Best Practices for Production:
+
+- Be explicit about JSON schemas and give 1-2 examples
+- Penalize unnecessary tool calls: "If the answer is already clear, respond with ANSWER directly"
+- Cap tool calls in the system prompt and in code (double safety)
+- Include a short memory of recent tool outputs, not full logs, to stay under context limits
+
+For the *answering* prompt, keep using the strategies that work in regular RAG:
+
+- Ask the model to quote and cite sources
+- Require it to say "I do not know" if evidence is insufficient
+- Distinguish between internal knowledge and retrieved knowledge in the instructions
+
+## Privacy and security considerations
+
+Agentic RAG increases your attack surface:
+
+- More tools means more places where user input is serialized and passed around
+- Tool parameters might inadvertently leak sensitive data to third parties
+- Complex reasoning makes it harder to audit where a piece of information came from
+
+Combining the ideas from Data Privacy in the Age of Large Language Models and Introduction to Differential Privacy for NLP, you should:
+
+- Implement **input filters** that detect and redact PII before it reaches third-party APIs
+- Use **role separation** so the agent cannot call privileged tools without passing through a policy check
+- Maintain **provenance metadata** for each piece of retrieved content (source, timestamp, access rights)
+- Log all tool calls with anonymized user identifiers and keep them under your own storage controls
+
+Agentic RAG is powerful, but for regulated domains, you may need stronger guarantees like local LLM deployment, local vector databases, and sometimes even differential privacy at training time.
+
+## Observability and evaluation
+
+Debugging Agentic RAG is easily twice as hard as debugging basic RAG systems. You need visibility into:
+
+- Plans and actions chosen by the agent
+- All tool calls, inputs, outputs, and latencies
+- Final answers and user feedback
+
+Hook into your existing monitoring setup, for instance the patterns in Monitoring ML Models in Production and Evaluating RAG System Performance:
+
+- Log each step as a structured event: `session_id`, `step`, `action`, `tool_name`, `latency_ms`, `prompt_tokens`, `completion_tokens`
+- Build simple dashboards showing average steps per query and tool usage distribution
+- Alert on anomalies like sudden spikes in a specific tool or high failure rates
+
+For offline evaluation, reuse your RAG evaluation framework but enrich it with:
+
+- Step-level annotations: did the agent choose appropriate tools
+- Tool failure robustness: does the system degrade gracefully if a tool is down
+
+## From prototype to production
+
+To take Agentic RAG from a notebook to production, I lean on the practices covered in Deploying ML Models with FastAPI and Docker, CI/CD Pipelines for Machine Learning Projects, and Python Best Practices for ML Engineers.
+
+A high-level deployment shape:
+
+1. **FastAPI service** that exposes a `/query` endpoint
+2. Inside the handler, run the control loop (`run_agentic_rag`) with timeouts
+3. Use async tool calls where possible for latency (especially for web search or slow APIs)
+4. Deploy behind an API gateway with rate limiting and auth
+5. Containerize with Docker, configure resource limits (CPU, RAM), and connect to your vector DB
+
+Example FastAPI skeleton:
+
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+
+
+class QueryRequest(BaseModel):
+    question: str
+
+
+class QueryResponse(BaseModel):
+    answer: str
+
+
+@app.post("/query", response_model=QueryResponse)
+async def query(req: QueryRequest):
+    try:
+        answer = run_agentic_rag(llm, req.question, max_steps=5)
+    except ToolResult as e:
+        # For now just propagate, but in practice ask user on the frontend
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return QueryResponse(answer=answer)
+```
+
+You can then embed this service into a larger architecture, for example, a multi-agent system that delegates some tasks to this Agentic RAG service while other agents handle workflow orchestration or UI interactions.
+
+## Where Agentic RAG shines (and where it does not)
+
+Good use cases:
+
+- Complex research or due diligence tasks that naturally require multiple retrieval and reasoning steps
+- Internal knowledge bases with heterogeneous tools (documents, SQL databases, Jira, Git, etc.)
+- Privacy-aware assistants where you want strong control and observability over each action
+
+Less suitable cases:
+
+- Extremely latency-sensitive applications where even one extra LLM call is too much
+- Very simple FAQ style systems that can be solved with a single retrieval call
+- Highly regulated tasks that require formal guarantees instead of heuristic verification
+
+As always, start from the problem. If single-shot RAG is failing due to reasoning, coordination, or safety issues, then it is a good signal that Agentic RAG may be worth the added complexity.
+
+## Key Takeaways
+
+- Agentic RAG extends basic RAG with planning, tool use, and iterative reasoning under a controlled loop.
+- Keep retrieval as a first-class, observable tool and expose multiple retrievers for dense, sparse, and hybrid search.
+- Separate planning, execution, and answering so you can test and monitor each phase independently.
+- Run the control loop in your own code, not inside a single opaque prompt, to enforce budgets, safety, and timeouts.
+- Add verification agents to check answers against evidence and detect hallucinations and privacy risks.
+- Treat privacy and security as core design constraints, especially when agents can call multiple tools.
+- Instrument every agent step with structured logs and metrics for reliable debugging and evaluation.
+- Start with a minimal loop and a few tools, then iterate based on real user failures before adding more complexity.

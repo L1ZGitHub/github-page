@@ -1,0 +1,197 @@
+---
+title: "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models"
+description: "Exploring techniques for mitigating memorization risks in LLMs, from differential privacy to anonymization, based on research at INRIA."
+date: "2026-01-28"
+category: "NLP & Privacy"
+tags: ["NLP", "Privacy", "Differential Privacy", "LLMs", "Research"]
+difficulty: "advanced"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+## Introduction
+
+Large Language Models have demonstrated remarkable capabilities, but they come with a significant privacy risk: they can memorize and reproduce sensitive information from their training data. Names, addresses, phone numbers, medical records, and other personally identifiable information (PII) can be extracted from trained models through targeted prompting.
+
+During my research internship at INRIA Grenoble, I worked on this exact problem. Our paper, [Towards the Anonymization of Language Modeling](https://arxiv.org/html/2501.02407v2), investigates how language structure affects memorization behavior and proposes techniques to mitigate these risks. In this article, I will share key insights from that work and the broader landscape of privacy-preserving NLP.
+
+## The Memorization Problem
+
+### What Is Memorization?
+
+When we say a model "memorizes" data, we mean it can generate verbatim or near-verbatim copies of training examples. This is different from learning general patterns. A model that has learned English grammar is useful; a model that can recite a specific patient's medical record is dangerous.
+
+Research by Carlini et al. (2021) demonstrated that GPT-2 could reproduce hundreds of verbatim training examples, including personal phone numbers and email addresses. Larger models memorize more data, making this an increasingly critical problem as models scale.
+
+### Why Does It Happen?
+
+Memorization occurs because:
+
+1. **Overparameterization**: Modern LLMs have billions of parameters, far more than needed to learn general language patterns. The excess capacity enables memorization of specific examples.
+2. **Data duplication**: Information repeated multiple times in the training data is more likely to be memorized. Web scrapes inevitably contain duplicated content.
+3. **Distinctive patterns**: Unique sequences like formatted phone numbers or structured addresses are easier for models to memorize than generic text.
+
+## Differential Privacy in NLP
+
+Differential Privacy (DP) provides a mathematical framework for limiting what a model can learn about individual training examples.
+
+### DP-SGD: The Standard Approach
+
+Differentially Private Stochastic Gradient Descent (DP-SGD) modifies the training process by:
+
+1. Clipping per-example gradients to bound individual influence
+2. Adding calibrated Gaussian noise to the aggregated gradients
+3. Tracking the privacy budget (epsilon) across training steps
+
+```python
+from opacus import PrivacyEngine
+from torch.optim import Adam
+
+model = TransformerModel()
+optimizer = Adam(model.parameters(), lr=1e-4)
+
+# Wrap with differential privacy
+privacy_engine = PrivacyEngine()
+model, optimizer, train_loader = privacy_engine.make_private_with_epsilon(
+    module=model,
+    optimizer=optimizer,
+    data_loader=train_loader,
+    epochs=3,
+    target_epsilon=8.0,
+    target_delta=1e-5,
+    max_grad_norm=1.0,
+)
+
+# Training loop proceeds normally
+for batch in train_loader:
+    loss = model(batch)
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+# Check actual privacy spent
+epsilon = privacy_engine.get_epsilon(delta=1e-5)
+```
+
+### The Utility-Privacy Trade-off
+
+The fundamental challenge with DP-SGD is that stronger privacy guarantees (lower epsilon) require more noise, which degrades model utility. In our research at INRIA, we found that this trade-off is especially pronounced for language models, where the noise can disrupt the subtle statistical patterns needed for fluent text generation.
+
+Typical epsilon values in practice:
+
+- **epsilon < 1**: Strong privacy, significant utility loss
+- **epsilon = 1-10**: Moderate privacy, acceptable utility for many tasks
+- **epsilon > 10**: Weak formal guarantee, but still provides some protection
+
+## Language-Specific Memorization Patterns
+
+One of the key findings from our INRIA research was that memorization behavior varies significantly across languages. We compared French and English language models and found:
+
+### Structural Differences Matter
+
+French has richer morphology (verb conjugations, gender agreements) than English. This structural complexity affects how models encode and retrieve information. Sequences that are highly distinctive in English (like specific name-number combinations) may be less distinctive in French due to the additional morphological context surrounding them.
+
+### Named Entity Leakage
+
+We specifically measured the leakage of named entities, including person names, locations, and organizations. Our analysis showed that the position and context of named entities within a sentence significantly affects memorization risk. Entities at the beginning of documents or in repeated patterns are more vulnerable.
+
+### Evaluation Methodology
+
+To measure memorization, we used exposure metrics that quantify how much more likely a model is to generate a specific sequence compared to a random baseline:
+
+```python
+import torch
+import numpy as np
+
+def compute_exposure(model, tokenizer, sequence, num_samples=1000):
+    """Compute the exposure metric for a sequence."""
+    # Perplexity of the target sequence
+    tokens = tokenizer.encode(sequence, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(tokens, labels=tokens)
+        target_loss = outputs.loss.item()
+
+    # Compare against random sequences of same length
+    random_losses = []
+    vocab_size = tokenizer.vocab_size
+    for _ in range(num_samples):
+        random_tokens = torch.randint(0, vocab_size, tokens.shape)
+        with torch.no_grad():
+            outputs = model(random_tokens, labels=random_tokens)
+            random_losses.append(outputs.loss.item())
+
+    # Exposure = log2(rank of target among randoms)
+    rank = sum(1 for l in random_losses if l <= target_loss)
+    exposure = np.log2(max(rank, 1))
+    return exposure
+```
+
+## Anonymization Techniques
+
+Beyond differential privacy, several practical anonymization techniques can reduce privacy risks:
+
+### Pre-training Anonymization
+
+**Named Entity Recognition + Replacement**: Run NER on training data and replace sensitive entities with synthetic alternatives. This preserves text structure while removing identifying information.
+
+**K-Anonymity for Text**: Ensure that each text pattern appears at least k times in the training data by generalizing rare sequences.
+
+### Post-training Defenses
+
+**Output Filtering**: Screen model outputs for PII patterns (regex for phone numbers, emails, etc.) and redact before showing to users.
+
+**Membership Inference Detection**: Monitor for queries that appear to be probing whether specific data was in the training set.
+
+### Data Deduplication
+
+Simply removing duplicate and near-duplicate entries from training data significantly reduces memorization. Tools like MinHash LSH can efficiently identify near-duplicates in large corpora.
+
+```python
+from datasketch import MinHash, MinHashLSH
+
+def deduplicate_corpus(documents, threshold=0.8):
+    """Remove near-duplicate documents using MinHash LSH."""
+    lsh = MinHashLSH(threshold=threshold, num_perm=128)
+    unique_docs = []
+
+    for i, doc in enumerate(documents):
+        minhash = MinHash(num_perm=128)
+        for word in doc.split():
+            minhash.update(word.encode("utf8"))
+
+        if not lsh.query(minhash):
+            lsh.insert(f"doc_{i}", minhash)
+            unique_docs.append(doc)
+
+    return unique_docs
+```
+
+## Evaluation Metrics
+
+Evaluating privacy in NLP models requires specific metrics:
+
+| Metric | What It Measures | Range |
+|---|---|---|
+| **Exposure** | How memorable a specific sequence is | 0 to log2(vocab_size) |
+| **Membership Inference** | Can we detect if data was in training set | AUC 0.5 (random) to 1.0 |
+| **Canary Insertion** | How many inserted canaries can be extracted | 0% to 100% extraction rate |
+| **PII Extraction Rate** | Percentage of PII recoverable via prompting | 0% to 100% |
+
+## Practical Recommendations
+
+Based on our research and practical experience, here are recommendations for deploying privacy-aware NLP systems:
+
+1. **Audit your training data**: Know what sensitive information exists before training. You cannot protect what you do not know about.
+2. **Deduplicate aggressively**: Remove near-duplicates from training data. This is the highest-impact, lowest-cost intervention.
+3. **Apply NER-based anonymization**: Replace sensitive entities in training data with synthetic alternatives.
+4. **Consider DP-SGD for high-risk applications**: Accept the utility trade-off when handling medical, financial, or legal data.
+5. **Filter outputs**: Always screen model outputs for PII patterns before serving to users.
+6. **Monitor for extraction attacks**: Log unusual query patterns that may indicate memorization probing.
+
+## Conclusion
+
+Privacy-preserving NLP is not just an academic concern; it is a practical requirement for responsible AI deployment. As LLMs become more capable and are trained on more data, the risk of sensitive information leakage grows. The techniques discussed here, from differential privacy to anonymization and deduplication, provide a toolkit for mitigating these risks.
+
+Our work at INRIA on language-specific memorization patterns highlights that privacy solutions need to be adapted to the linguistic and cultural context of the data. There is no universal solution, but combining multiple defense layers provides robust protection for most applications.
+
+For a deeper dive into our findings, I encourage you to read the full paper: [Towards the Anonymization of Language Modeling](https://arxiv.org/html/2501.02407v2).

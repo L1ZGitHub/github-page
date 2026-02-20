@@ -1,0 +1,394 @@
+---
+title: "LLM Evaluation Frameworks: Beyond Perplexity"
+description: "Go beyond perplexity with practical LLM evaluation: task metrics, judge models, rubrics, RAG-specific checks, and production feedback loops."
+date: "2026-02-09"
+category: "Tutorials"
+tags: ["LLMs", "Evaluation", "RAG", "Python", "MLOps", "NLP"]
+difficulty: "intermediate"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Perplexity is a bit like model size. It is easy to compare on a slide, it feels objective and scientific, and it is rarely the thing that actually breaks your product.
+
+For most real-world systems - chatbots, RAG applications, agents, internal tools - perplexity tells you almost nothing about whether the model is good enough to ship.
+
+As I have scaled RAG systems and privacy-preserving NLP pipelines into production, the evaluation question has come up again and again: *How do we know this is actually better?* That is where we need to go beyond perplexity.
+
+In this post I will walk through practical ways to evaluate LLMs and LLM-based systems, with code, focusing on what you can implement without building a full research lab. If you already read the articles on **Retrieval-Augmented Generation: A Complete Guide**, **Evaluating RAG System Performance**, and **Monitoring ML Models in Production**, this will fit naturally on top of those topics.
+
+
+## Why perplexity is not enough
+
+Perplexity measures how well a language model predicts the next token on some text. This is useful for training and research, but it fails badly for most product questions:
+
+- It is measured on generic corpora, not your domain.
+- It does not care about factual correctness, safety, or usefulness.
+- It says nothing about how the model behaves in a RAG pipeline, with tools, or in a constrained UI.
+- Two models with similar perplexity can have very different instruction-following behavior.
+
+When I compare models for a production use case, I care about things like:
+
+- Does it follow instructions consistently?
+- Does it hallucinate less, especially in RAG settings?
+- Does it respect privacy constraints?
+- Does it degrade gracefully on long contexts, multimodal inputs, or tool calls?
+
+These are system-level behaviors, not token prediction quality.
+
+
+## A mental model of LLM evaluation
+
+I find it useful to split evaluation into three complementary layers:
+
+1. **Task-level metrics** - Classic metrics adapted to LLM outputs: accuracy, F1, BLEU, ROUGE, etc.
+2. **LLM-as-a-judge** - Using a strong model to grade the outputs of another one.
+3. **System-level and human-in-the-loop** - RAG quality, user satisfaction, safety, latency, cost.
+
+You rarely need all of this at once. Start simple, then iterate.
+
+
+## 1. Task-level metrics: still useful, used carefully
+
+If your task has a clear notion of “right answer”, traditional metrics are still your best friend. For example:
+
+- Classification or routing - accuracy, AUROC, F1.
+- Extraction (like Named Entity Recognition from **Named Entity Recognition with Modern NLP**) - span-level F1, exact match.
+- Structured outputs - JSON schema validation plus field-level metrics.
+
+For open-ended generation, metrics like BLEU and ROUGE are noisy, but can still catch regressions.
+
+### Example: evaluating a classification prompt
+
+Suppose we use an LLM for intent classification instead of fine-tuning a small classifier. We can build an evaluation harness like this:
+
+```python
+import json
+from typing import List, Dict
+
+import openai  # or any other LLM client
+from sklearn.metrics import classification_report
+
+openai.api_key = "YOUR_KEY"
+
+SYSTEM_PROMPT = """You are an intent classifier.
+Given a user message, output exactly one of: [billing, technical, other].
+Respond with JSON: {"intent": "..."}.
+"""
+
+
+def classify_intent(message: str) -> str:
+    completion = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": message},
+        ],
+        temperature=0,
+    )
+
+    content = completion.choices[0].message["content"]
+    data = json.loads(content)
+    return data["intent"]
+
+
+def evaluate_dataset(dataset: List[Dict[str, str]]):
+    y_true, y_pred = [], []
+    for sample in dataset:
+        y_true.append(sample["label"])
+        y_pred.append(classify_intent(sample["text"]))
+
+    print(classification_report(y_true, y_pred))
+
+
+if __name__ == "__main__":
+    dev_set = [
+        {"text": "My invoice is wrong", "label": "billing"},
+        {"text": "App keeps crashing on startup", "label": "technical"},
+        # ...
+    ]
+    evaluate_dataset(dev_set)
+```
+
+You can plug this into the CI/CD flows discussed in **CI/CD Pipelines for Machine Learning Projects** and trigger it on prompt changes or model upgrades.
+
+
+## 2. LLM-as-a-judge: automatic grading at scale
+
+For many realistic tasks, there is no single ground truth answer. Responses can be good in different ways. A binary “correct / incorrect” label is too crude.
+
+This is where **LLM-as-a-judge** approaches shine. The idea:
+
+- Use a strong, usually more capable, judge model.
+- Provide the user query, the system answer, and possibly a reference answer.
+- Ask the judge to score the answer along explicit dimensions.
+
+This is very similar to prompt engineering principles from **Prompt Engineering Best Practices for Production**. The difference is that the prompt is now a rubric for grading.
+
+### Designing a scoring rubric
+
+Common dimensions I use:
+
+- Correctness / factuality (0-5)
+- Relevance to the query (0-5)
+- Clarity and structure (0-5)
+- Safety and policy compliance (0-5)
+
+Keep the scale small and the rubric explicit. For example:
+
+```text
+Score from 1 to 5.
+1 = Completely incorrect, 3 = Partially correct, 5 = Fully correct and precise.
+```
+
+### Example: LLM judge for QA
+
+```python
+import openai
+from typing import Dict
+
+openai.api_key = "YOUR_KEY"
+
+JUDGE_SYSTEM_PROMPT = """You are an expert evaluator.
+You will receive a question, a model answer, and a reference answer.
+Evaluate the model answer on correctness, relevance, and clarity.
+Return a JSON object with integer scores from 1 to 5 for each criterion,
+and a short justification.
+"""
+
+JUDGE_USER_TEMPLATE = """Question:
+{question}
+
+Model answer:
+{answer}
+
+Reference answer:
+{reference}
+
+Provide your evaluation now.
+"""
+
+
+def judge_answer(question: str, answer: str, reference: str) -> Dict:
+    prompt = JUDGE_USER_TEMPLATE.format(
+        question=question,
+        answer=answer,
+        reference=reference,
+    )
+
+    completion = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0,
+    )
+
+    content = completion.choices[0].message["content"]
+    return json.loads(content)
+```
+
+With this in place, you can:
+
+- Compare models on the same dataset.
+- Track scores over time as you iterate prompts and system design.
+- Detect regressions as part of your deployment pipeline, similar to **Monitoring ML Models in Production**.
+
+
+## 3. Evaluating RAG systems: retrieval + generation
+
+For RAG, evaluating the model in isolation is often misleading. As I described in **Building Production-Ready RAG Systems** and **Scaling RAG Systems to Millions of Documents**, retrieval quality matters as much as, or more than, model choice.
+
+A robust RAG evaluation checks at least three things:
+
+1. **Retrieval quality** - Do we fetch the right documents?
+2. **Groundedness** - Does the answer rely on the retrieved context, or hallucinate?
+3. **Task success** - Does the user get a useful answer?
+
+### 3.1 Retrieval quality
+
+Retrieval metrics are covered in depth in **Evaluating RAG System Performance**, **Semantic Search vs Keyword Search: When to Use What**, and **Vector Database Performance Benchmarks**. Practically, you want:
+
+- Recall@k - Is the relevant document in the top k?
+- Precision@k - How many of the top k are actually relevant?
+
+At minimum, build a small labeled dataset of queries with relevant document IDs, then measure recall@k:
+
+```python
+from typing import List, Dict
+
+
+def recall_at_k(labels: List[List[str]], preds: List[List[str]], k: int = 5) -> float:
+    """labels and preds are lists of lists of document IDs."""
+    hits, total = 0, 0
+    for true_ids, pred_ids in zip(labels, preds):
+        total += len(true_ids)
+        hits += sum(1 for doc_id in true_ids if doc_id in pred_ids[:k])
+    return hits / total if total > 0 else 0.0
+```
+
+This is directly influenced by your choice of embeddings (see **Embedding Models Compared: OpenAI vs Open-Source**) and your retrieval strategy (pure dense, sparse, or **Hybrid Search: Combining Dense and Sparse Retrieval**).
+
+### 3.2 Groundedness and hallucinations
+
+For groundedness, LLM-as-a-judge is again very effective. You can prompt the judge model to check whether each claim in the answer is supported by the provided context.
+
+Example rubric:
+
+```text
+Given a question, a model answer, and the retrieved context, check:
+- Are the factual claims supported by the context?
+- Are there unsupported additions or hallucinations?
+Output a JSON object with:
+- groundedness_score (1-5)
+- hallucination (true/false)
+- justification
+```
+
+This ties directly to the patterns from **Knowledge Graphs Meet LLMs: Structured RAG Architectures**, where part of the goal is exactly to reduce hallucination by constraining what the model can use.
+
+### 3.3 Task success and user-centric metrics
+
+Ultimately, your RAG system exists to answer someone's question in a specific workflow. Some practical, system-level metrics:
+
+- Task completion rate - Did the user get what they needed without escalating?
+- Re-ask rate - How often did users need to rephrase or ask again?
+- Human escalation rate - How often did support agents need to step in?
+- Time-to-answer - Especially if you have real-time constraints as in **Building Real-Time ML Inference Pipelines**.
+
+Instrument these in your application backend, not just your model code.
+
+
+## 4. Human evaluation: small but critical
+
+Purely automated evaluation tends to drift away from what humans actually care about. A small amount of structured human evaluation can correct that.
+
+### Practical tips for human evals
+
+From experience:
+
+- Keep it cheap - 50 to 200 examples are often enough for directional decisions.
+- Use a simple UI - even a Google Sheet with columns: question, answer A, answer B, preferred, comments.
+- Ask one question per judgment - “Which answer is better for this user?” is often enough.
+- Sample real traffic - synthetic prompts from prompt libraries are rarely representative.
+
+You can use the same categories you defined for automated judging: correctness, relevance, clarity, safety.
+
+Combine human scores with automated ones. If they diverge, inspect examples and adjust your rubrics or prompts.
+
+
+## 5. Evaluation for privacy-preserving and safe NLP
+
+If you work on privacy or compliance heavy use cases, evaluation must include privacy and safety, not just quality.
+
+This connects directly to topics from **Privacy-Preserving NLP: Protecting Sensitive Data in Language Models**, **Federated Learning for Privacy-Preserving AI**, and **Introduction to Differential Privacy for NLP**.
+
+### Privacy checks
+
+Concrete checks I like to run:
+
+- **Leakage tests** - If you provide training data with synthetic secrets (emails, API keys), does the model regurgitate them unprompted?
+- **Redaction robustness** - If inputs are redacted, does the model avoid reconstructing or inferring sensitive data?
+- **Policy compliance** - Judge prompts that request forbidden information and verify safe refusals.
+
+You can automate a lot of this with an LLM judge plus regex / pattern checks, and monitor them with the same pipelines you use for performance metrics.
+
+### Safety and toxicity
+
+Use curated prompt sets for:
+
+- Toxic or abusive content.
+- Self-harm and medical requests.
+- Jailbreak attempts.
+
+Evaluate both refusal rates and quality of safe alternatives. This becomes part of your continuous evaluation harness.
+
+
+## 6. Building an evaluation harness you can live with
+
+The most important advice I can give as an engineer: treat evaluation like you treat your build system, not like a one-off notebook.
+
+A minimal but realistic setup:
+
+1. **Datasets in version control**  - A small but curated set of prompts and expected behavior stored as JSON or CSV.
+2. **Evaluation scripts in Python**  - Metrics, LLM-judge calls, and report generation.
+3. **CI integration**  - On every model or prompt change, run the evaluation and fail the build if key metrics drop.
+4. **Dashboarding**  - Store results in a database or simple files and visualize trends.
+
+Example skeleton for an eval CLI:
+
+```python
+import argparse
+import json
+from pathlib import Path
+
+
+def run_eval(dataset_path: Path, model_name: str):
+    dataset = json.loads(dataset_path.read_text())
+    results = []
+
+    for example in dataset:
+        # 1. Get model answer
+        answer = call_model(model_name, example["question"])  # implement
+
+        # 2. Compute metrics / judge score
+        judge_result = judge_answer(
+            question=example["question"],
+            answer=answer,
+            reference=example.get("reference", ""),
+        )
+
+        results.append({
+            "question": example["question"],
+            "answer": answer,
+            "judge": judge_result,
+        })
+
+    # 3. Aggregate and print summary
+    avg_correctness = sum(r["judge"]["correctness"] for r in results) / len(results)
+    print(f"Avg correctness: {avg_correctness:.2f}")
+
+    # Save raw results for inspection
+    Path("eval_results.json").write_text(json.dumps(results, indent=2))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("model_name", type=str)
+    args = parser.parse_args()
+
+    run_eval(args.dataset, args.model_name)
+```
+
+Tie this into the tooling you already use from **Python Best Practices for ML Engineers**, **Deploying ML Models with FastAPI and Docker**, and **Monitoring ML Models in Production** and you get a reproducible, observable system.
+
+
+## 7. Special cases: agents and tool-using systems
+
+For more complex systems like those in **Building a Multi-Agent AI System**, **Agentic RAG: The Next Evolution**, or **Building AI Agents with LangChain and LangGraph**, evaluation becomes more like software testing:
+
+- **End-to-end task success** - Did the agent complete the workflow? Place the order, update the record, generate the report?
+- **Tool call correctness** - Were tools used correctly, with valid parameters, and in a minimal number of steps?
+- **Cost and latency** - Did the agent blow up your token budget or latency budget?
+
+Instrument your orchestrator (LangGraph, custom Python, etc.) to log:
+
+- Each tool call and its arguments.
+- Number of steps to completion.
+- Failures and retries.
+
+Then build metrics on top of those logs. For example, average steps per task, tool error rate, or percentage of tasks solved without human intervention.
+
+
+## Key Takeaways
+
+- Perplexity is useful for training research but largely irrelevant for evaluating real LLM products.
+- Combine classical task metrics with LLM-as-a-judge and human evaluation for a realistic picture.
+- For RAG, evaluate retrieval quality, groundedness, and task success, not just model responses.
+- LLM-as-a-judge with clear rubrics is a practical way to scale evaluation without a huge labeling budget.
+- Privacy, safety, and policy compliance should be first-class evaluation dimensions, not afterthoughts.
+- Treat evaluation as code: version datasets, script metrics, integrate with CI, and monitor drifts over time.
+- Complex systems like agents and tool-using LLMs require end-to-end task-level evaluation and careful instrumentation.
+

@@ -1,0 +1,447 @@
+---
+title: "Deploying ML Models with FastAPI and Docker"
+description: "Learn how to containerize and deploy ML models using FastAPI and Docker, with patterns for scaling, performance, and production-ready setups."
+date: "2026-02-09"
+category: "Engineering"
+tags: ["FastAPI", "Docker", "Machine Learning", "MLOps", "RAG", "Python"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+Shipping a model is often harder than training one. The Jupyter notebook that demoed beautifully on your laptop suddenly becomes a fragile snowflake when real users and real traffic show up. Logs are missing, dependencies break, and latency jumps.
+
+FastAPI and Docker give us a clean way out of this. FastAPI provides a modern async web framework with type hints and automatic docs. Docker gives us reproducible, portable environments. Put together, they are a solid foundation for deploying anything from a small classifier to a full Retrieval-Augmented Generation (RAG) pipeline.
+
+This post walks through a practical pattern I use regularly when deploying models, including some tricks that carry over from building production RAG systems and privacy-preserving NLP services.
+
+## Designing the API around the model
+
+Before writing Dockerfiles, I want a clear contract: what requests look like, what responses look like, and how we will monitor and debug them.
+
+### Start with a minimal interface
+
+For a classifier, a simple interface might be:
+
+- `POST /predict` - takes input text, returns predicted label and score
+- `GET /healthz` - returns service health
+
+Define the Pydantic models first. It forces you to think about the API surface instead of jumping straight to model loading.
+
+```python
+from typing import List
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI(title="Text Classifier API")
+
+
+class PredictRequest(BaseModel):
+    texts: List[str]
+
+
+class Prediction(BaseModel):
+    label: str
+    score: float
+
+
+class PredictResponse(BaseModel):
+    predictions: List[Prediction]
+
+
+@app.get("/healthz")
+def health_check():
+    return {"status": "ok"}
+```
+
+This is similar to how you would design a RAG endpoint that returns answers, references, and scores, like I discussed in "Retrieval-Augmented Generation: A Complete Guide".
+
+### Loading the model efficiently
+
+Naively loading the model inside the endpoint handler is a classic anti-pattern. It reloads on every request and kills performance.
+
+Use FastAPI's startup event to load heavy resources once per process:
+
+```python
+from fastapi import FastAPI
+import joblib
+
+app = FastAPI(title="Text Classifier API")
+
+model = None
+
+
+@app.on_event("startup")
+async def load_model():
+    global model
+    model = joblib.load("./model.joblib")
+
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(req: PredictRequest):
+    # simple batch prediction
+    labels = model.predict(req.texts)
+    # assume model has predict_proba
+    probs = model.predict_proba(req.texts).max(axis=1)
+
+    predictions = [
+        Prediction(label=str(label), score=float(score))
+        for label, score in zip(labels, probs)
+    ]
+    return PredictResponse(predictions=predictions)
+```
+
+Production tip: for large deep learning models, you might want to lazy-load or share them using a separate process or model server if multiple services need the same model.
+
+## Structuring the project for deployment
+
+A clean folder layout makes Docker and CI/CD easier.
+
+```text
+ml-service/
+  app/
+    __init__.py
+    main.py
+    models.py          # pydantic schemas
+    inference.py       # prediction logic
+    config.py
+  models/
+    model.joblib
+  requirements.txt
+  Dockerfile
+  start.sh
+```
+
+Split responsibilities:
+
+- `main.py` - FastAPI app and routing
+- `inference.py` - model loading and prediction logic
+- `config.py` - environment variable parsing
+
+`config.py` keeps configuration out of the code, which is important when you handle secrets for privacy-preserving NLP systems.
+
+```python
+# app/config.py
+from pydantic import BaseSettings
+
+
+class Settings(BaseSettings):
+    model_path: str = "./models/model.joblib"
+    log_level: str = "info"
+    max_batch_size: int = 32
+
+
+settings = Settings()
+```
+
+Then use it in your inference layer:
+
+```python
+# app/inference.py
+from typing import List
+import joblib
+from .config import settings
+
+
+class ModelService:
+    def __init__(self):
+        self.model = joblib.load(settings.model_path)
+
+    def predict(self, texts: List[str]):
+        labels = self.model.predict(texts)
+        probs = self.model.predict_proba(texts).max(axis=1)
+        return list(zip(labels, probs))
+```
+
+And wire it into FastAPI:
+
+```python
+# app/main.py
+from fastapi import FastAPI
+from .models import PredictRequest, PredictResponse, Prediction
+from .inference import ModelService
+
+app = FastAPI(title="Text Classifier API")
+model_service: ModelService
+
+
+@app.on_event("startup")
+async def startup_event():
+    global model_service
+    model_service = ModelService()
+
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(req: PredictRequest):
+    results = model_service.predict(req.texts)
+    predictions = [
+        Prediction(label=str(label), score=float(score))
+        for label, score in results
+    ]
+    return PredictResponse(predictions=predictions)
+```
+
+## Writing a production-friendly Dockerfile
+
+A fragile Dockerfile is a silent source of pain in ML deployments. The environment needs to be stable, reproducible, and reasonably small.
+
+### Basic Dockerfile for CPU inference
+
+```dockerfile
+# Use a slim Python image
+FROM python:3.11-slim as base
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies (adjust as needed)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies first, to leverage Docker cache
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app ./app
+COPY models ./models
+
+# Expose FastAPI default port
+EXPOSE 8000
+
+# Use a non-root user for better security
+RUN useradd -m appuser
+USER appuser
+
+# Start script
+COPY start.sh ./
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]
+```
+
+And a simple `start.sh` that uses Uvicorn with multiple workers:
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+HOST=${HOST:-0.0.0.0}
+PORT=${PORT:-8000}
+WORKERS=${WORKERS:-2}
+
+exec uvicorn app.main:app \
+  --host "$HOST" \
+  --port "$PORT" \
+  --workers "$WORKERS" \
+  --proxy-headers
+```
+
+During local development, you can build and run it with:
+
+```bash
+docker build -t text-classifier:latest .
+docker run -p 8000:8000 text-classifier:latest
+```
+
+This pattern is similar to how you would containerize a RAG API that uses a vector database, as discussed in "Building Production-Ready RAG Systems" and "Understanding Vector Databases: A Beginner's Guide".
+
+### GPU-enabled images
+
+For deep learning models, you often need GPUs. With NVIDIA, the pattern is:
+
+- Use an `nvidia/cuda` base images
+- Install the right PyTorch / TensorFlow build
+- Run with `--gpus` flag
+
+Example snippet:
+
+```dockerfile
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+# then similar steps as before: install Python, dependencies, copy app
+```
+
+And run:
+
+```bash
+docker run --gpus all -p 8000:8000 your-image:tag
+```
+
+Align CUDA, PyTorch, and driver versions carefully. This is one of the most common sources of deployment failures for LLM or RAG backends.
+
+## Performance and scalability considerations
+
+Once the basic service runs, I usually look at three performance layers:
+
+- request-level optimizations
+- model-level optimizations
+- system-level scaling
+
+### Request-level optimizations
+
+1. **Batching** - The API already takes `List[str]`. Many models are much more efficient on batches.
+
+2. **Timeouts and limits** - Cap the max batch size and request body size to avoid abuse.
+
+In FastAPI you can enforce batch size:
+
+```python
+from fastapi import HTTPException
+from .config import settings
+
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(req: PredictRequest):
+    if len(req.texts) > settings.max_batch_size:
+        raise HTTPException(status_code=400, detail="Batch too large")
+    # actual prediction logic...
+```
+
+For latency-sensitive services, especially in RAG setups where multiple microservices are chained, these limits help avoid cascading failures.
+
+### Model-level optimizations
+
+From experience with both RAG and traditional ML services, two patterns pay off quickly:
+
+- Use quantized or distilled models when possible
+- Preload tokenizers and avoid re-initializing them per request
+
+For transformer-based models:
+
+```python
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+
+
+class TransformerService:
+    def __init__(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            "distilbert-base-uncased-finetuned-sst-2-english"
+        ).to(self.device)
+        self.model.eval()
+
+    def predict(self, texts):
+        inputs = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            probs = torch.softmax(outputs.logits, dim=-1)
+            scores, labels = torch.max(probs, dim=-1)
+        return [
+            (int(label.item()), float(score.item()))
+            for label, score in zip(labels, scores)
+        ]
+```
+
+Conceptually this is the same pattern as building embedding endpoints, like in "Embedding Models Compared: OpenAI vs Open-Source", except here we return class labels and scores instead of vectors.
+
+### System-level scaling
+
+For real traffic you will typically:
+
+- run multiple container replicas
+- put them behind a load balancer
+- configure auto-scaling based on CPU or latency
+
+You can quickly try horizontal scaling locally with Docker Compose:
+
+```yaml
+version: "3.9"
+services:
+  api:
+    image: text-classifier:latest
+    deploy:
+      replicas: 3
+    ports:
+      - "8000:8000"
+```
+
+In Kubernetes, you would add an HPA (Horizontal Pod Autoscaler) on CPU or custom metrics like request latency.
+
+## Observability and reliability
+
+Models rarely fail silently. They show drift, skew, or increased error rates. For any ML service, I treat observability as non-negotiable.
+
+### Structured logging
+
+Use structured logs instead of raw `print` so your logging backend can parse them.
+
+```python
+import logging
+import json
+
+logger = logging.getLogger("ml-service")
+logging.basicConfig(level=logging.INFO)
+
+
+def log_prediction(input_count: int, latency_ms: float):
+    logger.info(json.dumps({
+        "event": "prediction",
+        "inputs": input_count,
+        "latency_ms": round(latency_ms, 2),
+    }))
+```
+
+You can enhance this with anonymization techniques from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" to avoid logging raw user text.
+
+### Health checks and readiness
+
+For container orchestrators, splitting liveness and readiness probes is crucial.
+
+- **Liveness** - container is not stuck
+- **Readiness** - model is loaded and ready to serve
+
+Add a simple readiness flag:
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+model_ready = False
+
+
+@app.on_event("startup")
+async def startup_event():
+    global model_ready
+    # load model
+    model_ready = True
+
+
+@app.get("/readyz")
+async def readyz():
+    if not model_ready:
+        return {"status": "not-ready"}
+    return {"status": "ready"}
+```
+
+In Kubernetes, you would then configure readiness and liveness probes against `/readyz` and `/healthz`.
+
+## Extending to RAG and agents
+
+The same patterns scale to more complex systems:
+
+- A RAG service: FastAPI app that orchestrates retrieval, ranking, and generation, with each stage possibly being its own container. This aligns with the architecture I described in "Building Production-Ready RAG Systems" and "Chunking Strategies for RAG Pipelines".
+- An AI agent backend: FastAPI app that exposes a single `/agent` endpoint, internally calling multiple tools or services. This is close to the architectures in "Building AI Agents with LangChain and LangGraph".
+
+The core ideas stay the same:
+
+- keep the API contract explicit
+- isolate model logic
+- containerize with clear dependencies
+- layer in observability and scalability
+
+Once you have one robust Dockerized FastAPI service for a small model, reusing the same template for larger systems becomes mostly a matter of configuration and infrastructure.
+
+## Key Takeaways
+
+- Design a clear API contract first, using Pydantic models to structure inputs and outputs.
+- Load models once at startup, not per request, to avoid massive latency penalties.
+- Use a clean project structure that separates API, inference logic, and configuration.
+- Write a Dockerfile that prioritizes reproducibility, small images, and non-root execution.
+- Optimize at three levels: request batching and limits, efficient model implementations, and system-level scaling.
+- Add structured logging, health, and readiness endpoints to make the service observable and reliable.
+- Reuse the same FastAPI + Docker patterns for RAG services, embedding APIs, and AI agents.
+- Treat privacy and security as first-class concerns, especially when logging or handling user data.

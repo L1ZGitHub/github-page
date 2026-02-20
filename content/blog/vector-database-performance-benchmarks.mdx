@@ -1,0 +1,457 @@
+---
+title: "Vector Database Performance Benchmarks"
+description: "Learn how to design, run, and interpret vector database performance benchmarks for real-world RAG systems, with code, metrics, and pitfalls."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["Vector Databases", "RAG", "Benchmarking", "Python", "Information Retrieval", "LLMs"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Most RAG projects that hit a performance wall are not limited by the LLM. They are limited by retrieval. You can have great chunking, careful prompt engineering, and excellent embeddings, yet your system still feels slow or returns mediocre context. Very often, the root cause is a poorly understood vector database setup.
+
+Benchmarks are how you reclaim control.
+
+The goal is not just to pick "the fastest" vector store. It is to understand where the time goes and what tradeoffs you are making between latency, recall, cost, and operational complexity.
+
+In this article I will walk through how I design, run, and interpret vector database performance benchmarks in practice, especially for Retrieval-Augmented Generation systems.
+
+## What are we actually benchmarking?
+
+Before talking about numbers, we need clarity on *what* is being measured. For vector databases, I focus on three dimensions:
+
+1. **Index performance**
+   - Index build time
+   - Memory / disk usage
+   - Incremental update performance (upserts, deletes)
+
+2. **Query performance**
+   - Latency (p50, p95, p99)
+   - Throughput (QPS) under load
+   - Recall / accuracy (how many relevant neighbors we actually retrieve)
+
+3. **Operational behavior**
+   - Behavior under concurrent load
+   - Impact of replication, sharding, and persistence
+   - Warm vs cold cache behavior
+
+In the "Understanding Vector Databases: A Beginner's Guide" article I covered the basic concepts like HNSW, IVF, and product quantization. Here we will use those concepts, but with a more engineering-oriented mindset: how to actually test them.
+
+## Dataset and embedding model selection
+
+Benchmark results are only as meaningful as the data and queries you use.
+
+### Use realistic data
+
+For RAG workloads, good benchmarks use:
+
+- Text documents that look like your production data
+  - Length distribution similar to your production chunks
+  - Mix of domains and topics
+- Chunking strategies similar to your target architecture
+  - If you have not decided, the "Chunking Strategies for RAG Pipelines" article has concrete patterns
+
+If you are working in a privacy-sensitive domain, you can follow the ideas from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" and generate synthetic data that mimics structure without exposing real content.
+
+### Embedding model choice matters
+
+The embedding model affects:
+
+- Vector dimensionality (e.g. 384, 768, 1536, 3072)
+- Vector distribution and norm
+- Semantic properties (which affect recall metrics)
+
+If you have not yet decided, see "Embedding Models Compared: OpenAI vs Open-Source" for a deeper comparison. For benchmarking frameworks, I typically use one or two models:
+
+- A **lighter model** (e.g. 384-d) to test high scale and low memory setups
+- A **heavier model** (e.g. 1536-d or 3072-d) to simulate more demanding semantic workloads
+
+Below is an example of generating embeddings with a typical Python pipeline:
+
+```python
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+texts = [
+    "This is a sample document for our benchmark.",
+    "Another document that might be related to retrieval.",
+    # ... more documents
+]
+
+embeddings = model.encode(texts, batch_size=128, show_progress_bar=True)
+embeddings = embeddings.astype("float32")
+
+print(embeddings.shape)  # (N, dim)
+```
+
+Save both texts and vectors to disk so they can be reused across vector databases:
+
+```python
+import json
+
+np.save("vectors.npy", embeddings)
+with open("texts.jsonl", "w") as f:
+    for t in texts:
+        f.write(json.dumps({"text": t}) + "\n")
+```
+
+Keeping the dataset and embeddings fixed is critical if you want to compare databases fairly.
+
+## Core metrics: latency, recall, and cost
+
+### Latency
+
+Latency must be measured at different percentiles:
+
+- **p50** - typical request
+- **p95** - worst-case user usually sees
+- **p99** - tail latency, often the bottleneck in production
+
+For RAG systems, the target often looks like:
+
+- Vector search budget: 20-80 ms p95 for k = 10-50
+- End-to-end RAG budget (retrieval + model): 500-3000 ms depending on UX
+
+Remember that vector search latency is just one piece of your total pipeline. If you have already read "Building Production-Ready RAG Systems" you know to look at retrieval + ranking + generation together.
+
+### Recall and quality
+
+Approximate nearest neighbor (ANN) indexes trade accuracy for speed. We need a way to measure: *how often do we retrieve the true nearest neighbors?*
+
+Common metric:
+
+- **Recall@k** - fraction of true top-k neighbors retrieved by an approximate index
+
+To compute this, we first build an *exact* index (e.g. brute force with Faiss `IndexFlatL2`) and then compare to the approximate index.
+
+```python
+import faiss
+import numpy as np
+
+# Load vectors
+vectors = np.load("vectors.npy")
+
+# Exact index
+index_exact = faiss.IndexFlatL2(vectors.shape[1])
+index_exact.add(vectors)
+
+# Sample some queries
+rng = np.random.default_rng(0)
+query_ids = rng.choice(len(vectors), size=100, replace=False)
+queries = vectors[query_ids]
+
+D_exact, I_exact = index_exact.search(queries, k=10)
+```
+
+Now compare with an approximate index, for example HNSW:
+
+```python
+index_hnsw = faiss.IndexHNSWFlat(vectors.shape[1], 32)  # 32 neighbors
+index_hnsw.hnsw.efConstruction = 200
+index_hnsw.add(vectors)
+
+index_hnsw.hnsw.efSearch = 64
+D_hnsw, I_hnsw = index_hnsw.search(queries, k=10)
+
+# Compute Recall@10
+recall_sum = 0
+for i in range(len(queries)):
+    exact_set = set(I_exact[i])
+    approx_set = set(I_hnsw[i])
+    recall_sum += len(exact_set & approx_set) / 10.0
+
+recall_at_10 = recall_sum / len(queries)
+print(f"Recall@10: {recall_at_10:.3f}")
+```
+
+This style of evaluation transfers directly to production-ready vector databases as long as they expose a way to export vectors or run batch queries.
+
+### Cost and memory
+
+Cost is a combination of:
+
+- Compute resources (CPU vs GPU, instance types)
+- Memory footprint of your index
+- Storage and IOPS costs
+- Networking between application and database
+
+Memory usage scales roughly as:
+
+- `O(N * dim * precision)` plus index overhead
+
+If you are using product quantization or aggressive compression, track the degradation in recall as you shrink memory.
+
+## Benchmark setup: single node first
+
+I always start with a simple baseline benchmark using a single node and a single index. Distributed setups are important, but they make interpretation harder. Get your single-node numbers first.
+
+### Basic benchmark script structure
+
+A minimal structure for a benchmark script:
+
+1. Load vectors
+2. Build index
+3. Warm up
+4. Run timed queries
+5. Compute metrics
+
+Below is a simplified version using Faiss as the local engine.
+
+```python
+import time
+import numpy as np
+import faiss
+
+vectors = np.load("vectors.npy")
+
+# Build HNSW index
+index = faiss.IndexHNSWFlat(vectors.shape[1], 32)
+index.hnsw.efConstruction = 200
+start = time.time()
+index.add(vectors)
+build_time = time.time() - start
+print(f"Build time: {build_time:.2f}s for {len(vectors)} vectors")
+
+# Warm up
+rng = np.random.default_rng(0)
+queries = vectors[rng.choice(len(vectors), size=1000, replace=False)]
+for q in queries[:100]:
+    index.search(q.reshape(1, -1), k=10)
+
+# Timed queries
+latencies = []
+for q in queries:
+    t0 = time.time()
+    index.search(q.reshape(1, -1), k=10)
+    latencies.append((time.time() - t0) * 1000)  # ms
+
+latencies = np.array(latencies)
+print("Latency ms - p50: %.2f, p95: %.2f, p99: %.2f" % (
+    np.percentile(latencies, 50),
+    np.percentile(latencies, 95),
+    np.percentile(latencies, 99),
+))
+```
+
+For a cloud vector database, replace the Faiss calls with HTTP or gRPC requests using their client library, but keep the same structure.
+
+### Measuring throughput and concurrency
+
+For throughput benchmarks, you need concurrent queries. Python's `asyncio` and `httpx` (or `aiohttp`) are handy if the database exposes an HTTP API.
+
+```python
+import asyncio
+import time
+import numpy as np
+import httpx
+
+BASE_URL = "http://localhost:8000/search"  # example endpoint
+vectors = np.load("vectors.npy")
+rng = np.random.default_rng(0)
+queries = vectors[rng.choice(len(vectors), size=2000, replace=False)]
+
+async def query(client, q):
+    t0 = time.time()
+    payload = {"vector": q.tolist(), "k": 10}
+    r = await client.post(BASE_URL, json=payload)
+    r.raise_for_status()
+    return (time.time() - t0) * 1000
+
+async def run_concurrent(concurrency: int):
+    latencies = []
+    sem = asyncio.Semaphore(concurrency)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        async def wrapped(q):
+            async with sem:
+                lat = await query(client, q)
+                latencies.append(lat)
+
+        tasks = [asyncio.create_task(wrapped(q)) for q in queries]
+        t0 = time.time()
+        await asyncio.gather(*tasks)
+        total_time = time.time() - t0
+
+    qps = len(queries) / total_time
+    return latencies, qps
+
+latencies, qps = asyncio.run(run_concurrent(concurrency=32))
+
+print(f"Throughput: {qps:.1f} QPS at concurrency=32")
+print("Latency ms - p50: %.2f, p95: %.2f, p99: %.2f" % (
+    np.percentile(latencies, 50),
+    np.percentile(latencies, 95),
+    np.percentile(latencies, 99),
+))
+```
+
+This pattern mirrors how I measure performance for real RAG backends behind FastAPI, similar to the strategies in "Deploying ML Models with FastAPI and Docker".
+
+## Benchmarking multiple vector databases fairly
+
+To compare different systems, the benchmark harness must be **identical** across them:
+
+- Same embeddings
+- Same hardware (or instance class)
+- Same query set
+- Same definition of k, distance metric, and filters
+- Comparable index parameters (e.g. HNSW M/efConstruction/efSearch, IVF nlist/probes)
+
+### Normalize configuration
+
+Each system uses different naming and defaults, but you can approximate equivalence:
+
+- For HNSW-based systems:
+  - `M` roughly controls graph degree and memory
+  - `efConstruction` influences build time and recall
+  - `efSearch` controls recall vs latency at query time
+- For IVF or inverted lists:
+  - `nlist` (number of cells) vs dataset size
+  - `nprobe` (probes) vs recall
+
+When in doubt, run small grid searches: for each index type, sweep across a handful of settings and plot recall vs latency.
+
+## Measuring RAG-level impact, not just ANN
+
+One of the most important lessons I learned building RAG systems in production: *index-level metrics can be deceptive*.
+
+You may find a configuration with Recall@10 = 0.99 but RAG answer quality (measured by human evals or LLM judges) is not noticeably better than Recall@10 = 0.95. If the latter is 2x faster and 40 percent cheaper, it is probably the better choice.
+
+To measure this, extend the benchmark to the end-to-end pipeline:
+
+1. Given a query, fetch top-k chunks from your vector database
+2. Build a prompt according to your template (see "Prompt Engineering Best Practices for Production")
+3. Call the LLM with deterministic settings (e.g. temperature = 0)
+4. Score the answer using a grading rubric or LLM-as-judge
+
+Pseudo-code structure:
+
+```python
+def rag_answer(query: str, retriever, llm):
+    # 1. Encode and search
+    q_vec = embed(query)
+    contexts = retriever.search(q_vec, k=10)
+
+    # 2. Build prompt
+    prompt = build_prompt(query, contexts)
+
+    # 3. Call LLM
+    answer = llm.generate(prompt)
+    return answer
+
+# Then benchmark both quality and time-to-first-token
+```
+
+This merges concepts from "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems" and provides a more honest measurement of business impact.
+
+## Common pitfalls in vector database benchmarks
+
+### 1. Ignoring warm vs cold behavior
+
+Many vector databases use caches (query cache, page cache, OS disk cache). Benchmarks should record:
+
+- Cold start performance (post-deploy, post-restart)
+- Warm performance (after a few hundred or thousand queries)
+
+Measure both separately and avoid mixing them.
+
+### 2. Benchmarking single queries only
+
+Single-query benchmarks are useful but misleading for systems that will see concurrent requests. Always include concurrency levels close to your expected production QPS.
+
+### 3. Not accounting for filters
+
+Real RAG pipelines use metadata filters:
+
+- Tenant id
+- Document type
+- Creation date ranges
+
+Filters can significantly impact performance depending on how the index is structured.
+
+When benchmarking, include realistic filters that match your production use cases.
+
+### 4. Overfitting to synthetic queries
+
+Random vector queries or random text queries are easy to generate but may not represent your production distribution.
+
+If you cannot use real queries, approximate them:
+
+- Take public datasets in your domain
+- Use their queries or titles as approximate search queries
+
+### 5. Ignoring ingestion cost
+
+Index build time and ingestion throughput matter if you:
+
+- Frequently update content
+- Work with near-real-time data
+
+Benchmark:
+
+- Initial index build time
+- Sustained upsert rate (docs per second)
+- How ingestion affects query latency during load
+
+## Experimental workflow and automation
+
+A repeatable benchmark pipeline is essential if you plan to iterate on models or infrastructure.
+
+A simple but effective structure:
+
+1. **Configuration files** for each database & index type (YAML/JSON)
+2. **Single benchmark driver** script that:
+   - Reads config
+   - Spins up or connects to the target database
+   - Loads data
+   - Runs benchmarks
+   - Writes results to JSON/CSV
+3. **Visualization notebook** that plots:
+   - latency vs recall
+   - QPS vs recall
+   - cost vs recall
+
+In Python, you can use a small abstraction for retrievers so the benchmark code is reused.
+
+```python
+from abc import ABC, abstractmethod
+
+class Retriever(ABC):
+    @abstractmethod
+    def add(self, vectors, metadatas):
+        ...
+
+    @abstractmethod
+    def search(self, query_vec, k: int, filter: dict | None = None):
+        ...
+
+class FaissRetriever(Retriever):
+    def __init__(self, dim: int):
+        import faiss
+        self.index = faiss.IndexHNSWFlat(dim, 32)
+
+    def add(self, vectors, metadatas):
+        self.index.add(vectors)
+
+    def search(self, query_vec, k: int, filter: dict | None = None):
+        D, I = self.index.search(query_vec.reshape(1, -1), k)
+        return I[0]
+
+# Later, implement CloudVectorDBRetriever, etc., with same interface
+```
+
+With a shared interface you can plug this retriever into your existing RAG pipeline (for instance the ones you might build with LangChain or LangGraph as described in "Building AI Agents with LangChain and LangGraph") and benchmark in conditions that are very close to your final system.
+
+## Key Takeaways
+
+- Benchmark vector databases with realistic data, chunking, and queries that mirror your RAG workload.
+- Measure both index build performance and query performance, including latency percentiles and ingestion throughput.
+- Use an exact index as a reference to compute Recall@k and understand the latency vs recall tradeoff.
+- Benchmark under concurrency, not just single-request scenarios, and differentiate cold from warm performance.
+- Include filters and metadata conditions in benchmarks since they often impact performance significantly.
+- Always connect index-level metrics to RAG-level quality and end-to-end latency, not just ANN statistics.
+- Automate benchmarks with a shared retriever abstraction so you can compare multiple vector databases consistently.
+- Combine results with cost and operational complexity to make an informed choice for your production RAG system.

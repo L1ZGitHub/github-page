@@ -1,0 +1,163 @@
+---
+title: "Building Production-Ready RAG Systems"
+description: "A practical guide to designing and deploying Retrieval-Augmented Generation systems that scale, from chunking strategies to vector store optimization."
+date: "2026-02-05"
+category: "RAG Systems"
+tags: ["RAG", "AI", "Production", "LangChain", "Vector Databases"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+## Introduction
+
+Retrieval-Augmented Generation (RAG) has emerged as the most practical way to make Large Language Models (LLMs) work with your own data. Instead of fine-tuning a model on proprietary documents, RAG retrieves relevant context at query time and feeds it into the LLM prompt. This approach is cheaper, more maintainable, and avoids the hallucination problems that plague vanilla LLM deployments.
+
+At Ailog, we have built RAG systems for clients across industries, from legal document analysis to customer support automation. In this article, I will walk through the key architectural decisions that separate a prototype from a production-ready system.
+
+## RAG Architecture Overview
+
+A production RAG pipeline consists of two main phases:
+
+**Indexing Pipeline** (offline): Documents are loaded, split into chunks, embedded into vectors, and stored in a vector database.
+
+**Query Pipeline** (online): A user query is embedded, similar chunks are retrieved from the vector store, and both the query and retrieved context are sent to an LLM for answer generation.
+
+```python
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.chat_models import ChatOpenAI
+from langchain.chains import RetrievalQA
+
+# 1. Load documents
+loader = PyPDFLoader("company_docs.pdf")
+documents = loader.load()
+
+# 2. Split into chunks
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200,
+    separators=["\n\n", "\n", ". ", " ", ""]
+)
+chunks = text_splitter.split_documents(documents)
+
+# 3. Create embeddings and store
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+vectorstore = Chroma.from_documents(chunks, embeddings)
+
+# 4. Query with retrieval
+llm = ChatOpenAI(model="gpt-4", temperature=0)
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=vectorstore.as_retriever(search_kwargs={"k": 5}),
+    return_source_documents=True
+)
+```
+
+## Chunking Strategies
+
+Chunking is arguably the most impactful decision in your RAG pipeline. Poor chunking leads to irrelevant retrievals and incomplete answers.
+
+### Fixed-Size Chunking
+
+The simplest approach splits text into fixed-size windows with overlap. This works well for homogeneous documents but can break semantic boundaries.
+
+### Recursive Character Splitting
+
+LangChain's `RecursiveCharacterTextSplitter` tries to split on natural boundaries (paragraphs, sentences, words) before falling back to character-level splitting. This is the recommended default for most use cases.
+
+### Semantic Chunking
+
+For documents with clear structure (headers, sections), semantic chunking respects document hierarchy. Each chunk maintains its context by preserving section headers.
+
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter
+
+headers_to_split_on = [
+    ("#", "Header 1"),
+    ("##", "Header 2"),
+    ("###", "Header 3"),
+]
+splitter = MarkdownHeaderTextSplitter(
+    headers_to_split_on=headers_to_split_on
+)
+chunks = splitter.split_text(markdown_document)
+```
+
+### Chunk Size Guidelines
+
+| Document Type | Chunk Size | Overlap | Notes |
+|---|---|---|---|
+| Technical docs | 1000-1500 | 200 | Preserve code blocks |
+| Legal contracts | 500-800 | 100 | Keep clauses intact |
+| FAQs | 300-500 | 50 | One Q&A per chunk |
+| Chat transcripts | 200-400 | 50 | Preserve conversation turns |
+
+## Embedding Models
+
+The choice of embedding model directly affects retrieval quality. Here are the key considerations:
+
+- **OpenAI text-embedding-3-small**: Good balance of cost and performance. 1536 dimensions. Best for English-centric applications.
+- **Cohere embed-v3**: Strong multilingual support. Useful when dealing with documents in multiple languages.
+- **BGE / E5**: Open-source alternatives that can be self-hosted. Important for data-sensitive applications where you cannot send documents to third-party APIs.
+
+> **Tip**: Always evaluate embedding models on your actual data. Create a small test set of queries and expected document matches, then measure retrieval precision.
+
+## Vector Store Selection
+
+For production deployments, your vector store needs to handle concurrent reads, scale with your data, and support metadata filtering.
+
+- **Pinecone**: Fully managed, scales effortlessly, but vendor lock-in.
+- **Weaviate**: Self-hosted or cloud, hybrid search (vector + keyword), good for complex filtering.
+- **Qdrant**: High performance, Rust-based, excellent filtering capabilities.
+- **Chroma**: Great for prototyping and small-scale deployments. Easy to get started.
+- **pgvector**: PostgreSQL extension. If you already run Postgres, this avoids adding another service.
+
+## Retrieval Optimization
+
+Basic vector similarity search is rarely sufficient for production. Here are techniques we use at Ailog to improve retrieval quality:
+
+### Hybrid Search
+
+Combine dense vector search with sparse keyword search (BM25). This catches both semantic similarity and exact keyword matches.
+
+```python
+from langchain.retrievers import EnsembleRetriever
+from langchain.retrievers import BM25Retriever
+
+bm25_retriever = BM25Retriever.from_documents(chunks)
+bm25_retriever.k = 5
+
+vector_retriever = vectorstore.as_retriever(
+    search_kwargs={"k": 5}
+)
+
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[bm25_retriever, vector_retriever],
+    weights=[0.3, 0.7]
+)
+```
+
+### Reranking
+
+After initial retrieval, use a cross-encoder model to rerank results. This dramatically improves precision at the cost of some latency.
+
+### Query Expansion
+
+Rephrase the user query into multiple variants to improve recall. An LLM can generate alternative formulations before retrieval.
+
+## Production Tips
+
+1. **Monitor retrieval quality**: Log queries, retrieved chunks, and user feedback. Set up alerts for low-confidence answers.
+2. **Cache frequent queries**: Use Redis or similar to cache embeddings and results for common queries.
+3. **Version your index**: When updating documents, rebuild the index and swap atomically rather than doing incremental updates.
+4. **Set up evaluation**: Use RAGAS or similar frameworks to continuously measure retrieval and generation quality.
+5. **Handle edge cases**: Implement fallback responses when retrieval confidence is low. Never let the LLM hallucinate an answer when it does not have relevant context.
+
+## Conclusion
+
+Building a production RAG system is more engineering than science. The core concepts are straightforward, but the details matter: chunk sizes, embedding models, retrieval strategies, and monitoring all compound to determine the quality of your system. Start simple, measure everything, and iterate based on real user queries.
+
+At Ailog, we have learned these lessons through deploying RAG systems for real businesses. The key takeaway is that there is no one-size-fits-all solution. Every deployment requires tuning for the specific domain, document types, and query patterns of your users.

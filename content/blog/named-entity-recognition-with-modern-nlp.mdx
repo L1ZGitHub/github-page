@@ -1,0 +1,374 @@
+---
+title: "Named Entity Recognition with Modern NLP"
+description: "Learn modern Named Entity Recognition, from classical CRFs to transformer-based models, practical pipelines, privacy, evaluation, and production tips."
+date: "2026-02-09"
+category: "NLP & Privacy"
+tags: ["NLP", "Named Entity Recognition", "Transformers", "SpaCy", "PyTorch", "Privacy"]
+difficulty: "intermediate"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Named Entity Recognition (NER) looks deceptively simple. Highlight names, locations, organizations, maybe a few dates, and you are done. Then real data appears: messy contracts, medical notes, log lines, multilingual chats, half-structured PDFs. Suddenly NER becomes one of the most valuable and frustrating tasks in NLP.
+
+In many RAG systems and privacy-sensitive applications I work on, good NER is not a nice-to-have. It is the difference between a system that can safely index documents at scale and one that leaks private data or retrieves irrelevant content.
+
+In this article I will walk through modern, practical NER: how it works with transformers, how to use it effectively in pipelines, how to tune and evaluate it, and where privacy and RAG enter the picture.
+
+## What is NER really doing?
+
+At its core, NER is sequence labeling. For each token in a sentence, we assign a label like `B-PER` (begin person), `I-ORG` (inside organization), or `O` (outside any entity). The classic BIO scheme looks like this:
+
+```text
+Sentence:   Alice   joined   OpenAI   in   San   Francisco   in   2020
+Tokens:     Alice   joined   OpenAI   in   San   Francisco   in   2020
+Labels:     B-PER  O        B-ORG    O   B-LOC I-LOC       O   B-DATE
+```
+
+NER is often one layer in a larger system:
+
+- In RAG pipelines (see "Retrieval-Augmented Generation: A Complete Guide"), NER helps detect key entities for indexing and query expansion.
+- In privacy-preserving workloads (see "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models"), NER is a workhorse for de-identification, for example masking names, emails, or IDs.
+- In analytics, it powers downstream entity resolution, knowledge graphs, and searching by people or organizations.
+
+## From CRFs to transformers
+
+Before transformers, NER was dominated by Conditional Random Fields (CRFs) with handcrafted features like character n-grams, capitalization, POS tags, or gazetteers. They are still useful in low-resource or highly structured environments, but in most production systems transformers now dominate.
+
+Modern NER usually uses one of three patterns:
+
+1. **Pretrained transformer with a token classification head**  
+   A model like `bert-base-cased` or `distilbert-base-multilingual-cased` plus a small classification layer that outputs a label for each token.
+
+2. **Task-specific models**  
+   Models like `dslim/bert-base-NER` or `Davlan/bert-base-multilingual-cased-ner-hrl` that are already fine-tuned on NER datasets.
+
+3. **Library abstractions**  
+   spaCy or Flair, which hide some details and provide end-to-end pipelines.
+
+If you have read "Understanding Transformer Architectures" you already know why transformers work so well here: self-attention can capture long-range dependencies, for example connecting a first mention of "International Business Machines" with later mentions of "IBM".
+
+## Fast path: high quality NER with almost no code
+
+If you just want a strong baseline or a production-worthy model without custom labels, off-the-shelf models are usually enough.
+
+### Using spaCy
+
+spaCy offers well engineered models with efficient inference and good tokenization behavior.
+
+```python
+import spacy
+
+# English core model with NER
+nlp = spacy.load("en_core_web_trf")  # transformer-based, or use en_core_web_sm for speed
+
+text = "Alice joined OpenAI in San Francisco in 2020."
+
+doc = nlp(text)
+
+for ent in doc.ents:
+    print(ent.text, ent.label_)
+```
+
+Output (simplified):
+
+```text
+Alice PERSON
+OpenAI ORG
+San Francisco GPE
+2020 DATE
+```
+
+Key practical tips:
+
+- For high throughput systems, try `en_core_web_md` or `en_core_web_sm` and benchmark as in "Vector Database Performance Benchmarks" but for NER throughput.
+- Use `doc.ents` together with `doc.sents` to segment and annotate longer documents efficiently.
+
+### Using HuggingFace transformers
+
+For more control or multilingual setups, HuggingFace is usually my first choice.
+
+```python
+from transformers import AutoTokenizer, AutoModelForTokenClassification
+from transformers import pipeline
+
+model_name = "dslim/bert-base-NER"
+
+ner = pipeline("token-classification", model=model_name, tokenizer=model_name,
+               aggregation_strategy="simple")
+
+text = "Alice joined OpenAI in San Francisco in 2020."
+
+entities = ner(text)
+for e in entities:
+    print(e["word"], e["entity_group"], round(e["score"], 3))
+```
+
+The `aggregation_strategy="simple"` groups subword tokens back into entities, making results more readable.
+
+## When you need custom entities
+
+Real projects rarely fit into PERSON/ORG/LOC/DATE. You might need:
+
+- Product names
+- Legal clauses
+- Internal project codes
+- Medical entities (DRUG, CONDITION, etc.)
+
+At that point you have two main options.
+
+1. **Fine-tune a transformer on your labeled data**  
+   Best accuracy, but requires labeled examples.
+
+2. **Rule-based or hybrid NER**  
+   Combine heuristics, regexes, and gazetteers with a base model. Often ideal for privacy, where patterns like emails, IBANs, or phone numbers are easier to detect with rules.
+
+### Fine-tuning a transformer for NER
+
+HuggingFace makes it straightforward. Suppose your data is in the classic CoNLL-style TSV format.
+
+```python
+from datasets import load_dataset
+from transformers import (AutoTokenizer, AutoModelForTokenClassification,
+                          DataCollatorForTokenClassification, TrainingArguments,
+                          Trainer)
+
+model_name = "distilbert-base-cased"
+
+dataset = load_dataset("conll2003")  # replace with your own dataset
+label_list = dataset["train"].features["ner_tags"].feature.names
+
+id2label = {i: l for i, l in enumerate(label_list)}
+label2id = {l: i for i, l in id2label.items()}
+
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Tokenization with alignment of labels to subword tokens
+
+def tokenize_and_align_labels(examples):
+    tokenized = tokenizer(examples["tokens"], truncation=True, is_split_into_words=True)
+    labels = []
+    for i, label_seq in enumerate(examples["ner_tags"]):
+        word_ids = tokenized.word_ids(batch_index=i)
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids:
+            if word_idx is None:
+                label_ids.append(-100)  # ignored in loss
+            elif word_idx != previous_word_idx:
+                label_ids.append(label_seq[word_idx])
+            else:
+                # For B/I schemes you might want to force I- labels here
+                label_ids.append(label_seq[word_idx])
+            previous_word_idx = word_idx
+        labels.append(label_ids)
+    tokenized["labels"] = labels
+    return tokenized
+
+
+tokenized_datasets = dataset.map(tokenize_and_align_labels, batched=True)
+
+model = AutoModelForTokenClassification.from_pretrained(
+    model_name,
+    num_labels=len(label_list),
+    id2label=id2label,
+    label2id=label2id,
+)
+
+data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
+
+training_args = TrainingArguments(
+    output_dir="./ner-model",
+    evaluation_strategy="epoch",
+    learning_rate=5e-5,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    num_train_epochs=3,
+    weight_decay=0.01,
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["validation"],
+    tokenizer=tokenizer,
+    data_collator=data_collator,
+)
+
+trainer.train()
+```
+
+From there you can export to ONNX or TorchScript and deploy, reusing patterns from "Deploying ML Models with FastAPI and Docker".
+
+### Rule-based and hybrid NER
+
+Some entities are too rare or too pattern-driven for supervised learning to shine. In privacy-preserving NLP, I often favor hybrid NER: a base model for semantics and rules for strict patterns.
+
+Using spaCy, you can combine the statistical NER with an `EntityRuler`:
+
+```python
+import spacy
+from spacy.pipeline import EntityRuler
+
+nlp = spacy.load("en_core_web_trf")
+ruler = EntityRuler(nlp, overwrite_ents=True)
+
+patterns = [
+    {"label": "EMAIL", "pattern": [{"TEXT": {"REGEX": "^[^@\s]+@[^@\s]+\.[^@\s]+$"}}]},
+    {"label": "PROJECT_CODE", "pattern": [{"TEXT": {"REGEX": "^PRJ-[0-9]{4}$"}}]},
+]
+
+ruler.add_patterns(patterns)
+
+nlp.add_pipe(ruler, before="ner")
+
+text = "Contact alice@example.com about PRJ-1234 and PRJ-5678."
+
+doc = nlp(text)
+for ent in doc.ents:
+    print(ent.text, ent.label_)
+```
+
+This approach aligns well with the privacy topics in "Data Privacy in the Age of Large Language Models" and complements differential privacy methods: before you even think about privacy noise, remove or mask obvious identifiers.
+
+## NER in RAG pipelines
+
+If you have read "Building Production-Ready RAG Systems" and "Chunking Strategies for RAG Pipelines", you know the retrieval side is critical. NER can help at several stages.
+
+### 1. Pre-processing and redaction
+
+Before indexing documents into a vector database (see "Understanding Vector Databases: A Beginner's Guide"), NER can:
+
+- Mask sensitive entities: `Alice` -> `[PERSON]`
+- Normalize variants: `IBM`, `International Business Machines` -> `IBM`
+
+This reduces privacy risk and sometimes improves retrieval consistency.
+
+A simple masking function:
+
+```python
+def redact_entities(doc):
+    redacted_tokens = []
+    ent_starts = {ent.start: ent for ent in doc.ents}
+
+    i = 0
+    while i < len(doc):
+        if i in ent_starts:
+            ent = ent_starts[i]
+            redacted_tokens.append(f"[{ent.label_}]")
+            i = ent.end
+        else:
+            redacted_tokens.append(doc[i].text)
+            i += 1
+
+    return " ".join(redacted_tokens)
+```
+
+Combine this with your chunking strategy so that entity spans are not cut mid-way. Chunk at sentence or paragraph boundaries, then run NER on each chunk.
+
+### 2. Query understanding and expansion
+
+For search, especially in hybrid setups like in "Hybrid Search: Combining Dense and Sparse Retrieval", NER gives you structured hooks:
+
+- Detect entities in the user query.
+- Use them as filters on metadata (e.g. `ORG=OpenAI`).
+- Expand synonyms or alternative forms via a small entity database.
+
+For instance, a query like "policies for OpenAI contractors in Sweden" can be converted into a structured filter (`ORG: OpenAI`, `LOC: Sweden`) plus a free-text query. Your RAG retriever can use both.
+
+### 3. Entity-level evaluation
+
+In "Evaluating RAG System Performance" I discuss metrics like answer correctness and grounding. For NER-enhanced RAG, it is often useful to measure:
+
+- Entity recall in retrieved documents: do we retrieve chunks containing the key organizations or people from the query?
+- Entity leakage: do generated answers contain entities that should have been redacted? NER can be used as a post-hoc checker here.
+
+## NER and privacy: de-identification in practice
+
+In privacy-preserving NLP the goal is often de-identification: remove or obfuscate personal identifiers while keeping text useful. NER is central, but it is not enough on its own.
+
+Challenges I see frequently:
+
+- **Recall vs utility**  
+  Aggressive models or thresholds catch more PII but might over-mask, making text useless.
+
+- **Long tail of identifiers**  
+  Rare names, internal IDs, URLs, or semi-structured tokens that are not in training data.
+
+- **Context-dependent entities**  
+  "Apple" in a grocery list vs "Apple" in a shareholder report.
+
+Practical strategies:
+
+- Start with a general NER model, then add custom labels for organization-specific IDs.
+- Introduce rules for easy patterns: account numbers, email addresses, phone numbers.
+- Add a confidence threshold and manual review for low-confidence cases. Scale review with sampling.
+
+For stronger privacy guarantees, differential privacy and secure aggregation techniques from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" can complement NER, especially during model training.
+
+## Evaluation: beyond F1
+
+Standard NER evaluation uses token-level precision, recall, and F1. HuggingFace's `seqeval` integration makes this easy, but in production you often need task-specific metrics.
+
+### Classic evaluation with seqeval
+
+```python
+from datasets import load_metric
+
+metric = load_metric("seqeval")
+
+# Suppose you have predictions and references in BIO format
+results = metric.compute(predictions=y_pred, references=y_true)
+print(results["overall_f1"], results["overall_precision"], results["overall_recall"])
+```
+
+### Task-oriented evaluation
+
+Depending on your application:
+
+- For de-identification, entity-level **recall** on sensitive labels (PERSON, EMAIL, etc.) matters more than precision.
+- For analytics or knowledge graphs, you might prefer high precision, even at the cost of missing some entities.
+- For RAG, wrong entities can send retrieval in the wrong direction, so misclassifications are more harmful than misses.
+
+Adopt evaluation ideas from "Evaluating RAG System Performance": define metrics that actually reflect your business or safety goals, not just textbook F1.
+
+## Deployment and engineering tips
+
+Running NER in production has its own pitfalls. From my experience and from patterns in "Python Best Practices for ML Engineers" and "CI/CD Pipelines for Machine Learning Projects", a few guidelines help:
+
+- **Batching and streaming**  
+  For large documents, process in batches of sentences or paragraphs. Avoid passing entire books into a single forward pass.
+
+- **Model size vs latency**  
+  Distilled or smaller models often offer a much better latency-accuracy tradeoff. Measure it like you would for vector databases.
+
+- **Tokenization consistency**  
+  If you use NER outputs for indexing, ensure the same tokenizer and normalization steps across training, inference, and retrieval.
+
+- **Versioning**  
+  Store model version and label scheme. If you change labels (for example splitting ORG into COMPANY and NONPROFIT), version your indexes and pipelines accordingly.
+
+- **Monitoring drift**  
+  Domain language changes over time. Log entity distributions and periodically review a sample. Integrate checks into your CI/CD, similar to model regression tests.
+
+## Where LLMs fit into NER
+
+LLMs can act as zero-shot or few-shot NER engines. With good prompts (see "Prompt Engineering Best Practices for Production"), you can:
+
+- Rapidly prototype new label sets.
+- Label small datasets to bootstrap supervised models.
+- Handle highly domain-specific entities when you cannot afford full fine-tuning.
+
+However, for privacy-heavy settings, relying solely on black-box LLM NER can be risky, especially if prompts or outputs leave your infrastructure. Combining local supervised models with occasional LLM-assisted review is often a more robust design.
+
+## Key Takeaways
+
+- Modern NER is usually built on top of transformers, with token classification heads and BIO-style labeling.
+- Off-the-shelf models from spaCy or HuggingFace give strong baselines and can be production-ready for standard entities.
+- Custom NER often combines fine-tuned transformers with rule-based patterns, especially for privacy and structured identifiers.
+- In RAG systems, NER supports redaction, query understanding, metadata filters, and entity-level evaluation.
+- De-identification requires more than generic NER, including custom labels, pattern rules, and task-specific evaluation metrics.
+- Evaluate NER using both classic F1 and application-driven metrics like privacy recall or impact on retrieval quality.
+- Deploy NER with attention to batching, latency, tokenization consistency, versioning, and continuous monitoring.
+- LLMs are powerful for prototyping and bootstrapping NER datasets but should be combined with local models in privacy-sensitive pipelines.

@@ -1,0 +1,541 @@
+---
+title: "Python Best Practices for ML Engineers"
+description: "Practical Python best practices for ML engineers, from project structure and typing to performance, testing, and production-ready code."
+date: "2026-02-09"
+category: "Engineering"
+tags: ["Python", "Machine Learning", "MLOps", "RAG", "Best Practices", "Software Engineering"]
+difficulty: "beginner"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Good ML work is not only about the model. For every impressive result, there is usually a pile of glue code: data loaders, feature pipelines, training scripts, evaluation, inference services. If that code is fragile or messy, your pace slows down, experiments are hard to reproduce, and deployment becomes painful.
+
+As an ML engineer, Python is often your primary tool. Treating it with the same discipline that backend engineers apply to their services gives you a huge advantage, especially when you start shipping models to production, building RAG systems, or integrating with APIs.
+
+In this article I will walk through Python best practices I actually use in day-to-day ML and RAG work, from project structure and typing to performance and deployment.
+
+
+## 1. Structure projects like software, not notebooks
+
+Most ML projects start in a notebook. That is fine, but notebooks should not be the final form of your code.
+
+### From notebook chaos to a simple project layout
+
+A simple, clean structure is already a big win:
+
+```text
+my_project/
+  pyproject.toml      # or setup.cfg / requirements.txt
+  README.md
+  src/
+    my_project/
+      __init__.py
+      config.py
+      data/
+        loaders.py
+        preprocess.py
+      models/
+        base.py
+        classifier.py
+      training/
+        train.py
+        eval.py
+      inference/
+        serve.py
+  notebooks/
+    01_exploration.ipynb
+    02_modeling.ipynb
+  tests/
+    test_data_loaders.py
+    test_models.py
+```
+
+Key ideas:
+
+- Keep production code in `src/my_project`, not in notebooks
+- Use notebooks only for exploration, visualizations, quick prototypes
+- Promote stable notebook logic into modules in `src/` as soon as it solidifies
+
+If you have read *Building Production-Ready RAG Systems* or *Deploying ML Models with FastAPI and Docker*, you will recognize this separation between application code, experimentation, and deployment.
+
+
+## 2. Use virtual environments and pinned dependencies
+
+Reproducibility is fundamental. Nothing kills productivity faster than "it worked yesterday".
+
+### Virtual environments
+
+Use `venv` or a tool like `conda`, `poetry`, or `uv`.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+pip install -U pip
+```
+
+### Pin versions
+
+Use a `requirements.txt` or `pyproject.toml` with explicit versions:
+
+```text
+numpy==1.26.4
+pandas==2.2.0
+scikit-learn==1.4.0
+pydantic==2.6.1
+fastapi==0.110.0
+uvicorn[standard]==0.27.0
+```
+
+For research you can be slightly looser, but when something goes to production or is part of a pipeline (RAG retrieval services, vector database clients, etc.), pin versions and document how to recreate the environment.
+
+
+## 3. Embrace typing and static analysis
+
+ML code is often full of dictionaries, tensors, and nested configs. Without types, things get confusing quickly.
+
+### Type hints for clarity and safety
+
+Use Python type hints consistently:
+
+```python
+from typing import Dict, List, Tuple
+
+import numpy as np
+
+Array = np.ndarray
+
+
+def train_val_split(
+    X: Array,
+    y: Array,
+    val_ratio: float = 0.2,
+) -> Tuple[Array, Array, Array, Array]:
+    """Split features and labels into train and validation sets."""
+    n_samples = X.shape[0]
+    n_val = int(n_samples * val_ratio)
+
+    X_train, X_val = X[:-n_val], X[-n_val:]
+    y_train, y_val = y[:-n_val], y[-n_val:]
+    return X_train, X_val, y_train, y_val
+```
+
+This makes the expected inputs and outputs explicit. Static analyzers like `mypy` can catch many bugs before you run expensive training.
+
+### Dataclasses and Pydantic for configs
+
+Model and training configurations should be structured, not random dictionaries.
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class TrainingConfig:
+    batch_size: int = 32
+    learning_rate: float = 3e-4
+    num_epochs: int = 10
+    seed: int = 42
+
+
+config = TrainingConfig(batch_size=64)
+print(config)
+```
+
+For configs that come from JSON/YAML or env variables, I like Pydantic because it validates and documents at the same time:
+
+```python
+from pydantic import BaseModel, Field, ValidationError
+
+
+class RAGConfig(BaseModel):
+    top_k: int = Field(10, ge=1, le=100)
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    vector_db_url: str
+
+
+try:
+    cfg = RAGConfig(vector_db_url="http://localhost:6333")
+except ValidationError as e:
+    print("Invalid config:", e)
+```
+
+*Embedding Models Compared: OpenAI vs Open-Source* and *Retrieval-Augmented Generation: A Complete Guide* both highlight how configuration choices matter. Strongly typed configs make those choices traceable and safe.
+
+
+## 4. Write small, composable functions and modules
+
+Long scripts mixing data loading, feature engineering, training, and evaluation are painful to change. Aim for small functions that each do one thing.
+
+```python
+from pathlib import Path
+from typing import Tuple
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import f1_score
+
+
+def load_data(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path)
+
+
+def preprocess(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+    X = df.drop(columns=["label"])
+    y = df["label"]
+    return X, y
+
+
+def train_model(X_train, y_train) -> LogisticRegression:
+    clf = LogisticRegression(max_iter=1000)
+    clf.fit(X_train, y_train)
+    return clf
+
+
+def evaluate_model(clf, X_val, y_val) -> float:
+    y_pred = clf.predict(X_val)
+    return f1_score(y_val, y_pred)
+
+
+if __name__ == "__main__":
+    df = load_data(Path("data/dataset.csv"))
+    X, y = preprocess(df)
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    model = train_model(X_train, y_train)
+    score = evaluate_model(model, X_val, y_val)
+    print(f"Validation F1: {score:.3f}")
+```
+
+This style makes it easier to reuse `load_data` and `preprocess` in later RAG embedding pipelines or during online inference.
+
+
+## 5. Logging, not printing
+
+`print` is fine while exploring, but in training jobs, RAG services, or multi-agent systems, you want structured logs.
+
+```python
+import logging
+from pathlib import Path
+
+
+def setup_logger(log_path: Path) -> logging.Logger:
+    logger = logging.getLogger("ml_project")
+    logger.setLevel(logging.INFO)
+
+    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    ch = logging.StreamHandler()
+    ch.setFormatter(fmt)
+    logger.addHandler(ch)
+
+    fh = logging.FileHandler(log_path)
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
+
+    return logger
+
+
+logger = setup_logger(Path("logs/train.log"))
+
+
+def train_epoch(epoch: int) -> None:
+    logger.info("Starting epoch %d", epoch)
+    # training loop
+    logger.info("Finished epoch %d", epoch)
+```
+
+Structured logging becomes essential when you deploy with FastAPI, as discussed in *Deploying ML Models with FastAPI and Docker*.
+
+
+## 6. Testing: start small but start early
+
+You do not need a full TDD setup, but a few tests already prevent painful bugs.
+
+### Unit tests for core utilities
+
+Focus tests on:
+
+- Data loading and preprocessing
+- Feature transformations
+- Evaluation metrics and custom losses
+- Critical business logic (e.g., RAG retrieval and ranking)
+
+Using `pytest`:
+
+```python
+# src/my_project/data/loaders.py
+from pathlib import Path
+import pandas as pd
+
+
+def load_csv(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    if "label" not in df.columns:
+        raise ValueError("Missing 'label' column")
+    return df
+```
+
+```python
+# tests/test_loaders.py
+from pathlib import Path
+import pandas as pd
+from my_project.data.loaders import load_csv
+
+
+def test_load_csv_requires_label(tmp_path: Path):
+    path = tmp_path / "data.csv"
+    df = pd.DataFrame({"x": [1, 2, 3]})
+    df.to_csv(path, index=False)
+
+    try:
+        load_csv(path)
+    except ValueError as e:
+        assert "label" in str(e)
+    else:
+        assert False, "Expected ValueError"
+```
+
+When you move from toy scripts to production RAG pipelines, tests around chunking and retrieval (see *Chunking Strategies for RAG Pipelines* and *Semantic Search vs Keyword Search: When to Use What*) are extremely valuable.
+
+
+## 7. Performance: profile before optimizing
+
+Python is rarely the performance bottleneck in ML (model libraries are usually in C++ or CUDA), but preprocessing, feature engineering, and RAG retrieval pipelines can become slow.
+
+### Use vectorized operations
+
+Avoid Python loops over large arrays. Use NumPy, pandas, or vectorized libraries.
+
+```python
+import numpy as np
+
+
+def slow_normalize(vectors: np.ndarray) -> np.ndarray:
+    # Bad: Python loop
+    norms = []
+    for v in vectors:
+        norms.append(v / np.linalg.norm(v))
+    return np.stack(norms)
+
+
+def fast_normalize(vectors: np.ndarray) -> np.ndarray:
+    # Good: vectorized
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    return vectors / norms
+```
+
+For vector databases and embedding pipelines, as covered in *Vector Database Performance Benchmarks* and *Understanding Vector Databases: A Beginner's Guide*, batching operations is usually better than many small calls.
+
+### Profile with `cProfile`
+
+```bash
+python -m cProfile -o profile.out src/my_project/training/train.py
+```
+
+Then use `snakeviz` or similar tools to inspect hotspots.
+
+
+## 8. Configuration and reproducibility
+
+ML experiments must be reproducible, otherwise benchmarks and improvements are unreliable.
+
+### Fix random seeds
+
+```python
+import os
+import random
+
+import numpy as np
+import torch
+
+
+def set_seed(seed: int) -> None:
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+```
+
+Use the same function in every script (training, evaluation, RAG indexing) to minimize differences.
+
+### Centralize config
+
+Do not scatter magic numbers across your code. Even a simple config file helps:
+
+```python
+# src/my_project/config.py
+from dataclasses import dataclass
+
+
+@dataclass
+class ModelConfig:
+    model_name: str = "bert-base-uncased"
+    max_length: int = 128
+
+
+@dataclass
+class TrainingConfig:
+    batch_size: int = 32
+    lr: float = 2e-5
+    num_epochs: int = 3
+
+
+model_config = ModelConfig()
+training_config = TrainingConfig()
+```
+
+When working on RAG systems and multi-agent architectures, this becomes even more important because you have many moving parts: embedding models, chunk sizes, retriever settings, LLM parameters. Configs make it explicit, as discussed in *Building a Multi-Agent AI System* and *Building AI Agents with LangChain and LangGraph*.
+
+
+## 9. Clean interfaces for models and pipelines
+
+Treat your models and pipelines as components with clear interfaces.
+
+### A simple model wrapper
+
+```python
+from typing import List
+
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+
+
+class Classifier:
+    def __init__(self, model: LogisticRegression) -> None:
+        self.model = model
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        return self.model.predict_proba(X)
+
+    def predict_labels(self, X: np.ndarray, threshold: float = 0.5) -> List[int]:
+        probs = self.predict_proba(X)[:, 1]
+        return [int(p >= threshold) for p in probs]
+```
+
+This makes it easier to swap models or plug the classifier into a FastAPI service.
+
+### RAG style pipeline
+
+If you are working with RAG, define clear interfaces between components: retriever, ranker, generator. This mirrors patterns in *Retrieval-Augmented Generation: A Complete Guide*.
+
+```python
+from typing import Protocol, List
+
+
+class Retriever(Protocol):
+    def retrieve(self, query: str, top_k: int = 5) -> List[str]:
+        ...
+
+
+class Generator(Protocol):
+    def generate(self, prompt: str) -> str:
+        ...
+
+
+class SimpleRAGPipeline:
+    def __init__(self, retriever: Retriever, generator: Generator) -> None:
+        self.retriever = retriever
+        self.generator = generator
+
+    def answer(self, query: str, top_k: int = 5) -> str:
+        docs = self.retriever.retrieve(query, top_k=top_k)
+        context = "\n".join(docs)
+        prompt = f"Context:\n{context}\n\nQuestion: {query}\nAnswer:"
+        return self.generator.generate(prompt)
+```
+
+Using `Protocol` keeps your code flexible. You can plug in different vector databases or LLM providers without changing the pipeline logic.
+
+
+## 10. Production mindset: from scripts to services
+
+Once a model or RAG pipeline is useful, someone will eventually want to call it via an API. If you have followed the best practices above, this step is much easier.
+
+### A minimal FastAPI inference service
+
+```python
+from typing import List
+
+import numpy as np
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from my_project.models.classifier import Classifier, load_trained_model
+
+
+class PredictRequest(BaseModel):
+    features: List[List[float]]
+
+
+class PredictResponse(BaseModel):
+    predictions: List[int]
+
+
+app = FastAPI()
+model: Classifier | None = None
+
+
+@app.on_event("startup")
+def load_model() -> None:
+    global model
+    model = load_trained_model()
+
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(req: PredictRequest) -> PredictResponse:
+    assert model is not None
+    X = np.array(req.features, dtype=float)
+    preds = model.predict_labels(X)
+    return PredictResponse(predictions=preds)
+```
+
+This pattern is similar to what I use in production setups, like those described in *Deploying ML Models with FastAPI and Docker*. The earlier best practices around typing, small modules, and configuration make such services much easier to reason about, test, and monitor.
+
+
+## 11. Privacy and security awareness
+
+If your ML system touches user data, privacy is not optional. The discussions in *Data Privacy in the Age of Large Language Models* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models* apply directly to how you write Python.
+
+Practical tips:
+
+- Centralize all data access and anonymization logic
+- Never log raw user data or secrets
+- Use environment variables or secret managers for API keys
+- Consider tokenization or pseudonymization before sending data to third party APIs
+
+A simple pattern for secrets:
+
+```python
+import os
+
+from pydantic import BaseModel, SecretStr
+
+
+class Settings(BaseModel):
+    openai_api_key: SecretStr
+
+
+settings = Settings(openai_api_key=os.environ["OPENAI_API_KEY"])
+```
+
+Then pass `settings` around instead of sprinkling `os.environ[...]` everywhere.
+
+
+## Key Takeaways
+
+- Treat ML projects as software projects: structure your code, not just notebooks
+- Use virtual environments and pinned dependencies for reproducible experiments
+- Add type hints, dataclasses, and Pydantic configs to make your code self-documenting
+- Write small, composable functions and modules with clear responsibilities
+- Prefer logging over prints, especially for training jobs and services
+- Start testing early, focusing on data loading, preprocessing, and core logic
+- Optimize only after profiling, and favor vectorized operations and batching
+- Centralize configuration and fix random seeds for reproducibility
+- Design clean interfaces for models and RAG pipelines so components are swappable
+- Prepare for production by exposing models via typed, well structured APIs
+- Keep privacy and security in mind whenever you touch user or sensitive data

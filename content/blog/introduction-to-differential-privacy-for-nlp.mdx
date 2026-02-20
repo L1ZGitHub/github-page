@@ -1,0 +1,388 @@
+---
+title: "Introduction to Differential Privacy for NLP"
+description: "Advanced introduction to differential privacy for NLP practitioners, with practical Python examples, tradeoffs, and system design advice."
+date: "2026-02-09"
+category: "NLP & Privacy"
+tags: ["Differential Privacy", "NLP", "LLMs", "RAG", "Python", "Machine Learning"]
+difficulty: "advanced"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+Most teams I talk to want two things from their NLP systems: strong performance and strong privacy. They are used to trading one for the other. Differential privacy is one of the few tools that lets you quantify this tradeoff instead of guessing.
+
+In production LLM and RAG systems, especially those processing sensitive text, differential privacy is moving from academic curiosity to practical requirement. It integrates surprisingly well with the topics I have written about before, like privacy-preserving NLP, RAG architectures, and deploying ML models with FastAPI and Docker.
+
+In this article I will focus on how differential privacy actually works in the context of NLP, and what you should do differently when building real systems.
+
+## What differential privacy actually guarantees
+
+Informally, differential privacy (DP) guarantees that the model's output distribution does not change much if you add or remove a single user's data from the training set.
+
+Formally, a randomized algorithm `M` is `(ε, δ)`-differentially private if for any two datasets `D` and `D'` that differ in one record, and for any output set `S`:
+
+\[
+P[M(D) \in S] \le e^\varepsilon \cdot P[M(D') \in S] + \delta
+\]
+
+- `ε` (epsilon) controls privacy loss - smaller is more private, but usually worse utility.
+- `δ` is a small failure probability - often set to something like `1 / |D|^2`.
+
+For NLP this means:
+
+- You should not be able to tell if a specific user's emails, chats or documents were used in training.
+- Memorization of rare sequences is bounded in a precise sense.
+
+Differential privacy is not about encryption or access control. It is about limiting what can be inferred from the model output, even by an attacker with side information.
+
+This pairs naturally with the ideas from "Data Privacy in the Age of Large Language Models" and "Privacy-Preserving NLP". There we looked at system and data-level controls. Differential privacy controls the learning algorithm itself.
+
+## Where DP fits in NLP pipelines
+
+For most NLP systems we use three main levers:
+
+1. **Data-level**: redaction, PII detection, synthetic data.
+2. **Model-level**: differential privacy, regularization, small-context RAG.
+3. **System-level**: access control, logging policies, on-prem deployments.
+
+Differential privacy primarily lives in the model-level, although it is easier to implement if you already have strong data and system-level practices.
+
+In a typical RAG system like the ones in "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems", your pipeline looks like:
+
+1. Ingestion and PII handling.
+2. Text normalization and chunking (see "Chunking Strategies for RAG Pipelines").
+3. Embedding with a transformer (see "Embedding Models Compared: OpenAI vs Open-Source").
+4. Storage in a vector database ("Vector Database Performance Benchmarks").
+5. Retrieval + generation.
+
+Differential privacy can be applied at two key stages:
+
+- Training your own **language model** or **encoder** with DP-SGD.
+- Training **downstream classifiers** or **token-level taggers** on sensitive labels.
+
+For many practical setups, you will not retrain a full LLM with DP - it is too expensive and hurtful to quality. Instead you will apply DP to smaller models or to adapter layers on top of a frozen LLM.
+
+## The core mechanism: DP-SGD for NLP
+
+The workhorse algorithm is DP-SGD: Stochastic Gradient Descent with per-example gradient clipping and noise.
+
+High-level steps per batch:
+
+1. Compute gradient for each example.
+2. Clip each gradient to have norm at most `C`.
+3. Average clipped gradients.
+4. Add Gaussian noise with variance tuned to privacy budget.
+5. Update model parameters.
+
+This controls how much any single training example can move the model.
+
+### Minimal DP-SGD loop in PyTorch
+
+For NLP we usually fine-tune a transformer with DP-SGD. Libraries like Opacus handle the heavy lifting, but it is important to understand what happens under the hood.
+
+```python
+import torch
+from torch import nn, optim
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+# pip install opacus
+from opacus import PrivacyEngine
+
+model_name = "distilbert-base-uncased"
+model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Dummy dataset
+texts = ["contains sensitive info", "generic sentence"] * 128
+labels = torch.tensor([1, 0] * 128)
+
+enc = tokenizer(texts, padding=True, truncation=True, max_length=128, return_tensors="pt")
+dataset = torch.utils.data.TensorDataset(
+    enc["input_ids"], enc["attention_mask"], labels
+)
+loader = torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True)
+
+optimizer = optim.AdamW(model.parameters(), lr=5e-5)
+
+# Configure DP
+noise_multiplier = 1.2  # more noise -> stronger privacy
+max_grad_norm = 1.0     # clipping threshold
+target_delta = 1e-5
+
+privacy_engine = PrivacyEngine()
+model, optimizer, loader = privacy_engine.make_private(
+    module=model,
+    optimizer=optimizer,
+    data_loader=loader,
+    noise_multiplier=noise_multiplier,
+    max_grad_norm=max_grad_norm,
+)
+
+criterion = nn.CrossEntropyLoss()
+
+for epoch in range(3):
+    for input_ids, attention_mask, y in loader:
+        optimizer.zero_grad()
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+        loss = criterion(outputs.logits, y)
+        loss.backward()
+        optimizer.step()
+
+    epsilon = privacy_engine.get_epsilon(target_delta)
+    print(f"Epoch {epoch}, ε = {epsilon:.2f}, δ = {target_delta}")
+```
+
+This example is deliberately minimalistic, but a few key points matter for NLP:
+
+- **Batch size** must be small enough for per-example gradients to fit in memory.
+- **Sequence length** impacts memory quadratically in transformers, so apply truncation and smart chunking.
+- **Noise multiplier** and **max_grad_norm** determine your privacy-utility tradeoff.
+
+If you have read "Understanding Transformer Architectures" you know why transformers are memory hungry. DP-SGD multiplies that pain: per-example gradients effectively require keeping intermediate activations per sample instead of per batch.
+
+## What to privatize in NLP systems
+
+You rarely need end-to-end differential privacy on everything. Focus on what carries the biggest privacy risk.
+
+### 1. Fine-tuning on sensitive text
+
+If you fine-tune a general LLM on internal emails, chat logs or medical notes, you are at high risk of memorization. Even without differential privacy, you can mitigate this with:
+
+- Careful filtering and PII removal.
+- Strong validation that the model is not parroting training snippets.
+- Smaller context windows and more RAG.
+
+But if you want formal guarantees, you need DP fine-tuning. In practice I recommend:
+
+- Use a **base model** trained non-privately on public data.
+- Apply **DP fine-tuning** only on your sensitive domain data.
+- Keep the DP model for internal use only, unless ε is extremely small.
+
+### 2. Embedding models for semantic search
+
+In "Semantic Search vs Keyword Search" and "Understanding Vector Databases" I described how embeddings power modern retrieval. If you train your own embedding model on sensitive corpora, you risk encoding user-specific quirks.
+
+Here, DP-SGD is often more tractable than full LLM fine-tuning:
+
+- Encoder models are smaller.
+- Sequence lengths are modest (often 128 or 256 tokens).
+- You can use pairwise or triplet losses with DP.
+
+A skeleton DP training loop for contrastive sentence embeddings:
+
+```python
+from opacus import PrivacyEngine
+
+class ContrastiveModel(nn.Module):
+    def __init__(self, base_name="distilbert-base-uncased"):
+        super().__init__()
+        self.encoder = AutoModelForSequenceClassification.from_pretrained(
+            base_name,
+            num_labels=1,
+            problem_type="regression",
+        ).base_model
+        self.proj = nn.Linear(self.encoder.config.hidden_size, 256)
+
+    def encode(self, input_ids, attention_mask):
+        out = self.encoder(input_ids=input_ids, attention_mask=attention_mask)[0]
+        cls = out[:, 0]
+        return nn.functional.normalize(self.proj(cls), dim=-1)
+
+    def forward(self, a, a_mask, b, b_mask):
+        ea = self.encode(a, a_mask)
+        eb = self.encode(b, b_mask)
+        return ea, eb
+
+model = ContrastiveModel()
+optimizer = optim.AdamW(model.parameters(), lr=3e-5)
+privacy_engine = PrivacyEngine()
+
+model, optimizer, loader = privacy_engine.make_private(
+    module=model,
+    optimizer=optimizer,
+    data_loader=loader,      # yields anchor/positive pairs
+    noise_multiplier=0.8,
+    max_grad_norm=1.0,
+)
+
+for batch in loader:
+    (a_ids, a_mask, b_ids, b_mask) = batch
+    ea, eb = model(a_ids, a_mask, b_ids, b_mask)
+    # simple cosine similarity loss
+    logits = ea @ eb.t()
+    labels = torch.arange(logits.size(0))
+    loss = nn.CrossEntropyLoss()(logits, labels)
+    loss.backward()
+    optimizer.step()
+```
+
+Once trained, you can integrate this DP encoder into your RAG stack exactly like any other embedding model.
+
+### 3. Label-sensitive tasks
+
+Even with non-sensitive text, labels themselves can be very sensitive.
+
+Examples:
+
+- Toxicity or abuse labels attached to user messages.
+- Medical codes attached to doctor notes.
+- User interest or personality predictions.
+
+Training a classifier on these labels using DP-SGD gives you protection even if the raw text is public.
+
+## Choosing and managing your privacy budget
+
+Teams often ask: "What ε should I use?" There is no single right answer, but there are some reasonable bands.
+
+For many NLP applications:
+
+- **ε ≤ 2**: strong privacy, often poor utility on small datasets.
+- **2 < ε ≤ 8**: moderate privacy, acceptable for many real-world tasks.
+- **ε > 10**: weak guarantee, may still be useful but do not oversell it.
+
+`δ` is usually set to `1 / N^2` where `N` is dataset size.
+
+Key practical points:
+
+- Track **cumulative ε** if you run multiple training runs on the same data.
+- Use a **privacy accountant** (like RDP accountant in Opacus) rather than naive bounds.
+- Fix your target `(ε, δ)` first, then tune `noise_multiplier` and epochs to hit it.
+
+In real projects I like to start with a target like `ε ≈ 5, δ = 1e-6`, run a few small experiments, measure accuracy and then decide if we can afford more or less privacy.
+
+## Threat models in NLP and what DP does not solve
+
+Differential privacy is powerful, but it is not a silver bullet. It specifically defends against *membership inference* and *memorization* attacks.
+
+Threats it helps with:
+
+- Adversary asking the model to repeat rare training sentences.
+- Adversary probing whether a specific email or record was used in training.
+
+Threats it does not address by itself:
+
+- Malicious insiders or model owners who can inspect training data directly.
+- Prompt injection in RAG systems that pulls sensitive data from a vector database.
+- Side channels in deployed systems, like timing leaks.
+
+For those you need the system-level work covered in "Privacy-Preserving NLP" and "Deploying ML Models with FastAPI and Docker".
+
+A DP-trained model can still reveal sensitive facts that are *correlated* with the training data. For example, a DP medical model can still learn that a certain medication is strongly associated with a disease. That is the point of learning.
+
+## Practical tips for engineering teams
+
+Here is how I would approach differential privacy in an NLP stack from scratch.
+
+### 1. Start with the simplest possible model
+
+Do not try to train a 7B parameter LLM with DP in your first attempt.
+
+Instead:
+
+- Start with a small transformer like DistilBERT.
+- Train a simple classifier or encoder with DP-SGD.
+- Understand the speed, memory and quality tradeoffs.
+
+Once this is stable, you can consider:
+
+- DP fine-tuning of adapter layers on top of a larger frozen LLM.
+- DP training of smaller domain-specific encoders for RAG.
+
+### 2. Reduce sequence length intelligently
+
+Long sequences kill DP-SGD performance. In many NLP tasks, you can:
+
+- Use sliding windows or chunking (reusing logic from your RAG chunking strategy).
+- Keep only the most informative parts of a document.
+- Use summarization to precompress text before DP training, keeping the summarizer non-private.
+
+This is similar to the tradeoffs you make in "Chunking Strategies for RAG Pipelines", but here the constraint is privacy training cost instead of retrieval quality.
+
+### 3. Use RAG to avoid overfitting on private data
+
+One interesting pattern I use in practice:
+
+- Keep a strong public LLM, not trained with DP.
+- Use RAG to inject private knowledge at query time.
+- Train only a small DP classifier or reranker over retrieved chunks.
+
+This way, most of your intelligence and language understanding lives in a non-private model trained once by a third party. You apply DP only to the thin, sensitive components you control.
+
+This aligns with architectures from "Building Production-Ready RAG Systems" and "Building AI Agents with LangChain and LangGraph". The agents and tools can remain largely standard, while the privacy-critical learners are wrapped in DP.
+
+### 4. Combine DP with standard regularization
+
+Differential privacy already acts as a strong regularizer due to gradient clipping and noise. Still, you can combine it with:
+
+- Early stopping.
+- Weight decay.
+- Dropout.
+
+But be careful not to over-regularize. Monitor validation loss closely and avoid automatic hyperparameter transfers from non-DP setups. What works well without DP can underfit badly once DP noise is added.
+
+### 5. Evaluate privacy leakage explicitly
+
+Besides tracking ε and δ, run empirical checks:
+
+- Train a small attack model to distinguish whether a sample was in your training set.
+- Search for verbatim memorized strings, especially for rare patterns or emails.
+- For text generation models, prompt them with partial sensitive sequences and see if they autocomplete them.
+
+You can integrate some of these tests into the same kind of evaluation harness you might already use for "Evaluating RAG System Performance". Treat privacy leakage as another metric, not as an afterthought.
+
+## Simple membership inference experiment in Python
+
+Here is a very small sketch of how you might test for membership inference on a classifier, comparing DP and non-DP models.
+
+```python
+import torch
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.metrics import roc_auc_score
+
+# Assume you have a trained model and a held-out test set
+# train_loader used for training, test_loader is disjoint
+
+def collect_losses(model, loader):
+    model.eval()
+    losses = []
+    criterion = nn.CrossEntropyLoss(reduction="none")
+    with torch.no_grad():
+        for x_ids, x_mask, y in loader:
+            logits = model(input_ids=x_ids, attention_mask=x_mask).logits
+            batch_losses = criterion(logits, y)
+            losses.extend(batch_losses.cpu().tolist())
+    return losses
+
+train_losses = collect_losses(model, train_loader)
+test_losses = collect_losses(model, test_loader)
+
+# Membership inference attacker: low loss -> likely member
+scores = train_losses + test_losses
+labels = [1] * len(train_losses) + [0] * len(test_losses)
+auc = roc_auc_score(labels, [-s for s in scores])
+print(f"Membership inference AUC: {auc:.3f}")
+```
+
+You can compute this AUC for a non-DP model and a DP model trained on the same task. A DP model should be significantly closer to random guessing (AUC ≈ 0.5).
+
+## Integrating DP into your engineering workflow
+
+From an engineering point of view, differential privacy is "just" a different optimizer and a couple of hyperparameters. To make it sustainable:
+
+- Wrap your DP configuration in a clear module, with obvious defaults.
+- Log privacy parameters (ε, δ, noise, clipping norm) in the same place you log training metrics.
+- Add unit tests that fail if privacy accounting is missing.
+- Document for stakeholders what your chosen ε actually means.
+
+For teams used to the patterns from "Python Best Practices for ML Engineers" and "Deploying ML Models with FastAPI and Docker", DP is one more cross-cutting concern to encode in your templates and CI pipelines.
+
+## Key Takeaways
+
+- Differential privacy gives a mathematically robust guarantee that model outputs do not depend strongly on any one user's data.
+- For NLP it is usually implemented via DP-SGD, with per-example gradient clipping and Gaussian noise.
+- Training full LLMs with DP is expensive, so focus on smaller models, adapters or encoders fine-tuned on sensitive data.
+- Good starting targets are ε between 2 and 8, with δ around 1 / N², but you must tune for your task and risk profile.
+- Use DP for high-risk components: fine-tuning on private text, embedding models over sensitive corpora, and label-sensitive classifiers.
+- RAG architectures let you offload most language understanding to non-private base models, and confine DP to thin adaptation layers.
+- Evaluate privacy not only via theoretical ε, but also with empirical membership inference tests and memorization checks.
+- Treat DP as a first-class engineering concern: log it, test it, and document it alongside your usual performance metrics.

@@ -1,0 +1,258 @@
+---
+title: "AI Agents in Finance: MNPI Risks and Cross-Deal Contamination"
+description: "How RAG systems in finance can leak MNPI across deals, and practical mitigation strategies for quants building compliant AI pipelines"
+date: "2026-02-19"
+category: "NLP & Privacy"
+tags: ["MNPI", "RAG", "Finance", "Compliance", "Privacy", "Python"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+A quant fund deploys a RAG-based research agent. The agent has access to earnings transcripts, satellite imagery analytics, credit card transaction panels, and a few alternative data feeds. An analyst on Deal A asks it a question. The agent, doing what it was designed to do, retrieves the most relevant context from every source it can reach, including a data feed that happens to contain material non-public information relevant to Deal B. Nobody intended this. But the information just crossed a wall.
+
+This scenario is not hypothetical. As AI agents become standard infrastructure at hedge funds, proprietary trading desks, and investment banks, the risk of cross-deal contamination through automated retrieval is becoming one of the most consequential compliance challenges in financial AI.
+
+Having built RAG systems that handle sensitive data across multiple domains, I have seen firsthand how retrieval pipelines can silently break information barriers that compliance teams spent years constructing.
+
+
+## What makes MNPI so dangerous in RAG pipelines
+
+Material Non-Public Information is any information about a public company that has not been disclosed to the market and could reasonably affect an investor's decision to buy or sell securities. Trading on MNPI is illegal under SEC Rule 10b-5 and the CFTC's anti-manipulation rules.
+
+Traditional information barriers, often called "Chinese walls," separate teams working on different deals within a financial institution. These barriers have well-understood physical, procedural, and digital controls.
+
+RAG systems break this model in subtle ways:
+
+- **Retrieval is non-deterministic.** The same query can surface different documents depending on embeddings, index state, and ranking thresholds. Compliance cannot pre-approve what the system will retrieve.
+- **Alternative data blurs the line.** Satellite imagery, web scraping, credit card panels, and sensor data may contain information that qualifies as MNPI depending on context.
+- **Agents aggregate across sources.** A multi-tool agent, as described in my earlier posts on Agentic RAG and Building a Multi-Agent AI System, naturally combines information from multiple retrieval backends. That combination can itself constitute MNPI even when individual sources do not.
+- **Context windows are large.** Modern LLMs can process hundreds of thousands of tokens. An agent that stuffs its context with broadly retrieved data is far more likely to accidentally include deal-sensitive material.
+
+
+## CFTC and SEC regulatory landscape
+
+The CFTC has been increasingly clear about AI and alternative data. In recent enforcement actions and guidance, the commission has emphasized that algorithmic systems do not get a compliance exemption. If your system trades on MNPI, it does not matter whether a human or an AI agent made the inference.
+
+Key regulatory considerations include:
+
+- **Section 10(b) and Rule 10b-5** (SEC): prohibit fraud and deception in securities transactions, including trading on MNPI.
+- **CFTC Regulation 180.1**: the anti-manipulation rule that mirrors 10b-5 for commodities and derivatives.
+- **Regulation FD** (Fair Disclosure): requires companies to disclose material information to all investors simultaneously.
+- **MiFID II** (in Europe): imposes strict record-keeping and surveillance requirements on automated trading systems.
+
+The burden falls on the firm to demonstrate that its systems, including AI agents, have adequate controls. "We did not know the agent retrieved that document" is not a defense.
+
+
+## Where cross-deal contamination happens
+
+In a typical financial RAG setup, contamination can occur at several layers:
+
+### At the data layer
+
+Multiple data feeds are indexed into the same vector store or knowledge base. Deal A's private information sits in the same index as Deal B's alternative data. Unless retrieval is strictly partitioned, any query can reach any document.
+
+### At the agent layer
+
+An agentic system with access to multiple tools, such as a vector database, a SQL database, and an API for market data, can combine fragments from each tool into a single response. Even if each tool individually enforces access controls, the agent's synthesis step operates on the union of retrieved data.
+
+### At the inference layer
+
+LLMs can memorize and leak information from their context. If sensitive data enters the context window, it can influence the output in ways that are difficult to audit. This connects directly to the concerns I discussed in Data Privacy in the Age of Large Language Models.
+
+
+## Mitigation strategies
+
+### 1. Data isolation by deal and classification
+
+The most robust approach is physical isolation: separate vector indices, separate databases, separate infrastructure for each deal or information classification level.
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+
+
+class DataClassification(Enum):
+    PUBLIC = "public"
+    CONFIDENTIAL = "confidential"
+    MNPI = "mnpi"
+    RESTRICTED = "restricted"
+
+
+@dataclass
+class DealContext:
+    deal_id: str
+    classification: DataClassification
+    allowed_sources: list[str]
+
+
+def get_vector_store(deal_context: DealContext):
+    """Return an isolated vector store scoped to the deal."""
+    store_name = f"deal_{deal_context.deal_id}_{deal_context.classification.value}"
+    return VectorStoreClient(
+        collection=store_name,
+        read_only=deal_context.classification == DataClassification.MNPI,
+    )
+```
+
+For most hedge funds, full physical isolation is expensive. A pragmatic middle ground is namespace isolation within a shared vector database, combined with strict server-side filtering.
+
+### 2. Authorization-aware retrieval
+
+Every retrieval call must be filtered by the requesting user's clearance and deal scope. This is the same principle I described in Building Production-Ready RAG Systems, but with financial-specific access controls.
+
+```python
+from typing import Optional
+
+
+@dataclass
+class UserClearance:
+    user_id: str
+    deal_ids: list[str]
+    max_classification: DataClassification
+    wall_crossed_deals: list[str]  # deals where wall-crossing was approved
+
+
+def authorized_retrieve(
+    query: str,
+    user: UserClearance,
+    vector_store,
+    top_k: int = 10,
+    deal_filter: Optional[str] = None,
+) -> list[dict]:
+    """Retrieve documents with MNPI-aware access controls."""
+    results = vector_store.search(query, top_k=top_k * 3)
+
+    authorized = []
+    for doc in results:
+        doc_classification = DataClassification(doc.metadata["classification"])
+        doc_deal = doc.metadata.get("deal_id")
+
+        # Block MNPI unless user has wall-crossing approval
+        if doc_classification == DataClassification.MNPI:
+            if doc_deal not in user.wall_crossed_deals:
+                continue
+
+        # Enforce deal scope
+        if doc_deal and doc_deal not in user.deal_ids:
+            continue
+
+        # Enforce classification ceiling
+        classification_order = list(DataClassification)
+        if classification_order.index(doc_classification) > classification_order.index(
+            user.max_classification
+        ):
+            continue
+
+        # Apply optional deal filter
+        if deal_filter and doc_deal != deal_filter:
+            continue
+
+        authorized.append(doc)
+        if len(authorized) >= top_k:
+            break
+
+    return authorized
+```
+
+### 3. Audit trails and provenance tracking
+
+Every retrieval and generation must be logged with full provenance. This is not optional in regulated finance.
+
+```python
+import json
+import time
+from datetime import datetime, timezone
+
+
+def log_retrieval_event(
+    user: UserClearance,
+    query: str,
+    retrieved_docs: list[dict],
+    filtered_docs: list[dict],
+    logger,
+):
+    """Log a complete audit trail for every retrieval operation."""
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user_id": user.user_id,
+        "query_hash": hash_text(query),
+        "docs_retrieved": len(retrieved_docs),
+        "docs_after_filter": len(filtered_docs),
+        "docs_blocked": len(retrieved_docs) - len(filtered_docs),
+        "doc_ids_served": [d.metadata["doc_id"] for d in filtered_docs],
+        "classifications_served": [
+            d.metadata["classification"] for d in filtered_docs
+        ],
+        "deal_ids_touched": list(
+            set(d.metadata.get("deal_id", "none") for d in filtered_docs)
+        ),
+    }
+    logger.info("retrieval_audit", extra=event)
+    return event
+```
+
+### 4. Information barriers in the RAG pipeline
+
+Implement barriers at the pipeline level, not just the data level. This means the agent itself should be scoped to a deal context and should not have the ability to query outside its boundary.
+
+```python
+class ScopedRAGAgent:
+    """An agent that is hard-scoped to a single deal context."""
+
+    def __init__(self, deal_context: DealContext, user: UserClearance):
+        self.deal_context = deal_context
+        self.user = user
+        self.vector_store = get_vector_store(deal_context)
+        self.tools = self._build_scoped_tools()
+
+    def _build_scoped_tools(self):
+        """Only register tools that are allowed for this deal."""
+        tools = []
+        for source in self.deal_context.allowed_sources:
+            tool = load_tool(source, deal_filter=self.deal_context.deal_id)
+            tools.append(tool)
+        return tools
+
+    def query(self, question: str) -> dict:
+        docs = authorized_retrieve(
+            query=question,
+            user=self.user,
+            vector_store=self.vector_store,
+            deal_filter=self.deal_context.deal_id,
+        )
+        audit = log_retrieval_event(
+            self.user, question, docs, docs, self.logger
+        )
+        response = self.llm.generate(question, context=docs)
+        return {"answer": response, "audit": audit}
+```
+
+### 5. Pre-ingestion classification
+
+Before any data enters your RAG pipeline, classify it. Do not rely on post-hoc filtering alone. Tag every document with its deal association, classification level, source, and ingestion timestamp.
+
+This connects to the ideas in Introduction to Differential Privacy for NLP, where we discussed that privacy controls are most effective when applied as early as possible in the data pipeline.
+
+
+## Testing and validation
+
+Compliance teams should run regular "contamination tests" against the RAG system:
+
+- Submit queries designed to elicit cross-deal information.
+- Verify that retrieval filters are correctly blocking out-of-scope documents.
+- Check that audit logs capture every retrieval event, including blocked documents.
+- Run adversarial prompt tests to see if the agent can be tricked into ignoring deal boundaries.
+
+This is analogous to the evaluation techniques in Evaluating RAG System Performance, but with a compliance lens rather than a pure accuracy lens.
+
+
+## Key Takeaways
+
+- RAG systems in finance can silently break information barriers by retrieving MNPI across deals, creating serious regulatory and legal risk.
+- The CFTC and SEC hold firms responsible for their AI systems' compliance, algorithmic trading on MNPI carries the same penalties as human insider trading.
+- Mitigate cross-deal contamination through **data isolation** (separate indices or strict namespace filtering), **authorization-aware retrieval** (per-user, per-deal access controls), and **scoped agents** (agents hard-bound to a single deal context).
+- Every retrieval and generation event must produce a **complete audit trail** with provenance, classification labels, and blocking decisions.
+- Classify and tag data **before ingestion** into the RAG pipeline, not after retrieval.
+- Run regular **contamination tests** and adversarial evaluations to validate that information barriers hold under realistic conditions.
+- Treat compliance as a first-class system design constraint, not a post-deployment checkbox.

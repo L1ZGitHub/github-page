@@ -1,0 +1,396 @@
+---
+title: "Getting Started with PyTorch for Deep Learning"
+description: "Beginner friendly guide to getting started with PyTorch, from tensors to training your first neural network, with practical Python examples."
+date: "2026-02-09"
+category: "Tutorials"
+tags: ["PyTorch", "Deep Learning", "Python", "Neural Networks", "AI & ML", "ML Engineering"]
+difficulty: "beginner"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+Getting your first deep learning model to actually run, train, and converge can feel more like a rite of passage than a programming task. You install libraries, copy examples from docs, tune a few mysterious parameters, then watch the loss explode into NaNs.
+
+I have been there. The good news is that PyTorch makes the core ideas of deep learning much more approachable than they first appear. Once you understand a handful of concepts - tensors, computation graphs, automatic differentiation, and the training loop - the rest is mostly variations on a theme.
+
+In this guide I will walk through a practical, beginner friendly path to using PyTorch. The focus is on getting you to a working model quickly, not on covering every feature. If you have read my posts on topics like "Understanding Transformer Architectures" or "Embedding Models Compared: OpenAI vs Open-Source", you will recognize the same building blocks at a smaller scale here.
+
+
+## 1. Why PyTorch for Deep Learning
+
+PyTorch is one of the dominant deep learning frameworks in research and production. Some reasons I recommend it to beginners:
+
+- **Pythonic and intuitive** - Tensors feel like NumPy arrays with superpowers.
+- **Dynamic computation graph** - You build the model as regular Python code, which makes debugging easier.
+- **Huge ecosystem** - Pretrained models, tutorials, and libraries like Hugging Face Transformers.
+- **Production ready** - PyTorch works well with deployment stacks like FastAPI and Docker. I cover that in more depth in "Deploying ML Models with FastAPI and Docker".
+
+If your long term goal is to work with modern architectures such as transformers, RAG systems, or multi agent systems, PyTorch is a strong foundation. Most of the systems I describe in "Building Production-Ready RAG Systems" or "Building AI Agents with LangChain and LangGraph" rely on models originally trained in PyTorch.
+
+
+## 2. Setting Up Your Environment
+
+### 2.1 Installing PyTorch
+
+The safest way to install PyTorch is to use the official selector on the PyTorch website. For a basic CPU install with pip you can usually run:
+
+```bash
+pip install torch torchvision torchaudio
+```
+
+If you have an NVIDIA GPU, you will want a CUDA enabled build. The PyTorch site gives you the correct command for your OS, Python version, and CUDA version.
+
+### 2.2 A Minimal Project Structure
+
+Even for quick experiments, I encourage using a small but clean structure. It pays off as your work grows, just like the practices I discuss in "Python Best Practices for ML Engineers".
+
+```text
+pytorch-intro/
+  data/
+  models/
+  notebooks/
+  src/
+    train.py
+    dataset.py
+    model.py
+  requirements.txt
+```
+
+For this article we will keep everything in a single script, but keep this structure in mind for real projects.
+
+
+## 3. Tensors - The Core Building Block
+
+Tensors are to PyTorch what arrays are to NumPy. They are multi dimensional arrays with additional features like GPU support and automatic differentiation.
+
+### 3.1 Creating Tensors
+
+Open a Python shell or Jupyter notebook and try:
+
+```python
+import torch
+
+# Basic tensor
+x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+print(x)
+print(x.shape)
+
+# Random tensor
+rand_x = torch.randn(3, 4)
+print(rand_x)
+```
+
+A few common creation functions:
+
+```python
+zeros = torch.zeros(2, 3)
+ones = torch.ones(2, 3)
+arange = torch.arange(0, 10, step=2)  # 0, 2, 4, 6, 8
+```
+
+### 3.2 Moving Tensors to GPU
+
+If you have a GPU and installed a CUDA version of PyTorch, you can do:
+
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+x = torch.randn(3, 3)
+x = x.to(device)
+print(x.device)
+```
+
+This pattern `device = ...` and `.to(device)` appears everywhere. In production code, I almost always centralize device handling to avoid subtle bugs.
+
+
+## 4. Automatic Differentiation with `autograd`
+
+Deep learning is just repeated gradient based optimization. PyTorch's `autograd` system computes gradients for you.
+
+### 4.1 Basic Gradient Example
+
+```python
+import torch
+
+# Create a tensor with gradient tracking enabled
+x = torch.tensor(2.0, requires_grad=True)
+
+# Define a simple function: y = x^2
+y = x ** 2
+
+# Compute dy/dx
+y.backward()
+
+print(x.grad)  # Should be 2 * x = 4.0
+```
+
+Any tensor with `requires_grad=True` will accumulate gradients when you call `.backward()` on a scalar result.
+
+This is what allows complex models such as transformers, which I describe in "Understanding Transformer Architectures", to be trained just as easily as a tiny regression model.
+
+
+## 5. Defining a Simple Neural Network
+
+The usual way to define models in PyTorch is to subclass `torch.nn.Module`.
+
+Let us build a small fully connected network for a toy classification task.
+
+```python
+import torch
+import torch.nn as nn
+
+class SimpleNN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        return x
+
+# Example usage
+model = SimpleNN(input_dim=2, hidden_dim=16, output_dim=2)
+print(model)
+```
+
+Key points:
+
+- `__init__` defines the layers (parameters).
+- `forward` defines how data flows through the network.
+- You do not manually wire up gradients PyTorch tracks everything.
+
+If you later work with transformers for tasks like RAG, the interface is very similar: you instantiate a model class, then call it with input tensors.
+
+
+## 6. A Complete Training Loop from Scratch
+
+Let us walk through a full example: classify points in 2D space into two classes.
+
+### 6.1 Create a Synthetic Dataset
+
+We will generate a simple dataset using PyTorch itself.
+
+```python
+import torch
+from torch.utils.data import Dataset, DataLoader
+
+class ToyDataset(Dataset):
+    def __init__(self, n_samples=1000):
+        super().__init__()
+        # Random points in 2D
+        self.x = torch.randn(n_samples, 2)
+        # Labels: 1 if x0 + x1 > 0, else 0
+        self.y = (self.x.sum(dim=1) > 0).long()
+
+    def __len__(self):
+        return len(self.x)
+
+    def __getitem__(self, idx):
+        return self.x[idx], self.y[idx]
+
+train_dataset = ToyDataset(n_samples=5000)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+```
+
+`Dataset` and `DataLoader` are the workhorses of data handling in PyTorch. The pattern is similar to how we handle data in larger pipelines, like those I describe in "Chunking Strategies for RAG Pipelines" or "Evaluating RAG System Performance".
+
+### 6.2 Initialize Model, Loss, Optimizer
+
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+model = SimpleNN(input_dim=2, hidden_dim=16, output_dim=2).to(device)
+
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+```
+
+- `CrossEntropyLoss` is standard for multi class classification with logits.
+- `Adam` is a widely used optimizer. Others like SGD, AdamW are also common.
+
+### 6.3 The Training Loop
+
+Here is the core training loop that you will write in some form for almost any PyTorch project.
+
+```python
+def train(model, dataloader, criterion, optimizer, device, num_epochs=10):
+    model.train()  # Set model to training mode
+
+    for epoch in range(num_epochs):
+        running_loss = 0.0
+        correct = 0
+        total = 0
+
+        for inputs, labels in dataloader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            # 1. Zero gradients
+            optimizer.zero_grad()
+
+            # 2. Forward pass
+            outputs = model(inputs)  # shape: [batch_size, num_classes]
+
+            # 3. Compute loss
+            loss = criterion(outputs, labels)
+
+            # 4. Backward pass
+            loss.backward()
+
+            # 5. Update parameters
+            optimizer.step()
+
+            # Stats
+            running_loss += loss.item() * inputs.size(0)
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+        epoch_loss = running_loss / total
+        epoch_acc = correct / total
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}, Acc: {epoch_acc:.4f}")
+
+train(model, train_loader, criterion, optimizer, device, num_epochs=10)
+```
+
+This structure is nearly identical whether you are training a small MLP or a large transformer used inside a RAG system. The complexity in real world projects usually comes from data preprocessing, evaluation metrics, and infrastructure, which I cover in posts like "CI/CD Pipelines for Machine Learning Projects".
+
+
+## 7. Evaluating and Using the Model
+
+After training, you typically switch the model to evaluation mode and disable gradient tracking.
+
+### 7.1 Evaluation Mode
+
+```python
+def evaluate(model, dataloader, device):
+    model.eval()
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = model(inputs)
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    acc = correct / total
+    print(f"Accuracy: {acc:.4f}")
+
+# Reuse train_dataset for a quick test
+test_loader = DataLoader(train_dataset, batch_size=128, shuffle=False)
+evaluate(model, test_loader, device)
+```
+
+The `torch.no_grad()` context is important. It reduces memory usage and speeds up inference as gradients are not computed.
+
+### 7.2 Making Single Predictions
+
+```python
+model.eval()
+
+with torch.no_grad():
+    sample = torch.tensor([[0.5, -0.2]], device=device)
+    output = model(sample)
+    probs = torch.softmax(output, dim=1)
+    predicted_class = probs.argmax(dim=1).item()
+
+print("Predicted class:", predicted_class)
+```
+
+This pattern of moving from training to prediction is exactly what you will later use when serving models behind an API as I describe in "Deploying ML Models with FastAPI and Docker".
+
+
+## 8. From Toy Models to Real Projects
+
+Once you are comfortable with the basic workflow, extending to more realistic problems is straightforward.
+
+### 8.1 Image Classification with `torchvision`
+
+For images, you typically use `torchvision` datasets and transforms:
+
+```python
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+train_dataset = datasets.MNIST(
+    root="data",
+    train=True,
+    download=True,
+    transform=transform,
+)
+
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+```
+
+You then define a CNN or reuse a pretrained model, and the training loop looks almost identical.
+
+### 8.2 NLP and Transformers
+
+For NLP tasks like text classification or question answering, modern workflows often build on pretrained transformer models. These models are usually trained in PyTorch and exposed via frameworks like Hugging Face Transformers.
+
+When you work on applications such as RAG systems, semantic search, or hybrid retrieval (which I cover in "Retrieval-Augmented Generation: A Complete Guide", "Semantic Search vs Keyword Search: When to Use What" and "Hybrid Search: Combining Dense and Sparse Retrieval"), you will often:
+
+- Load a pretrained transformer encoder.
+- Use it to compute embeddings for texts.
+- Store those in a vector database, like I discuss in "Understanding Vector Databases: A Beginner's Guide" and "Vector Database Performance Benchmarks".
+
+The PyTorch basics you learned here, especially tensors, models, and training loops, carry over directly.
+
+
+## 9. Practical Tips I Wish I Knew Earlier
+
+A few pragmatic lessons from building real systems.
+
+### 9.1 Set Random Seeds
+
+For reproducibility, especially when debugging:
+
+```python
+import random
+import numpy as np
+import torch
+
+seed = 42
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+```
+
+### 9.2 Use Small Batches When Prototyping
+
+If you run into out of memory errors on GPU, lower `batch_size`. It is often the quickest fix when exploring.
+
+### 9.3 Log More Than Just Loss
+
+Even in small projects, track metrics like accuracy or F1. For more complex systems like RAG, evaluation is much more nuanced, as I describe in "Evaluating RAG System Performance".
+
+### 9.4 Think About Privacy Early
+
+If you work with real user data, start thinking about privacy from the beginning. Techniques like those I describe in "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" become relevant quickly once you move beyond toy datasets.
+
+
+## Key Takeaways
+
+- PyTorch centers around tensors, automatic differentiation, and the `nn.Module` abstraction for models.
+- A standard training loop consists of forward pass, loss computation, backward pass, and optimizer step inside batches and epochs.
+- `Dataset` and `DataLoader` give you a clean way to feed data into models, both for toy datasets and real world tasks.
+- Moving tensors and models to the correct `device` (CPU or GPU) is essential for both correctness and performance.
+- Evaluation mode with `model.eval()` and `torch.no_grad()` is critical for correct, efficient inference.
+- The same PyTorch fundamentals scale from simple MLPs to transformers, RAG systems, and production grade ML services.
+- Good engineering practices around structure, reproducibility, and privacy matter as soon as you leave toy examples behind.

@@ -1,0 +1,257 @@
+---
+title: "Multimodal RAG 2026: Vision and Text for State-of-the-Art Pipelines"
+description: "Build production multimodal RAG pipelines combining vision and text retrieval with Qwen3-VL, cross-modal fusion, and cost optimization strategies."
+date: "2026-02-17"
+category: "RAG Systems"
+tags: ["RAG", "Multimodal", "Vision-Language", "Embeddings", "Python", "Production ML"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+Text-only RAG has a blind spot. When your knowledge base contains architectural diagrams, scanned invoices, product photos, or dashboards with charts, a text retriever simply skips over them. You lose information that is often the most valuable part of the document.
+
+Multimodal RAG closes that gap by retrieving and reasoning over both text and visual content. In early 2026, this is no longer experimental. Models like Qwen3-VL, combined with mature embedding pipelines and vector databases, make it possible to build production-grade multimodal retrieval systems without a research lab budget.
+
+I have been deploying RAG systems at Ailog for years, from the foundational patterns in Building Production-Ready RAG Systems to the agentic architectures in Agentic RAG: The Next Evolution. Multimodal RAG is the natural next step, and the engineering patterns are surprisingly similar once you understand the core differences.
+
+## Why text-only RAG is no longer enough
+
+Most enterprise documents are not pure text. Consider:
+
+- **Technical manuals** with circuit diagrams and annotated photos
+- **Financial reports** where key data lives in charts and tables
+- **Medical records** mixing narrative notes with imaging results
+- **E-commerce catalogs** where product images carry critical information that text descriptions miss
+
+A standard text RAG pipeline, even with excellent chunking (see Chunking Strategies for RAG Pipelines), will either ignore these visual elements or rely on OCR-extracted text that loses layout, structure, and visual meaning.
+
+Multimodal RAG treats images as first-class retrievable units alongside text chunks. At query time, the system can retrieve relevant figures, charts, or photos and feed them directly to a vision-language model for grounded answers.
+
+## Architecture of a multimodal RAG pipeline
+
+The architecture extends the classic RAG pattern with parallel visual and textual processing paths.
+
+### Component overview
+
+1. **Document ingestion**: extract text chunks and visual elements from source documents
+2. **Dual encoding**: embed text chunks and images into vectors in a compatible space
+3. **Vector store**: index both embedding types with metadata
+4. **Cross-modal fusion**: merge retrieval results from both modalities at query time
+5. **Generation**: feed fused context to a vision-language model for the final answer
+
+If you have read Hybrid Search: Combining Dense and Sparse Retrieval, this should feel familiar. Multimodal RAG is essentially hybrid search extended to a new modality.
+
+### Visual encoders in 2026
+
+The encoder choice matters enormously for retrieval quality and cost. Here is the current landscape:
+
+- **SigLIP / SigLIP-2**: strong open-source visual encoders with efficient inference, good for shared embedding spaces.
+- **Qwen3-VL encoder**: the vision component can be used standalone for embeddings. Excellent on document-style images like charts and tables.
+- **ColPali / ColQwen**: late-interaction models that treat document pages as image inputs directly, bypassing OCR. Very promising for PDF-heavy use cases.
+- **OpenAI / Cohere multimodal embeddings**: hosted APIs, convenient but with privacy and cost tradeoffs (see Data Privacy in the Age of Large Language Models).
+
+For production, I recommend SigLIP-2 for the visual path and a proven text encoder like BGE or E5, aligned through a lightweight projection layer.
+
+## Building the pipeline step by step
+
+Let me walk through a concrete implementation. We will build a multimodal RAG system over technical documents that contain both text and figures.
+
+### Step 1: Document ingestion and extraction
+
+The first challenge is splitting documents into text chunks and image regions.
+
+```python
+from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Optional
+from PIL import Image
+import fitz  # PyMuPDF
+
+@dataclass
+class Chunk:
+    content: str
+    chunk_type: str  # "text" or "image"
+    page: int
+    source: str
+    image: Optional[Image.Image] = field(default=None, repr=False)
+
+def extract_chunks(pdf_path: str, min_image_size: int = 100) -> list[Chunk]:
+    doc = fitz.open(pdf_path)
+    chunks = []
+    source = Path(pdf_path).name
+
+    for page_num, page in enumerate(doc):
+        # Extract text blocks
+        text = page.get_text("text").strip()
+        if text:
+            chunks.append(Chunk(
+                content=text,
+                chunk_type="text",
+                page=page_num,
+                source=source,
+            ))
+
+        # Extract images
+        for img_idx, img_info in enumerate(page.get_images(full=True)):
+            xref = img_info[0]
+            base_image = doc.extract_image(xref)
+            if base_image["width"] >= min_image_size:
+                pil_image = Image.open(io.BytesIO(base_image["image"]))
+                chunks.append(Chunk(
+                    content=f"Figure on page {page_num + 1}",
+                    chunk_type="image",
+                    page=page_num,
+                    source=source,
+                    image=pil_image,
+                ))
+
+    return chunks
+```
+
+For text chunking, apply the strategies from Chunking Strategies for RAG Pipelines, splitting by sections, paragraphs, or semantic boundaries. For images, each extracted figure becomes its own chunk.
+
+### Step 2: Dual encoding
+
+Now we encode text and images into a shared vector space.
+
+```python
+import torch
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from transformers import AutoProcessor, AutoModel
+
+# Text encoder
+text_encoder = SentenceTransformer("BAAI/bge-base-en-v1.5")
+
+# Visual encoder (SigLIP-based)
+vis_processor = AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
+vis_model = AutoModel.from_pretrained("google/siglip-base-patch16-224")
+vis_model.eval()
+
+def encode_text_chunks(chunks: list[Chunk]) -> np.ndarray:
+    texts = [c.content for c in chunks if c.chunk_type == "text"]
+    return text_encoder.encode(texts, normalize_embeddings=True)
+
+@torch.inference_mode()
+def encode_image_chunks(chunks: list[Chunk]) -> np.ndarray:
+    images = [c.image for c in chunks if c.chunk_type == "image"]
+    if not images:
+        return np.array([])
+
+    inputs = vis_processor(images=images, return_tensors="pt")
+    outputs = vis_model.get_image_features(**inputs)
+    embeddings = outputs / outputs.norm(dim=-1, keepdim=True)
+    return embeddings.cpu().numpy()
+```
+
+An important consideration: SigLIP and CLIP models align text and image spaces through contrastive training. If you use separate encoders (BGE for text, SigLIP for images), you need a projection layer or separate indices with score fusion. I covered these tradeoffs in Embedding Models Compared: OpenAI vs Open-Source.
+
+### Step 3: Cross-modal fusion at query time
+
+Store both embedding types in your vector database (Qdrant, Weaviate, or Milvus all handle this with named vectors or metadata-level separation). At query time, retrieve from both modalities and fuse results with weighted score combination.
+
+```python
+from collections import defaultdict
+from qdrant_client import QdrantClient
+
+client = QdrantClient(url="http://localhost:6333")
+
+def multimodal_retrieve(query: str, top_k: int = 10, alpha: float = 0.6):
+    query_text_emb = text_encoder.encode(query, normalize_embeddings=True)
+
+    text_hits = client.search(
+        collection_name="multimodal_docs",
+        query_vector=("text", query_text_emb.tolist()),
+        limit=top_k,
+    )
+
+    # Cross-modal: encode text query via SigLIP text encoder to search images
+    query_vis_input = vis_processor(text=[query], return_tensors="pt")
+    with torch.inference_mode():
+        query_vis_emb = vis_model.get_text_features(**query_vis_input)
+        query_vis_emb = query_vis_emb / query_vis_emb.norm(dim=-1, keepdim=True)
+
+    image_hits = client.search(
+        collection_name="multimodal_docs",
+        query_vector=("image", query_vis_emb.squeeze().tolist()),
+        limit=top_k,
+    )
+
+    # Score fusion
+    scores = defaultdict(float)
+    payloads = {}
+    for hit in text_hits:
+        scores[hit.id] += alpha * hit.score
+        payloads[hit.id] = hit.payload
+    for hit in image_hits:
+        scores[hit.id] += (1 - alpha) * hit.score
+        payloads[hit.id] = hit.payload
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+    return [{"id": rid, "score": s, **payloads[rid]} for rid, s in ranked]
+```
+
+The `alpha` parameter controls the balance between text and visual retrieval. For document-heavy use cases, start with 0.6-0.7 favoring text. For image-centric catalogs, flip toward 0.3-0.4.
+
+### Step 4: Generation with a vision-language model
+
+Feed retrieved context, including actual images for visual chunks, to a vision-language model via the Claude API.
+
+```python
+import anthropic
+
+def generate_answer(query: str, retrieved_chunks: list[dict]) -> str:
+    client = anthropic.Anthropic()
+    content_blocks = []
+
+    for chunk in retrieved_chunks:
+        if chunk["type"] == "text":
+            content_blocks.append({
+                "type": "text",
+                "text": f"[Source: {chunk['source']}, p.{chunk['page']}]\n{chunk['content']}",
+            })
+        elif chunk["type"] == "image" and chunk.get("image_b64"):
+            content_blocks.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/png", "data": chunk["image_b64"]},
+            })
+
+    content_blocks.append({"type": "text", "text": f"Question: {query}"})
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": content_blocks}],
+        system="Answer based on the provided context. Reference specific figures and pages when relevant.",
+    )
+    return response.content[0].text
+```
+
+## Cost optimization strategies
+
+Multimodal RAG is more expensive than text-only RAG. Images are larger to store, slower to encode, and cost more tokens at generation time. Four strategies I use in production:
+
+**Tiered encoding**: classify images into tiers. Full resolution for complex diagrams and charts, thumbnail resolution for decorative images, and skip encoding for very small or low-information images entirely.
+
+**Lazy image loading**: store image references in your vector index but only load actual image bytes when a visual chunk makes it into the top-k results. This cuts memory and storage costs significantly.
+
+**Cache embeddings aggressively**: visual encoding is expensive. If a document is re-indexed, only re-encode images that changed.
+
+**Route queries by modality**: use a lightweight classifier to determine if a query needs visual retrieval. Text-only queries like "what is the refund policy" can skip the image path entirely.
+
+## Production considerations
+
+**Evaluation is harder**. You need separate metrics for text and visual retrieval quality, plus joint metrics for surfacing visual content when needed. The frameworks from Evaluating RAG System Performance extend naturally, but budget extra time for visual test sets.
+
+**Orchestration tools help**. Workflow tools like N8N can manage ingestion, encoding, indexing, and serving stages without custom orchestration code. Pair them with the Claude API or a self-hosted Qwen3-VL for generation.
+
+**Monitor per-modality performance**. Track hit rates, latencies, and generation quality separately for text-only, image-relevant, and mixed queries, following the principles from Monitoring ML Models in Production.
+
+## Key Takeaways
+
+- Multimodal RAG extends text-only pipelines by treating images, charts, and visual elements as first-class retrievable units alongside text chunks.
+- The architecture follows a dual-encoder pattern: separate text and visual encoders feeding into a shared vector store with cross-modal score fusion at query time.
+- Models like SigLIP-2, ColPali, and Qwen3-VL make production-quality visual encoding accessible without training custom models.
+- Cost optimization through tiered encoding, lazy loading, caching, and modality-aware query routing is essential for keeping multimodal RAG economically viable.
+- Evaluation requires per-modality metrics and dedicated visual test sets beyond standard text RAG benchmarks.
+- Start with a simple dual-index setup and score fusion, then iterate toward tighter cross-modal integration as your retrieval quality data guides you.

@@ -1,0 +1,223 @@
+---
+title: "Multi-Agent Multi-LLM Architectures: A 2026 Guide"
+description: "A practical guide to multi-agent multi-LLM architectures covering agent roles, communication patterns, MoE, RLVR, and distributed scalability"
+date: "2026-02-18"
+category: "AI & ML"
+tags: ["Multi-Agent Systems", "LLMs", "MoE", "RLVR", "Distributed Systems", "MLOps"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+The single-model, single-agent pattern served us well for a while, but it has hit a ceiling. Real production systems in 2026 increasingly rely on multiple agents powered by different LLMs, each chosen for its strengths. One model handles reasoning, another handles code generation, a third handles retrieval and summarization. The result is an architecture that looks less like a chatbot and more like a distributed system with heterogeneous compute nodes.
+
+I have been building these systems at Ailog for the past year, and the patterns that work in production are quite different from what you see in demos. This guide covers the architecture decisions that matter: agent role design, communication patterns, integrating reinforcement learning techniques like RLVR and GRPO, leveraging Mixture-of-Experts models, and keeping everything observable at scale.
+
+## Agent roles and specialization
+
+The first design decision is how to assign roles to agents. In my earlier article on *Building a Multi-Agent AI System*, I covered the basics of when multi-agent setups make sense. Here, I want to go deeper into how you assign different LLMs to different roles.
+
+A typical production architecture looks like this:
+
+```
+[Orchestrator Agent - Claude/GPT-4o]
+    |
+    +-- [Reasoning Agent - DeepSeek R1]
+    |       Handles complex multi-step logic
+    |
+    +-- [Code Agent - Codestral/GPT-4o]
+    |       Generates and validates code
+    |
+    +-- [Retrieval Agent - Mistral + RAG]
+    |       Searches knowledge bases
+    |
+    +-- [Safety Agent - Lightweight classifier]
+            Checks outputs for policy compliance
+```
+
+The orchestrator routes tasks to specialized agents and assembles their outputs. Each agent runs a model selected for its strengths. DeepSeek R1, trained with RLVR (Reinforcement Learning with Verifiable Rewards), excels at structured reasoning. Codestral handles code. Mistral's Mixture-of-Experts architecture gives you strong general performance at lower inference cost for retrieval tasks.
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+
+class AgentRole(Enum):
+    ORCHESTRATOR = "orchestrator"
+    REASONER = "reasoner"
+    CODER = "coder"
+    RETRIEVER = "retriever"
+    SAFETY = "safety"
+
+@dataclass
+class AgentConfig:
+    role: AgentRole
+    model: str
+    temperature: float
+    max_tokens: int
+    tools: list[str]
+
+# Each agent uses the best model for its job
+AGENT_CONFIGS = {
+    AgentRole.ORCHESTRATOR: AgentConfig(
+        role=AgentRole.ORCHESTRATOR,
+        model="claude-sonnet-4-20250514",
+        temperature=0.3,
+        max_tokens=2048,
+        tools=["route", "aggregate"],
+    ),
+    AgentRole.REASONER: AgentConfig(
+        role=AgentRole.REASONER,
+        model="deepseek-r1",
+        temperature=0.1,
+        max_tokens=4096,
+        tools=["chain_of_thought", "verify"],
+    ),
+    AgentRole.CODER: AgentConfig(
+        role=AgentRole.CODER,
+        model="codestral-latest",
+        temperature=0.2,
+        max_tokens=4096,
+        tools=["execute_code", "lint", "test"],
+    ),
+    AgentRole.RETRIEVER: AgentConfig(
+        role=AgentRole.RETRIEVER,
+        model="mistral-large",
+        temperature=0.0,
+        max_tokens=2048,
+        tools=["vector_search", "rerank"],
+    ),
+}
+```
+
+The key insight is that no single model dominates every task. Benchmarks from MLSys 2026 confirm what practitioners already knew: specialized routing consistently outperforms using the best general-purpose model for everything, both in quality and cost.
+
+## Communication patterns
+
+How agents talk to each other determines the system's reliability and debuggability. Three patterns dominate in production.
+
+### Hub-and-spoke
+
+The orchestrator receives all requests, delegates to specialized agents, and assembles results. This is the simplest pattern and the one I recommend starting with. It is easy to monitor, easy to debug, and maps cleanly onto frameworks like LangGraph.
+
+### Pipeline (sequential)
+
+Agents process work in a fixed order: retrieve, then reason, then generate, then validate. This works well for well-defined workflows. It is what we use at Ailog for document processing, where every step has a clear input and output contract.
+
+### Mesh (peer-to-peer)
+
+Agents communicate directly with each other without a central coordinator. This is the most flexible pattern but also the hardest to debug. MLSys 2026 papers on distributed agent systems found that mesh architectures scale better for highly parallel tasks but require significantly more investment in observability tooling.
+
+```python
+import asyncio
+from typing import Any
+
+class AgentMessage:
+    def __init__(self, sender: str, recipient: str, payload: dict[str, Any]):
+        self.sender = sender
+        self.recipient = recipient
+        self.payload = payload
+
+class MessageBus:
+    """Simple async message bus for agent communication."""
+
+    def __init__(self):
+        self._queues: dict[str, asyncio.Queue] = {}
+
+    def register(self, agent_id: str):
+        self._queues[agent_id] = asyncio.Queue()
+
+    async def send(self, message: AgentMessage):
+        if message.recipient in self._queues:
+            await self._queues[message.recipient].put(message)
+
+    async def receive(self, agent_id: str) -> AgentMessage:
+        return await self._queues[agent_id].get()
+```
+
+In practice, I recommend starting with hub-and-spoke, moving to pipeline for well-understood workflows, and only using mesh when you have the monitoring infrastructure to support it. Which brings us to the topic I covered in *Monitoring ML Models in Production*, applied here at the multi-agent level.
+
+## RLVR, GRPO, and why they matter for multi-agent systems
+
+DeepSeek R1 demonstrated something important: reinforcement learning with verifiable rewards (RLVR) and Group Relative Policy Optimization (GRPO) can train models that are exceptionally good at structured reasoning and self-verification. This has direct implications for multi-agent architectures.
+
+In a multi-LLM setup, you want your reasoning agent to produce outputs that other agents can verify. RLVR-trained models excel here because they are optimized to reach correct, verifiable conclusions rather than just plausible-sounding text. GRPO improves on standard PPO by computing advantages relative to a group of sampled responses, which reduces variance and makes training more stable.
+
+For multi-agent systems, this means you can build verification loops where one agent generates a solution and another checks it against ground truth or logical constraints, with high confidence that the reasoning agent will produce structured, checkable work.
+
+```python
+async def verified_reasoning_pipeline(query: str, agents: dict) -> dict:
+    """Pipeline where reasoning output is verified before use."""
+    # Step 1: Reasoning agent generates a structured answer
+    reasoning_result = await agents["reasoner"].invoke({
+        "task": "reason",
+        "query": query,
+        "output_format": "structured_json",
+    })
+
+    # Step 2: Verification agent checks the reasoning
+    verification = await agents["verifier"].invoke({
+        "task": "verify",
+        "claim": reasoning_result["conclusion"],
+        "evidence": reasoning_result["chain_of_thought"],
+    })
+
+    if verification["is_valid"]:
+        return reasoning_result
+    else:
+        # Retry with feedback or escalate
+        return await agents["reasoner"].invoke({
+            "task": "reason",
+            "query": query,
+            "feedback": verification["issues"],
+        })
+```
+
+## Mixture-of-Experts for multi-agent setups
+
+Mistral's MoE architecture is particularly well-suited for multi-agent systems. In a MoE model, only a subset of the model's parameters activate for any given input, which means you get the capacity of a very large model at a fraction of the inference cost.
+
+For multi-agent architectures, MoE models work well as generalist agents that handle the "long tail" of tasks that do not justify a dedicated specialist agent. The orchestrator can route common, well-defined tasks to specialized agents and fall back to a MoE-based generalist for everything else. This keeps costs manageable while maintaining broad capability coverage.
+
+MLSys 2026 benchmarks showed that architectures combining specialized dense models for core tasks with MoE models for general routing reduced total inference cost by 35-45% compared to using a single large dense model everywhere.
+
+## Monitoring and distributed scalability
+
+Multi-agent multi-LLM systems are distributed systems, and they need to be treated as such. Every lesson from *CI/CD Pipelines for Machine Learning Projects* and *Monitoring ML Models in Production* applies here, multiplied by the number of agents.
+
+Key monitoring requirements:
+
+- **Per-agent latency and token usage.** You need to know which agent is the bottleneck and which is burning through your API budget.
+- **Inter-agent message tracing.** Every message between agents should carry a trace ID. OpenTelemetry with custom spans per agent is the minimum viable setup.
+- **Output quality per agent.** Track not just system-level accuracy but per-agent contribution. If your reasoning agent starts producing lower-quality chains of thought, you want to catch that before it propagates.
+- **Cost attribution.** Different LLMs have different pricing. Track cost per agent, per task, per customer.
+
+```python
+from opentelemetry import trace
+
+tracer = trace.get_tracer("multi-agent-system")
+
+async def traced_agent_call(agent_name: str, model: str, payload: dict):
+    """Wrap every agent call with distributed tracing."""
+    with tracer.start_as_current_span(
+        f"agent.{agent_name}",
+        attributes={
+            "agent.model": model,
+            "agent.role": agent_name,
+            "agent.input_tokens": len(str(payload)),
+        },
+    ) as span:
+        result = await call_agent(agent_name, payload)
+        span.set_attribute("agent.output_tokens", len(str(result)))
+        span.set_attribute("agent.status", "success")
+        return result
+```
+
+For horizontal scaling, the pattern that works best in practice is stateless agents behind a task queue. Each agent type runs as an independent service that pulls work from a shared queue (Redis Streams, Kafka, or a managed service like SQS). The orchestrator pushes tasks onto the appropriate queue and collects results. This decouples agent scaling from orchestration logic and lets you scale each agent type independently based on load.
+
+## Key Takeaways
+
+- Multi-LLM architectures assign different models to different agent roles based on each model's strengths, improving both quality and cost efficiency.
+- Start with hub-and-spoke communication, move to pipelines for structured workflows, and only adopt mesh patterns when you have strong observability.
+- RLVR and GRPO-trained models like DeepSeek R1 are excellent reasoning agents because they produce structured, verifiable outputs that other agents can check.
+- MoE models like Mistral serve well as generalist fallback agents, reducing total inference cost by 35-45% compared to dense models.
+- Treat multi-agent systems as distributed systems: trace every message, monitor per-agent metrics, attribute costs, and scale agents independently behind task queues.

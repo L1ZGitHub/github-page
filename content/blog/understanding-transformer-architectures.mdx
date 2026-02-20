@@ -1,0 +1,418 @@
+---
+title: "Understanding Transformer Architectures"
+description: "Deep dive into transformer architectures, from self-attention math to practical variants for RAG, privacy NLP, and production systems."
+date: "2026-02-09"
+category: "AI & ML"
+tags: ["Transformers", "Deep Learning", "NLP", "RAG", "PyTorch", "Attention"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Modern NLP quietly standardized on one family of models. Whether you are building a RAG system, a semantic search engine, or a privacy-preserving classifier, you are probably running some variant of a transformer.
+
+Yet many engineers still treat transformers as a black box. That is fine until you need to debug weird attention patterns, pick an architecture for low-latency inference, or design a custom model for domain-specific retrieval.
+
+What follows is how I reason about transformers in practice, from the math of self-attention to architectural variants that matter in production.
+
+## The core idea: sequence as a fully connected graph
+
+Traditional sequence models (RNNs, LSTMs) process tokens one by one, passing information forward in time. Transformers instead treat a sequence like a fully connected graph: every token can directly attend to every other token in the same layer.
+
+Conceptually:
+
+- Input: a sequence of token vectors `x_1, ..., x_T`, each in R^d
+- At each layer, for each token `i`, we compute how much it should "look at" every token `j` in the sequence
+- The output for token `i` is a weighted sum of all token representations, where weights come from a similarity function
+
+The trick is that this similarity is implemented with query, key, and value projections.
+
+## Self-attention, step by step
+
+Let `X` be a matrix of shape `(T, d_model)`, one row per token.
+
+We learn three linear projections:
+
+- `W_Q` in R^(d_model x d_k)
+- `W_K` in R^(d_model x d_k)
+- `W_V` in R^(d_model x d_v)
+
+Then:
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class SelfAttention(nn.Module):
+    def __init__(self, d_model, d_k=None, d_v=None):
+        super().__init__()
+        d_k = d_k or d_model
+        d_v = d_v or d_model
+        self.W_Q = nn.Linear(d_model, d_k)
+        self.W_K = nn.Linear(d_model, d_k)
+        self.W_V = nn.Linear(d_model, d_v)
+
+    def forward(self, X, mask=None):
+        # X: (batch, T, d_model)
+        Q = self.W_Q(X)  # (batch, T, d_k)
+        K = self.W_K(X)  # (batch, T, d_k)
+        V = self.W_V(X)  # (batch, T, d_v)
+
+        # Attention scores
+        scores = torch.matmul(Q, K.transpose(-2, -1))  # (batch, T, T)
+        d_k = Q.size(-1)
+        scores = scores / d_k**0.5
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        attn = F.softmax(scores, dim=-1)  # (batch, T, T)
+        out = torch.matmul(attn, V)       # (batch, T, d_v)
+        return out, attn
+```
+
+A few key points that matter in real systems:
+
+- The softmax is along the last dimension, so each token outputs a probability distribution over all positions
+- Scaling by `sqrt(d_k)` stabilizes gradients for large dimensions
+- Masks let you control visibility, which is critical for causal generation and for privacy constraints
+
+This is the primitive that everything else builds on. For RAG systems (see "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems"), you are indirectly tuning these attention patterns through prompt construction and retrieval.
+
+## Multi-head attention: attention with multiple perspectives
+
+One attention head is often too rigid. Multi-head attention lets the model learn different similarity spaces in parallel.
+
+- Instead of one (Q, K, V) triplet, we have `h` heads
+- Each head uses smaller dimensions `d_k = d_model / h`
+- Outputs of all heads are concatenated and projected back to `d_model`
+
+A simple multi-head implementation:
+
+```python
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        self.W_Q = nn.Linear(d_model, d_model)
+        self.W_K = nn.Linear(d_model, d_model)
+        self.W_V = nn.Linear(d_model, d_model)
+        self.W_O = nn.Linear(d_model, d_model)
+
+    def _split_heads(self, x):
+        # x: (batch, T, d_model)
+        b, T, _ = x.size()
+        x = x.view(b, T, self.num_heads, self.d_k)
+        return x.transpose(1, 2)  # (batch, heads, T, d_k)
+
+    def _combine_heads(self, x):
+        # x: (batch, heads, T, d_k)
+        b, h, T, d_k = x.size()
+        x = x.transpose(1, 2).contiguous().view(b, T, h * d_k)
+        return x
+
+    def forward(self, X, mask=None):
+        Q = self._split_heads(self.W_Q(X))
+        K = self._split_heads(self.W_K(X))
+        V = self._split_heads(self.W_V(X))
+
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.d_k ** 0.5)
+        if mask is not None:
+            # mask: (batch, 1, 1, T) or broadcastable
+            scores = scores.masked_fill(mask == 0, float('-inf'))
+
+        attn = F.softmax(scores, dim=-1)
+        context = torch.matmul(attn, V)  # (batch, heads, T, d_k)
+        context = self._combine_heads(context)  # (batch, T, d_model)
+        out = self.W_O(context)
+        return out, attn
+```
+
+In practice:
+
+- More heads improves expressivity but hurts latency and memory
+- For latency-critical endpoints (for example in "Deploying ML Models with FastAPI and Docker"), you often want to reduce heads or use head pruning
+
+## Positional encodings: giving order to a set
+
+Self-attention is permutation invariant: if you shuffle tokens, you get the same scores pattern up to shuffling. To model sequences, we inject positional information.
+
+Two main approaches:
+
+1. Absolute positional encodings (original transformer)
+2. Relative or rotary encodings (used in modern LLMs)
+
+### Absolute sinusoidal encodings
+
+The original transformer uses deterministic sine and cosine signals, added to token embeddings.
+
+```python
+import math
+
+class SinusoidalPositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=10000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # (1, max_len, d_model)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        # x: (batch, T, d_model)
+        T = x.size(1)
+        return x + self.pe[:, :T]
+```
+
+This approach is simple but does not extend naturally to much longer sequences without careful extrapolation.
+
+### Rotary and relative encodings
+
+Modern LLMs use rotary (RoPE) or relative position encodings. The idea is to encode positions through transformations in the Q/K space.
+
+Why it matters in practice:
+
+- RoPE enables extrapolation to longer contexts with some fine-tuning
+- Relative encodings like in Transformer-XL or DeBERTa improve performance on tasks where distance between tokens matters
+- For long-context RAG setups (see "Chunking Strategies for RAG Pipelines"), your positional encoding choice can be the bottleneck
+
+Most libraries hide these details, but if you debug attention issues in long documents, understanding the positional scheme helps.
+
+## The transformer block: attention plus MLP
+
+A transformer layer is more than just attention. The standard encoder block:
+
+1. LayerNorm
+2. Multi-head self-attention with residual
+3. LayerNorm
+4. Position-wise feed-forward network (MLP) with residual
+
+In PyTorch-like pseudocode:
+
+```python
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d_model)
+        self.attn = MultiHeadAttention(d_model, num_heads)
+        self.dropout1 = nn.Dropout(dropout)
+
+        self.ln2 = nn.LayerNorm(d_model)
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Linear(d_ff, d_model),
+        )
+        self.dropout2 = nn.Dropout(dropout)
+
+    def forward(self, x, mask=None):
+        # Attention block
+        h = self.ln1(x)
+        attn_out, _ = self.attn(h, mask=mask)
+        x = x + self.dropout1(attn_out)
+
+        # Feed-forward block
+        h = self.ln2(x)
+        ff_out = self.ff(h)
+        x = x + self.dropout2(ff_out)
+        return x
+```
+
+The MLP is often 4x larger than `d_model` and is a major contributor to compute. When optimizing for inference cost, decreasing `d_ff` or using low-rank adapters can be effective.
+
+If you have read "Fine-Tuning LLMs on Custom Data: A Practical Guide", you have seen low-rank adaptation (LoRA) and similar tricks that manipulate these linear layers instead of full fine-tuning.
+
+## Encoder, decoder, encoder-decoder
+
+Once you have a stack of transformer blocks, how you arrange them defines the model family.
+
+### Encoder-only transformers
+
+Examples: BERT, RoBERTa, DistilBERT.
+
+- Use bidirectional self-attention
+- Well suited for classification, regression, and retrieval
+- Core in many semantic search and embedding systems
+
+This connects directly to "Semantic Search vs Keyword Search" and "Embedding Models Compared: OpenAI vs Open-Source". Most embedding models are encoder-only transformers with pooling and normalization.
+
+A minimal encoder-only architecture:
+
+```python
+class TransformerEncoder(nn.Module):
+    def __init__(self, vocab_size, d_model, num_layers, num_heads, d_ff):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, d_model)
+        self.pos_enc = SinusoidalPositionalEncoding(d_model)
+        self.layers = nn.ModuleList([
+            TransformerBlock(d_model, num_heads, d_ff)
+            for _ in range(num_layers)
+        ])
+        self.ln = nn.LayerNorm(d_model)
+
+    def forward(self, input_ids, mask=None):
+        x = self.embed(input_ids)
+        x = self.pos_enc(x)
+        for layer in self.layers:
+            x = layer(x, mask=mask)
+        x = self.ln(x)
+        return x
+```
+
+### Decoder-only transformers
+
+Examples: GPT, LLaMA, Mistral.
+
+- Use causal self-attention (no token can attend to future tokens)
+- Ideal for generative tasks and RAG generation
+
+The only real architectural difference at the core is the attention mask:
+
+```python
+def causal_mask(T, device=None):
+    # 1 for allowed positions, 0 for masked
+    mask = torch.tril(torch.ones(T, T, device=device))
+    return mask.unsqueeze(0).unsqueeze(1)  # (1,1,T,T)
+```
+
+This tiny change is why GPT-like models can be used autoregressively.
+
+### Encoder-decoder transformers
+
+Examples: T5, BART.
+
+- Encoder reads the input sequence
+- Decoder generates the output, attending both to itself (causal) and the encoder outputs (cross-attention)
+
+These are very powerful for tasks like translation or complex sequence-to-sequence transformations. For many RAG deployments though, decoder-only models are simpler to scale.
+
+## Architectural variants that matter in practice
+
+Transformers have many variants. I will focus on the ones I actually see affecting real-world systems.
+
+### Pre-LN vs Post-LN
+
+- Post-LN (original transformer): LayerNorm after residual
+- Pre-LN (most modern models): LayerNorm before sublayer
+
+Pre-LN makes optimization more stable at depth. If you are training from scratch or doing substantial fine-tuning, prefer pre-LN.
+
+### Attention efficiency variants
+
+Full self-attention is O(T^2) in memory and compute. For long-context RAG on large documents, this becomes painful.
+
+Common tricks:
+
+- Sparse / local attention (Longformer, BigBird) - restrict attention to a window plus some global tokens
+- Linear attention (Performer, Linear Transformer) - approximate softmax to achieve O(T) complexity
+- Sliding window attention (as in LongT5 and many long-context LLMs)
+
+In a production RAG pipeline (see "Building Production-Ready RAG Systems"), I usually try to avoid very long contexts by:
+
+- Better chunking and summarization
+- Hierarchical retrieval (document -> chunk -> passage)
+
+If you must go long, choose a model whose architecture is explicitly optimized for long sequences.
+
+### Mixture-of-Experts (MoE)
+
+MoE transformers route tokens to different expert MLPs.
+
+- Only a subset of experts run per token
+- Increases parameter count without linearly increasing FLOPs
+
+This is especially useful when you need a large capacity model but are constrained on latency. From an engineering standpoint, MoE brings challenges: routing, load balancing, and GPU utilization.
+
+## Transformers for embeddings and RAG
+
+Most of the work I do on RAG and semantic search revolves around using transformers as embedding engines.
+
+Key implementation patterns:
+
+- Pooling: CLS token, mean pooling, or attention pooling
+- Normalization: L2 normalization for cosine similarity
+- Training tasks: contrastive learning, supervised similarity, or multitask setups
+
+Simple embedding wrapper on top of an encoder-only transformer:
+
+```python
+class TransformerEmbedder(nn.Module):
+    def __init__(self, encoder, pooling="cls"):
+        super().__init__()
+        self.encoder = encoder
+        self.pooling = pooling
+
+    def forward(self, input_ids, attention_mask):
+        x = self.encoder(input_ids, mask=attention_mask)
+        if self.pooling == "cls":
+            # Assume first token is CLS
+            emb = x[:, 0]
+        elif self.pooling == "mean":
+            mask = attention_mask.unsqueeze(-1)  # (batch, T, 1)
+            summed = (x * mask).sum(dim=1)
+            counts = mask.sum(dim=1).clamp(min=1)
+            emb = summed / counts
+        else:
+            raise ValueError("Unknown pooling")
+        # Normalize for cosine similarity
+        emb = F.normalize(emb, p=2, dim=-1)
+        return emb
+```
+
+This is essentially what most open-source embedding models do, as discussed in "Embedding Models Compared: OpenAI vs Open-Source" and "Understanding Vector Databases: A Beginner's Guide".
+
+## Privacy and attention control
+
+In "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" I discussed strategies to avoid leaking sensitive data. Transformers give you several hooks for this.
+
+Some practical tools:
+
+- Token-level masking: ensure attention cannot flow from sensitive tokens to others
+- Segment-based attention: restrict which segments of a sequence can see each other
+- Attention inspection: analyze attention maps to detect if the model relies heavily on sensitive spans
+
+For example, to prevent attention to certain positions:
+
+```python
+def build_privacy_mask(attention_mask, sensitive_mask):
+    # attention_mask: (batch, T) - 1 where token exists
+    # sensitive_mask: (batch, T) - 1 where token is sensitive
+    base = attention_mask.unsqueeze(1).unsqueeze(2)  # (batch,1,1,T)
+
+    # Disallow attending *from* any token to sensitive positions
+    sensitive_block = (1 - sensitive_mask).unsqueeze(1).unsqueeze(2)
+    final_mask = base * sensitive_block
+    return final_mask  # 1 allowed, 0 blocked
+```
+
+Plugging such a mask into attention lets you reason formally about what information can flow where.
+
+## Practical advice for engineers
+
+A few rules of thumb I use when choosing or modifying transformer architectures:
+
+1. **RAG and generation**: use decoder-only models with strong instruction tuning. Focus on prompt and retrieval quality before exotic architectures.
+2. **Semantic search and embeddings**: prefer encoder-only models specialized for retrieval. Architecture details matter less than training data and pooling.
+3. **Latency-sensitive systems**: reduce heads and depth before shrinking width, consider knowledge distillation, and profile end-to-end.
+4. **Domain-specific models**: start from a pretrained backbone and fine-tune, do not train transformers from scratch unless you have massive data and budget.
+5. **Privacy-sensitive applications**: integrate masking and anonymization earlier in the pipeline, do not rely solely on the model to "forget" data.
+
+If you are already comfortable with transformers, the next logical steps are experimenting with fine-tuning strategies (see "Fine-Tuning LLMs on Custom Data: A Practical Guide") and wiring these models into proper services with FastAPI and Docker.
+
+## Key Takeaways
+
+- Self-attention is a learned similarity between tokens that produces weighted averages of representations
+- Multi-head attention allows the model to attend in multiple representation subspaces in parallel
+- Positional encodings, especially rotary and relative schemes, are critical for long-context behavior
+- Transformer blocks combine attention and MLPs with residual connections and LayerNorm, and MLPs dominate compute
+- Encoder-only, decoder-only, and encoder-decoder transformers target different problem classes
+- Architectural variants like efficient attention and MoE matter when you scale to long contexts or tight latency budgets
+- For RAG and semantic search, transformer architecture is important, but data quality, chunking, and retrieval often matter more
+- Privacy constraints can be expressed as attention masks and preprocessing rules integrated directly into the transformer pipeline

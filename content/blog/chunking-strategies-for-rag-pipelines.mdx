@@ -1,0 +1,413 @@
+---
+title: "Chunking Strategies for RAG Pipelines"
+description: "Learn practical chunking strategies for RAG pipelines, from basic splits to adaptive and hybrid methods, with code and evaluation tips."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["RAG", "NLP", "LLMs", "Python", "Vector Databases", "Information Retrieval"]
+difficulty: "intermediate"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Most broken RAG systems I see do not fail because of the model or the vector database. They fail because of bad chunking. Either the context windows are filled with irrelevant fragments, or key information is split right across chunk boundaries and never retrieved together.
+
+Chunking looks trivial at first. Split text every N characters, send to the embedder, done. Then you try to answer questions on real documents and realize that chunking is the hidden core of retrieval quality.
+
+In this post I want to walk through practical chunking strategies for Retrieval-Augmented Generation (RAG) pipelines, from simple baselines to more advanced, structure-aware methods. I will focus on trade-offs and implementation details I see in production systems.
+
+If you are new to RAG itself, the articles on "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems" give a good foundation. Here I will zoom into the chunking step of the ingestion pipeline.
+
+## What chunking is really optimizing
+
+Chunking is the process of splitting your raw documents into smaller units that will be embedded, indexed in a vector database, and later retrieved.
+
+Good chunking tries to optimize three conflicting objectives:
+
+1. **Semantic coherence**  - Each chunk should contain a self-contained idea that the LLM can use to answer a question.
+2. **Retrieval granularity**  - Chunks should be small enough so that retrieval is specific and does not pull in too much noise.
+3. **Coverage and recall**  - Information relevant to a question should actually live in at least one chunk that can be retrieved.
+
+Your model, vector database, and prompt strategy all interact with chunking. As I discussed in "Understanding Vector Databases: A Beginner's Guide", the index structure favors certain query lengths and vector distributions. Chunking indirectly shapes those.
+
+## Baseline: fixed-size chunking with overlap
+
+The most common baseline is:
+
+- Split into chunks of N tokens or characters
+- Add a fixed overlap of M tokens/characters between consecutive chunks
+
+This is simple, reproducible, and surprisingly strong if you choose reasonable values.
+
+### Why overlap matters
+
+If you split text into non-overlapping chunks, you often cut sentences or logical arguments in half. Overlap reduces boundary artifacts so that each chunk is more self-contained.
+
+For example, with 512-token chunks and 128-token overlap, any span of up to 384 tokens will be fully contained in at least one chunk.
+
+As a rough rule of thumb for general-purpose RAG:
+
+- Chunk size: 400 - 800 tokens
+- Overlap: 10% - 30% of chunk size
+
+For highly formal documents (APIs, contracts), I tend to push chunk size slightly down and overlap slightly up, because precise context matters.
+
+### A simple Python implementation
+
+I usually prefer token-based chunking, not character-based, so that chunk sizes align better with model limits. Using `tiktoken` for OpenAI-style tokenization:
+
+```python
+import tiktoken
+
+enc = tiktoken.get_encoding("cl100k_base")
+
+def tokenize(text: str):
+    return enc.encode(text)
+
+def detokenize(tokens):
+    return enc.decode(tokens)
+
+def chunk_tokens(tokens, chunk_size=512, overlap=128):
+    assert overlap < chunk_size
+    chunks = []
+    start = 0
+    while start < len(tokens):
+        end = start + chunk_size
+        chunk = tokens[start:end]
+        chunks.append(chunk)
+        if end >= len(tokens):
+            break
+        start = end - overlap
+    return chunks
+
+text = """Your long document text here ..."""
+tokens = tokenize(text)
+chunks = [detokenize(c) for c in chunk_tokens(tokens)]
+```
+
+This is a good baseline. If your RAG system performs poorly with this method, the issue is probably not chunking. If it performs reasonably but fails on specific types of queries, then more advanced chunking can help.
+
+## Structure-aware chunking
+
+Most real-world documents have structure: headings, paragraphs, bullet lists, sections, page breaks. Ignoring that structure is a waste.
+
+### Paragraph and sentence based splitting
+
+Instead of cutting strictly by length, start with natural language boundaries, then pack them into chunks.
+
+The recipe is:
+
+1. Split text into paragraphs, then into sentences.
+2. Build chunks greedily by adding sentences until the chunk would exceed the maximum token length.
+3. Optionally, include section titles / headings into each chunk.
+
+Using `nltk` just as an example (spaCy, blingfire, or custom rules work too):
+
+```python
+import re
+import nltk
+from typing import List
+
+nltk.download('punkt')
+
+def split_paragraphs(text: str) -> List[str]:
+    # Simple heuristic: split on blank lines
+    return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+def split_sentences(paragraph: str) -> List[str]:
+    return nltk.sent_tokenize(paragraph)
+
+def pack_sentences_to_chunks(text: str, max_tokens=512, overlap_sentences=1):
+    paragraphs = split_paragraphs(text)
+    sentences = []
+    for p in paragraphs:
+        sentences.extend(split_sentences(p))
+
+    chunks = []
+    current = []
+    current_tokens = 0
+
+    for sent in sentences:
+        sent_tokens = len(enc.encode(sent))
+        if current and current_tokens + sent_tokens > max_tokens:
+            chunks.append(" ".join(current))
+            # create overlap with last few sentences
+            overlap = current[-overlap_sentences:]
+            current = overlap.copy()
+            current_tokens = len(enc.encode(" ".join(current)))
+
+        current.append(sent)
+        current_tokens += sent_tokens
+
+    if current:
+        chunks.append(" ".join(current))
+
+    return chunks
+```
+
+This preserves semantic boundaries and usually improves retrieval quality compared to naïve fixed windows.
+
+### Adding headings and metadata
+
+Headings are extremely valuable as condensed semantics. For technical documentation, I nearly always push headings into each chunk.
+
+If you parse Markdown or HTML, you can propagate the nearest preceding heading into each chunk as either:
+
+- A prefix in the text ("Section: Authentication - ...")
+- A metadata field in your vector database (`section_title`)
+
+The metadata path is often better, because you can later filter or boost by section titles during retrieval.
+
+In a production-ready RAG system, as discussed in "Building Production-Ready RAG Systems", chunk-level metadata is central for routing, filtering, and debugging.
+
+## Domain-specific chunking strategies
+
+You get the biggest wins when chunking is tailored to the domain and format of your documents.
+
+### Code and API references
+
+For codebases and API docs, logical units are functions, classes, and endpoints.
+
+Typical rules:
+
+- Do not split inside a function or method body.
+- Include the function signature, docstring, and body in the same chunk, unless it is huge.
+- For REST APIs, group HTTP method, path, description, parameters, and response examples into one chunk.
+
+Example: chunking a Python file into function-level chunks with some packing for small functions.
+
+```python
+import ast
+from textwrap import dedent
+
+class FunctionExtractor(ast.NodeVisitor):
+    def __init__(self, source: str):
+        self.source = source
+        self.functions = []
+
+    def visit_FunctionDef(self, node):
+        start_line = node.lineno - 1
+        end_line = node.end_lineno
+        code_block = "\n".join(self.source.splitlines()[start_line:end_line])
+        self.functions.append(code_block)
+        self.generic_visit(node)
+
+
+def extract_function_blocks(source: str):
+    tree = ast.parse(source)
+    extractor = FunctionExtractor(source)
+    extractor.visit(tree)
+    return extractor.functions
+
+
+def chunk_code_file(source: str, max_tokens=512):
+    blocks = extract_function_blocks(source)
+    chunks = []
+    current = []
+    current_tokens = 0
+
+    for block in blocks:
+        block_tokens = len(enc.encode(block))
+        # large function - store alone
+        if block_tokens > max_tokens:
+            if current:
+                chunks.append("\n\n" + "\n\n".join(current))
+                current = []
+                current_tokens = 0
+            chunks.append(block)
+            continue
+
+        if current_tokens + block_tokens > max_tokens and current:
+            chunks.append("\n\n" + "\n\n".join(current))
+            current = []
+            current_tokens = 0
+
+        current.append(block)
+        current_tokens += block_tokens
+
+    if current:
+        chunks.append("\n\n" + "\n\n".join(current))
+
+    return chunks
+```
+
+For code-level RAG, this function-based chunking often outperforms naive span-based approaches by a large margin.
+
+### Legal and compliance documents
+
+For legal texts or policies, structure lives in:
+
+- Articles, sections, clauses
+- Numbered lists (1., a), i.)
+
+Good strategies:
+
+- Chunk at article or section level first.
+- Within an article, chunk by paragraphs with more overlap, so that cross-references stay together.
+- Preserve section numbers and titles in metadata.
+
+This is particularly important in privacy-preserving NLP settings as I discuss in "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models". Legal corpora often contain sensitive terms, and fine-grained, structure-aware chunking lets you apply redaction or access control at the right granularity.
+
+### Tables and PDFs
+
+Tables inside PDFs are a pain for chunking.
+
+Two useful approaches:
+
+1. **Treat whole tables as single chunks** with serialized text ("Row: ..., Column: ...").
+2. **Create row-level chunks** for large tables with header row included in each.
+
+For PDFs in general, prioritize a strong extraction step (layout-aware OCR or tools like `unstructured`, `pdfplumber`, `pdfminer`) that preserves logical blocks. Bad extraction ruins any chunking strategy.
+
+## Adaptive chunking based on content
+
+Fixed-size strategies are easy, but some documents are very dense and require small chunks. Others are verbose and can be packed more aggressively.
+
+A simple adaptive strategy:
+
+- Use a smaller max token size for dense, technical content (math, code, definitions).
+- Use larger chunks for narrative or descriptive content.
+
+You can approximate density by:
+
+- Ratio of punctuation to tokens
+- Average token length
+- Presence of specific patterns like formulas, code fences, or XML/JSON snippets
+
+Example heuristic:
+
+```python
+import string
+
+DENSE_THRESHOLD = 0.12
+
+
+def is_dense(text: str) -> bool:
+    tokens = enc.encode(text)
+    if not tokens:
+        return False
+    punct_count = sum(ch in string.punctuation for ch in text)
+    return punct_count / max(1, len(tokens)) > DENSE_THRESHOLD
+
+
+def adaptive_chunk(text: str, base_max_tokens=512):
+    paragraphs = split_paragraphs(text)
+    chunks = []
+
+    for p in paragraphs:
+        dense = is_dense(p)
+        max_tokens = int(base_max_tokens * (0.6 if dense else 1.2))
+        # simple reuse of token chunking at paragraph level
+        tokens = enc.encode(p)
+        for c in chunk_tokens(tokens, chunk_size=max_tokens, overlap=max_tokens // 4):
+            chunks.append(enc.decode(c))
+
+    return chunks
+```
+
+This is far from perfect, but in some domains it gives a noticeable improvement at minimal complexity.
+
+## Hybrid multi-granularity chunking
+
+For more advanced RAG systems, especially those described in "Fine-Tuning LLMs on Custom Data: A Practical Guide" and the production RAG article, a single granularity is sometimes not enough.
+
+Hybrid strategies index multiple views of the same content:
+
+- Coarse chunks: 1-2 pages, or full sections, for high recall.
+- Fine chunks: paragraphs or sentences, for precise grounding.
+
+At query time, you can:
+
+1. First retrieve coarse chunks.
+2. Re-rank or re-query within those chunks at a finer granularity (sometimes called hierarchical retrieval).
+
+This is especially useful in long technical manuals where a question may involve context spread over several paragraphs that are still within the same section.
+
+Implementation wise:
+
+- Maintain two separate indexes: `coarse_index` and `fine_index`.
+- Store identifiers so you can map fine chunks back to their parent coarse chunk.
+- Use coarse index to narrow down candidate documents, then fine index for final retrieval.
+
+## Evaluating chunking strategies
+
+You cannot optimize chunking blindly. You need feedback from tasks.
+
+### Quantitative evaluation
+
+If you have labeled data (questions with gold answers or gold supporting passages), you can evaluate chunking as follows:
+
+1. Ingest the corpus using a given chunking strategy.
+2. For each question, run retrieval only (do not call the LLM), and compute:
+   - Recall@k: proportion of questions where at least one retrieved chunk overlaps the gold passage.
+   - MRR or NDCG on passage rankings.
+3. Compare strategies by these metrics.
+
+This isolates retrieval quality, so you are not conflating chunking with model behavior.
+
+### Qualitative debugging
+
+Even without labels, you can:
+
+- Log the top-k retrieved chunks for failed queries.
+- Check if:
+  - Relevant content exists in any chunk at all.
+  - It exists but is split between multiple chunks.
+  - It exists in a huge chunk that contains too much noise.
+
+Common anti-patterns you will spot:
+
+- Chunks begin mid-sentence too often.
+- Important tables or code blocks are broken across chunks.
+- Redundant boilerplate (navigation menus, footers) appears in every chunk of a website.
+
+Cleaning and normalizing documents before chunking is often as impactful as the chunking algorithm itself.
+
+## Chunking and privacy
+
+Given my work on privacy-preserving NLP, I want to stress that chunk boundaries also define privacy boundaries.
+
+- If you need to redact or mask PII, do it **before** chunking when possible.
+- If access control is chunk-level, chunk size determines the minimum unit of restricted content.
+- For mixed-sensitivity documents, use finer chunks so you can selectively exclude sensitive regions.
+
+Poor chunking can leak more sensitive context than necessary into the LLM prompt, even if the actual answer does not require it.
+
+## Practical defaults and tuning process
+
+To make this concrete, here is how I typically approach a new RAG project.
+
+1. **Start with a simple baseline**
+   - 512-token chunks, 64-128 token overlap.
+   - Paragraph and sentence-aware splitting.
+
+2. **Add structure-awareness**
+   - Include headings in chunks and metadata.
+   - For code, move to function or class-based chunks.
+
+3. **Profile failures**
+   - Collect 20-50 failed queries.
+   - Inspect retrieved chunks manually.
+   - Decide if failures are due to chunk size, boundaries, or retrieval/scoring.
+
+4. **Iterate with domain-specific tweaks**
+   - Increase overlap when information is often split.
+   - Decrease chunk size when retrieval is too noisy.
+   - Introduce hybrid indexing if context is very long.
+
+5. **Lock in a stable ingestion pipeline**
+   - Deterministic chunking.
+   - Clear versioning when you change chunking strategy.
+   - Backfill / re-index when you update chunking.
+
+RAG systems are sensitive to indexing changes. Treat chunking as part of your schema, not as a throwaway detail.
+
+## Key Takeaways
+
+- Chunking quality is one of the main determinants of RAG performance, often more than the choice of LLM.
+- Fixed-size token chunking with modest overlap is a strong, simple baseline for most domains.
+- Structure-aware chunking that respects paragraphs, sentences, headings, and logical units usually improves retrieval.
+- Domain-specific chunking (functions for code, sections for legal, table-aware for PDFs) gives large gains in real systems.
+- Hybrid multi-granularity indexing (coarse + fine chunks) helps balance recall and precision for long documents.
+- Evaluate chunking with both quantitative retrieval metrics and qualitative inspection of failed queries.
+- Chunk boundaries interact with privacy and access control, so choose chunk size with sensitivity in mind.
+- Treat chunking as a first-class part of your RAG architecture and version it like any other schema change.

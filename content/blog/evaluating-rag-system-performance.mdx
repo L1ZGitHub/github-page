@@ -1,0 +1,494 @@
+---
+title: "Evaluating RAG System Performance"
+description: "Learn how to rigorously evaluate Retrieval-Augmented Generation systems with practical metrics, tooling, and Python examples for production setups."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["RAG", "LLMs", "Evaluation", "Python", "NLP", "MLOps"]
+difficulty: "intermediate"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+Most RAG systems I see in the wild fail not because the models are bad, but because the teams have no reliable way to tell when the system is actually working. Logs look fine, latency is acceptable, users are mostly quiet - and yet quality is all over the place.
+
+If you build RAG pipelines for real users, you need a measurement strategy that is as deliberate as your retrieval and generation design. Gut feeling and a few hand-checked examples are useful at the start, but they do not survive scale, iteration, or model upgrades.
+
+In my guides on Retrieval-Augmented Generation and Building Production-Ready RAG Systems I focus on architecture and design choices. Here I want to zoom in on something more painful and more critical: how to evaluate that what you built is actually good.
+
+
+## What does it mean for a RAG system to "perform well"?
+
+Performance in RAG is multi-dimensional. You cannot capture it with a single metric like accuracy.
+
+At minimum, you need to think about four aspects:
+
+1. **Retrieval quality** - Are we fetching the right pieces of context?
+2. **Generation quality** - Is the answer correct, grounded and useful?
+3. **User experience** - Is it fast enough, consistent and understandable?
+4. **Operational robustness** - Does quality degrade silently over time?
+
+These map nicely to different evaluation layers. If you read my articles on Semantic Search vs Keyword Search and Chunking Strategies for RAG Pipelines you have already seen how design choices at the retrieval layer impact everything that comes after. Evaluation is how we make those trade-offs explicit.
+
+
+## Levels of RAG evaluation
+
+I like to think of RAG evaluation in three levels, from most controlled to most realistic:
+
+1. **Component-level offline evaluation**
+2. **End-to-end offline evaluation**
+3. **Online and human-in-the-loop evaluation**
+
+A solid system combines all three.
+
+
+## 1. Component-level evaluation
+
+Component-level evaluation isolates parts of your RAG stack so you can improve them without noise from the rest of the pipeline.
+
+### Evaluating retrieval
+
+Here we want to answer: given a question, did the retriever surface the pieces of context that actually matter?
+
+Typical dataset format:
+
+```json
+{
+  "question": "How do I reset my account password?",
+  "gold_context_ids": ["doc_123", "doc_982"]
+}
+```
+
+You can use a variety of metrics:
+
+- **Recall@k** - Did we retrieve at least one relevant chunk in the top k?
+- **Precision@k** - Of the top k chunks, how many are actually relevant?
+- **MRR (Mean Reciprocal Rank)** - How high in the list is the first relevant chunk?
+
+If you read Vector Database Performance Benchmarks or Understanding Vector Databases, you will have seen similar metrics in a pure search context. For RAG, I recommend optimizing recall first, then improving precision with reranking or better chunking.
+
+A simple retrieval evaluation loop in Python might look like this:
+
+```python
+from typing import List, Dict
+import numpy as np
+
+# Assume we have some retrieval client that returns ranked document IDs
+class Retriever:
+    def retrieve(self, query: str, k: int = 10) -> List[str]:
+        ...
+
+
+def recall_at_k(gold_ids: List[str], retrieved_ids: List[str], k: int) -> float:
+    top_k = set(retrieved_ids[:k])
+    gold_set = set(gold_ids)
+    return 1.0 if gold_set & top_k else 0.0
+
+
+def evaluate_retriever(
+    retriever: Retriever,
+    dataset: List[Dict],
+    k_values: List[int] = [1, 3, 5, 10],
+):
+    scores = {k: [] for k in k_values}
+
+    for example in dataset:
+        q = example["question"]
+        gold = example["gold_context_ids"]
+        retrieved = retriever.retrieve(q, k=max(k_values))
+
+        for k in k_values:
+            scores[k].append(recall_at_k(gold, retrieved, k))
+
+    return {k: float(np.mean(v)) for k, v in scores.items()}
+```
+
+This kind of evaluation is where you compare different embedding models, as in Embedding Models Compared: OpenAI vs Open-Source. You can quickly see how model choice, chunk size or index configuration impact recall.
+
+### Evaluating generation in isolation
+
+Sometimes you want to know how good the LLM is at using the context you give it, independent of the retriever.
+
+For that you need a dataset with:
+
+- question
+- gold answer
+- gold supporting context
+
+You then feed the model the question plus the gold context and evaluate against the gold answer.
+
+Common metrics here:
+
+- **Exact match / F1** for QA-style tasks
+- **ROUGE / BLEU** for summarization-style
+- **Model-graded similarity** - a stronger model judges if the answer matches the reference
+
+A simple pattern using a judge LLM:
+
+```python
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class Example:
+    question: str
+    context: str
+    reference_answer: str
+
+
+class LLM:
+    def generate(self, prompt: str) -> str:
+        ...
+
+
+def build_prompt(example: Example) -> str:
+    return f"""You are a precise QA system.
+
+Context:
+{example.context}
+
+Question: {example.question}
+
+Answer based only on the context."""
+
+
+def judge_answer(judge_llm: LLM, answer: str, reference: str) -> float:
+    prompt = f"""You are grading an answer.
+
+Reference answer:
+{reference}
+
+Candidate answer:
+{answer}
+
+Score from 1 to 5, higher is better. Respond with only the number."""
+    raw = judge_llm.generate(prompt)
+    try:
+        return float(raw.strip())
+    except Exception:
+        return 0.0
+
+
+def evaluate_generator(
+    generation_llm: LLM,
+    judge_llm: LLM,
+    dataset: List[Example],
+):
+    scores = []
+    for ex in dataset:
+        prompt = build_prompt(ex)
+        answer = generation_llm.generate(prompt)
+        score = judge_answer(judge_llm, answer, ex.reference_answer)
+        scores.append(score)
+    return sum(scores) / len(scores)
+```
+
+This is a simplified version of what frameworks like RAGAS or other evaluation toolkits do. The important part is that you separate retrieval and generation, so you know which part is limiting your system.
+
+
+## 2. End-to-end offline evaluation
+
+Component metrics tell you where to look, but your users only see the full pipeline. For that, you need end-to-end evaluation.
+
+### Building a RAG evaluation dataset
+
+A useful RAG evaluation dataset usually contains:
+
+- **question** - realistic, user-like queries
+- **answer** - gold or at least good reference answers
+- **supporting doc ids or passages** - which parts of your corpus justify the answer
+
+Where to get such data:
+
+- Existing FAQ pairs and customer support tickets
+- Long-form documentation with derived questions you generate yourself
+- Synthetic data generated by an LLM, then filtered and checked by humans
+
+When you have this dataset, you can run your full RAG pipeline and evaluate at multiple levels:
+
+- Did we retrieve the gold documents?
+- Did the final answer match the reference?
+- Did the answer stay faithful to retrieved docs?
+
+### Using LLMs as judges for RAG
+
+Human evaluation is the gold standard, but it does not scale. For day-to-day iterations, an LLM judge is a useful approximation.
+
+We can evaluate three properties:
+
+1. **Relevance** - Does the answer address the question?
+2. **Correctness** - Is the answer factually correct according to the corpus?
+3. **Groundedness** - Does the answer stay within the retrieved context?
+
+Here is a pattern that evaluates groundedness with a judge LLM:
+
+```python
+RAG_JUDGE_PROMPT = """You are evaluating a RAG system answer.
+
+Question:
+{question}
+
+Retrieved context:
+{context}
+
+Answer:
+{answer}
+
+You must grade:
+- Groundedness: is the answer fully supported by the context, with no hallucinations?
+- Relevance: does the answer address the question?
+
+Respond as JSON with fields "groundedness" and "relevance", integers from 1 to 5."""
+
+
+def judge_rag_answer(judge_llm: LLM, question: str, context: str, answer: str):
+    prompt = RAG_JUDGE_PROMPT.format(
+        question=question,
+        context=context,
+        answer=answer,
+    )
+    raw = judge_llm.generate(prompt)
+
+    import json
+    try:
+        data = json.loads(raw)
+        return {
+            "groundedness": float(data["groundedness"]),
+            "relevance": float(data["relevance"]),
+        }
+    except Exception:
+        return {"groundedness": 0.0, "relevance": 0.0}
+```
+
+With this, you can run evaluation jobs as part of your CI when you change:
+
+- the embedding model
+- vector database indexing parameters
+- chunking strategy
+- LLM provider or prompting (see Prompt Engineering Best Practices for Production)
+
+If you already have a deployed system (for example behind FastAPI as in Deploying ML Models with FastAPI and Docker), you can periodically sample real queries, label them, and feed them into this pipeline.
+
+
+## 3. Online and human-in-the-loop evaluation
+
+Offline evaluation is safer and reproducible, but it does not perfectly match what users care about. That is where online evaluation patterns come in.
+
+### Implicit user feedback
+
+You can infer quality signals from behavior:
+
+- Was the answer copied or used in follow-up actions?
+- Did the user immediately rephrase the question after getting an answer?
+- Did they scroll and read retrieved sources you linked?
+
+These are weak signals, but aggregated over many interactions they tell you when quality drifts.
+
+### Explicit user feedback
+
+Simple mechanisms work best:
+
+- Thumbs up / thumbs down plus optional comment
+- A short Likert-scale survey for power users
+
+Store these along with:
+
+- the question
+- retrieved document IDs
+- generated answer
+- system configuration (model versions, parameters)
+
+Then you can look for patterns like:
+
+- certain document collections with more negative votes
+- specific models that users reject more often
+
+### A/B testing RAG variants
+
+For higher traffic systems, A/B testing is invaluable. You can compare:
+
+- two retrievers (for example BM25 + embeddings vs pure embeddings)
+- two chunking strategies (see Chunking Strategies for RAG Pipelines)
+- two LLMs or prompts
+
+Typical online metrics:
+
+- user satisfaction score (explicit)
+- task success (did they still escalate to support?)
+- time to resolution
+
+Do not forget operational metrics as well:
+
+- latency
+- cost per request
+- failure rate
+
+Sometimes the “worse” model on offline metrics wins online because it is faster and cheaper, which can matter more in a production setting.
+
+
+## Practical evaluation workflows
+
+Let me outline a workflow that has worked well for me across several RAG projects.
+
+### 1. Start with a small, high quality gold dataset
+
+- Aim for 50-200 carefully curated examples
+- Make sure they cover different user intents, document types and edge cases
+- Include tricky queries: ambiguous, multi-step, long-tail
+
+This dataset is your reference when everything else is blurry. Protect it.
+
+### 2. Automate an offline evaluation script
+
+Create a script that:
+
+1. Loads your evaluation dataset
+2. Runs the full RAG pipeline for each example
+3. Computes retrieval metrics (recall@k)
+4. Uses an LLM judge for answer quality and groundedness
+5. Produces a simple report (JSON or markdown)
+
+Example skeleton:
+
+```python
+import json
+from typing import Dict, Any, List
+
+
+class RAGPipeline:
+    def answer(self, question: str) -> Dict[str, Any]:
+        """Return answer and internal data.
+
+        Expected keys:
+        - "answer": str
+        - "contexts": List[str]
+        - "context_ids": List[str]
+        """
+        ...
+
+
+def evaluate_rag_pipeline(
+    pipeline: RAGPipeline,
+    judge_llm: LLM,
+    dataset_path: str,
+    k: int = 5,
+):
+    dataset = [json.loads(l) for l in open(dataset_path)]
+
+    results = []
+    for ex in dataset:
+        q = ex["question"]
+        gold_ids = ex.get("gold_context_ids", [])
+        reference = ex.get("reference_answer")
+
+        out = pipeline.answer(q)
+        answer = out["answer"]
+        contexts = out["contexts"]
+        context_ids = out["context_ids"]
+
+        # Retrieval recall
+        recall = recall_at_k(gold_ids, context_ids, k) if gold_ids else None
+
+        # Judge-based metrics
+        joined_context = "\n\n".join(contexts[:k])
+        judge_scores = judge_rag_answer(judge_llm, q, joined_context, answer)
+
+        # Optional similarity to reference
+        sim_score = None
+        if reference:
+            sim_score = judge_answer(judge_llm, answer, reference)
+
+        results.append({
+            "question": q,
+            "recall@k": recall,
+            "groundedness": judge_scores["groundedness"],
+            "relevance": judge_scores["relevance"],
+            "similarity_to_reference": sim_score,
+        })
+
+    return results
+```
+
+You can plug this into your CI pipeline so that any pull request that changes retrieval or generation logic runs evaluation on a fixed dataset.
+
+### 3. Visualize and debug failures
+
+Metrics are useful, but the real insight comes from manually inspecting the worst examples:
+
+- lowest groundedness scores
+- lowest recall
+- high similarity to reference but low user ratings
+
+Build a simple dashboard, or even just a notebook, that:
+
+- lists problematic examples
+- shows question, retrieved chunks, answer, reference
+- lets you quickly annotate error type: retrieval, generation, or data issue
+
+This is where a lot of the intuition you build while studying Understanding Transformer Architectures and Building a Multi-Agent AI System becomes useful. You will start to see patterns like:
+
+- “the model always hallucinates when the context is too long”
+- “retriever fails when the query uses synonyms not present in docs”
+
+### 4. Close the loop with online signals
+
+Use offline evaluation for safety and regression detection, but use online metrics to prioritize work.
+
+Example:
+
+- Offline evaluation shows retriever A is slightly better than retriever B
+- Online A/B test shows that users on B are happier because answers are faster and simpler
+
+In that case, you might:
+
+- keep B as default
+- improve A further for difficult queries
+- or route complex queries to A and simple ones to B using a classifier (see Building AI Agents with LangChain and LangGraph for ideas on routing architectures)
+
+
+## A note on privacy and evaluation data
+
+When you store evaluation logs and user feedback, you are likely storing sensitive information. Concepts from Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP apply just as much here.
+
+A few practical guidelines:
+
+- **Anonymize user identifiers** before storing logs
+- **Avoid storing raw content** if you do not need it, store hashed or redacted versions
+- **Separate evaluation datasets from production logs**, with stricter access controls
+
+Evaluation is not an excuse to weaken your privacy posture.
+
+
+## When to fine-tune vs when to fix retrieval
+
+A frequent question I get: should I fine-tune the LLM on my domain data, or just improve retrieval and prompting?
+
+If your evaluation shows:
+
+- high retrieval recall
+- good groundedness
+- but poor answer quality or style
+
+then fine-tuning (see Fine-Tuning LLMs on Custom Data) or better prompt engineering can help.
+
+If instead you see:
+
+- low recall@k
+- groundedness issues because the right docs are missing
+
+then do not touch the LLM yet. Fix retrieval: better embeddings, better chunking, maybe hybrid search as discussed in Semantic Search vs Keyword Search.
+
+Evaluation metrics are what keep you from wasting weeks fine-tuning a model that was not the bottleneck.
+
+
+## Key Takeaways
+
+- RAG performance is multi-dimensional: retrieval, generation, user experience, and robustness all matter.
+- Separate component-level evaluation (retriever, generator) from end-to-end RAG evaluation.
+- For retrieval, start with recall-focused metrics like recall@k, then tune for precision.
+- For generation, use a mix of reference-based metrics and LLM-as-a-judge scoring.
+- Build a small, high quality, curated evaluation set before scaling to synthetic data.
+- Automate offline evaluation and run it in CI for any change to retrieval or generation.
+- Combine offline metrics with online signals: user feedback, implicit behavior, and A/B tests.
+- Inspect the worst examples manually, that is where the best insights and improvements come from.
+- Use evaluation results to decide when to improve retrieval, when to tweak prompts, and when fine-tuning is worth it.
+- Treat evaluation data as sensitive: anonymize, restrict access, and respect user privacy throughout your pipeline.

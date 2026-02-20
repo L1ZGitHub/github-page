@@ -1,0 +1,390 @@
+---
+title: "Federated Learning for Privacy-Preserving AI"
+description: "Learn how to design and ship federated learning systems for privacy-preserving AI, from protocols and architectures to practical Python examples."
+date: "2026-02-09"
+category: "NLP & Privacy"
+tags: ["Federated Learning", "Privacy", "NLP", "RAG", "Machine Learning"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+User data is rarely sitting neatly in a central warehouse. It lives in phones, browsers, hospitals, banks, and SaaS tools scattered across the globe. Yet the expectation is clear: build intelligent systems without leaking anything sensitive.
+
+Federated learning is one of the few approaches that fundamentally changes where learning happens. Instead of dragging data to the model, we ship models to the data. For privacy-preserving AI, especially in NLP-heavy products, this is not a nice-to-have experiment. It is quickly becoming a design constraint.
+
+In this article I will walk through how I think about federated learning as an AI engineer, how to architect real systems, and how to make the privacy story hold up under scrutiny.
+
+## Why federated learning instead of "just" careful centralization
+
+Many teams try to solve privacy by centralizing data but wrapping it in good access controls, anonymization, and audits. That helps, but it has hard limits:
+
+- Central storage is a high-value target for attackers.
+- Legal constraints (GDPR, HIPAA, banking regulations) sometimes forbid centralization entirely.
+- Even with pseudonymization, re-identification is often possible.
+
+In earlier posts on *Data Privacy in the Age of Large Language Models* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models*, I covered techniques like differential privacy, tokenization, and secure logging. Federated learning is a complementary layer at the system level:
+
+- Data never leaves the client device or organization.
+- The server only sees aggregated model updates or gradients.
+- We can add secure aggregation and differential privacy on top.
+
+You can think of it as the distributed cousin of the techniques discussed in *Introduction to Differential Privacy for NLP*.
+
+## Core federated learning loop
+
+At its simplest, a federated learning system runs a repeated protocol:
+
+1. Server holds a global model `W_t`.
+2. Server selects a subset of clients for round `t`.
+3. Server sends `W_t` to selected clients.
+4. Each client trains locally on its private data for a few epochs and produces an update or new weights.
+5. Server aggregates client updates into a new global model `W_{t+1}`.
+
+A classic variant is Federated Averaging (FedAvg): the server computes a weighted average of client weights.
+
+Here is a minimal PyTorch sketch of the core loop, omitting many production concerns:
+
+```python
+import copy
+import torch
+from torch import nn, optim
+from torch.utils.data import DataLoader, Dataset
+
+
+class SimpleModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_classes):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_classes),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+def train_local(model, dataset, epochs=1, lr=1e-3, device="cpu"):
+    model = copy.deepcopy(model).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+    model.train()
+    for _ in range(epochs):
+        for x, y in loader:
+            x, y = x.to(device), y.to(device)
+            optimizer.zero_grad()
+            logits = model(x)
+            loss = criterion(logits, y)
+            loss.backward()
+            optimizer.step()
+
+    return model.state_dict()
+
+
+def federated_average(state_dicts, weights=None):
+    # state_dicts: list of client model state dicts
+    # weights: list of scalars proportional to num_samples per client
+    if weights is None:
+        weights = [1.0] * len(state_dicts)
+    total_weight = sum(weights)
+    normalized = [w / total_weight for w in weights]
+
+    global_state = copy.deepcopy(state_dicts[0])
+    for key in global_state.keys():
+        global_state[key] = sum(
+            client_state[key] * alpha
+            for client_state, alpha in zip(state_dicts, normalized)
+        )
+    return global_state
+
+
+def run_federated_training(global_model, federated_datasets, rounds=20):
+    # federated_datasets: list of (dataset, num_samples)
+    for r in range(rounds):
+        client_states = []
+        weights = []
+        for dataset, num_samples in federated_datasets:
+            client_state = train_local(global_model, dataset)
+            client_states.append(client_state)
+            weights.append(num_samples)
+
+        new_global_state = federated_average(client_states, weights)
+        global_model.load_state_dict(new_global_state)
+
+        print(f"Completed round {r + 1}")
+
+    return global_model
+```
+
+This is the algorithmic skeleton. The real difficulty is less about the averaging math and more about engineering, privacy, and heterogeneity.
+
+## Privacy threats and what FL actually protects
+
+Federated learning prevents raw data exfiltration by design, but it does not magically solve all privacy challenges. Some realistic attacks:
+
+- Gradient inversion: reconstructing input data from gradients.
+- Membership inference: checking if a specific record influenced the model.
+- Property inference: learning sensitive population traits from model parameters.
+
+So we add defense layers:
+
+- Secure aggregation: the server sees only aggregated updates, not individual ones.
+- Differential privacy: we clip and noise client updates.
+- Client-side filtering and redaction: similar to the sanitization techniques from *Privacy-Preserving NLP*.
+
+### Differentially private federated averaging
+
+The usual recipe is:
+
+1. Clip each client update to a fixed norm `C`.
+2. Aggregate clipped updates.
+3. Add Gaussian noise with variance calibrated to a target `(ε, δ)`.
+
+Here is a simplified PyTorch-style function that adds DP on the server side. It is not production grade, but it captures the idea:
+
+```python
+import torch
+
+
+def dp_federated_average(state_dicts, weights=None, clip_norm=1.0, noise_multiplier=0.5):
+    if weights is None:
+        weights = [1.0] * len(state_dicts)
+    total_weight = sum(weights)
+    normalized = [w / total_weight for w in weights]
+
+    # Flatten each state dict to a single vector to clip and add noise
+    flat_updates = []
+    for sd, alpha in zip(state_dicts, normalized):
+        params = torch.cat([p.view(-1) for p in sd.values()])
+        # Clip to clip_norm
+        norm = torch.norm(params)
+        scale = min(1.0, clip_norm / (norm + 1e-8))
+        params = params * scale * alpha
+        flat_updates.append(params)
+
+    stacked = torch.stack(flat_updates)
+    mean_update = stacked.sum(dim=0)
+
+    # Add Gaussian noise
+    noise = torch.randn_like(mean_update) * noise_multiplier * clip_norm
+    noisy_update = mean_update + noise
+
+    # Unflatten back to state dict shape
+    template = state_dicts[0]
+    new_state = {}
+    offset = 0
+    for key, value in template.items():
+        numel = value.numel()
+        new_state[key] = noisy_update[offset : offset + numel].view_as(value)
+        offset += numel
+
+    return new_state
+```
+
+In practice, you track privacy loss over rounds using tools like Opacus or TensorFlow Privacy. The trade-off is the usual one from *Introduction to Differential Privacy for NLP*: more noise gives stronger privacy guarantees but lower utility.
+
+## System architecture and engineering constraints
+
+Designing a federated system feels a lot like building a distributed ML pipeline, similar in complexity to the engineering work described in *Building Real-Time ML Inference Pipelines* and *Monitoring ML Models in Production*.
+
+A typical architecture has:
+
+- A central coordination service (or several) that handles round orchestration and model storage.
+- A fleet of clients (phones, browsers, internal services) that opt in to training.
+- Secure communication channel (TLS with mutual auth).
+- Logging and monitoring that never inspects raw training data.
+
+### Communication pattern
+
+High level flow per round:
+
+1. Scheduler picks eligible clients given device constraints, battery level, network, compliance region.
+2. Coordinator exposes a "join round" endpoint.
+3. Client downloads current model and training instructions.
+4. Client trains locally and uploads an update.
+5. Aggregator combines updates and writes new model version.
+
+Here is a pseudo-FastAPI style server endpoint to give an idea of the control plane, reusing some of the patterns from *Deploying ML Models with FastAPI and Docker*:
+
+```python
+from fastapi import FastAPI, UploadFile
+from pydantic import BaseModel
+import torch
+
+app = FastAPI()
+
+GLOBAL_MODEL_PATH = "model.pt"
+
+
+class JoinRoundResponse(BaseModel):
+    model_url: str
+    round_id: int
+    epochs: int
+    lr: float
+
+
+class ClientUpdate(BaseModel):
+    round_id: int
+    num_samples: int
+    # In practice we would not pass raw tensors via JSON
+    # This is heavily simplified
+    state_dict: dict
+
+
+@app.get("/join-round", response_model=JoinRoundResponse)
+async def join_round(client_id: str):
+    # TODO: determine client eligibility, rate limits, region constraints
+    round_id = 42
+    return JoinRoundResponse(
+        model_url="https://storage.example.com/models/model_41.pt",
+        round_id=round_id,
+        epochs=1,
+        lr=1e-3,
+    )
+
+
+@app.post("/submit-update")
+async def submit_update(update: ClientUpdate):
+    # Store update in a queue or DB for asynchronous aggregation
+    # Never log contents of state_dict, only metadata
+    save_update_to_store(update)
+    return {"status": "ok"}
+
+
+def aggregate_round(round_id: int):
+    updates = load_updates_for_round(round_id)
+    state_dicts = [u.state_dict for u in updates]
+    weights = [u.num_samples for u in updates]
+    new_state = dp_federated_average(state_dicts, weights)
+    torch.save(new_state, GLOBAL_MODEL_PATH)
+```
+
+You would wrap this with metrics, alerting (*Monitoring ML Models in Production*), and a CI/CD pipeline for the coordinator code (*CI/CD Pipelines for Machine Learning Projects*).
+
+## Federated learning for NLP and RAG
+
+Given my focus on privacy-preserving NLP and RAG systems, the interesting question is how federated learning interacts with retrieval-augmented architectures.
+
+### Personalization without data centralization
+
+One compelling use case is personalizing LLM-based assistants or search systems to user behavior without central logs.
+
+Imagine a semantic search engine (see *Semantic Search vs Keyword Search: When to Use What* and *Hybrid Search: Combining Dense and Sparse Retrieval*) that runs in a SaaS product. Instead of streaming user queries and clicks back to your server, you could:
+
+- Store interaction logs locally in the browser or mobile app.
+- Periodically run a small local model that predicts click behavior or query reformulations.
+- Participate in federated training rounds that improve the shared ranking model.
+
+The global model improves for everyone, but no one ever sends raw queries or clicked document IDs to the server.
+
+### Federated fine-tuning of language models
+
+In *Fine-Tuning LLMs on Custom Data: A Practical Guide* I covered standard centralized fine-tuning workflows. The federated analog is:
+
+- Ship a compact language model or adapter to clients.
+- Locally fine-tune using private domain text (emails, notes, documents).
+- Aggregate adapter weight updates with FedAvg.
+
+The main constraints:
+
+- Bandwidth: model checkpoints are large, so you prefer low rank adapters, LoRA modules, or small classifier heads.
+- Heterogeneity: client data distributions vary wildly.
+
+Parameter efficient fine tuning (PEFT) shines here. You do not federate the full model, only small adapter weights.
+
+### RAG specific considerations
+
+Federated learning and RAG intersect at several points:
+
+- Ranking models: train federated rerankers for retrieval pipelines discussed in *Hybrid Search* and *Vector Database Performance Benchmarks*.
+- Query understanding: federated training for intent classifiers or router models used in *Agentic RAG: The Next Evolution* and *Building Production-Ready RAG Systems*.
+- Local indexing: keep personal or organization specific documents in local or on prem vector stores, while training shared models via FL.
+
+One pattern I like:
+
+- Global: LLM, base embedding model, generic retriever.
+- Local: user specific vector index and lightweight reranker.
+- Federated: updates to reranker parameters or query encoder.
+
+This aligns nicely with the architectures in *Retrieval-Augmented Generation: A Complete Guide* and *Knowledge Graphs Meet LLMs: Structured RAG Architectures*: the "knowledge" remains local, only the reasoning and scoring components are learned collaboratively.
+
+## Handling non IID data and client drift
+
+Federated learning almost never has IID data. Some clients have only French documents, others only medical notes, others only source code. Averaging blindly can hurt performance for many.
+
+Techniques that help:
+
+- Client clustering: maintain separate models per segment (language, region, domain).
+- Personalization layers: global base model with client specific heads.
+- Meta learning: optimize models to be quickly adaptable to each client.
+
+A simple pattern is to train a global model federatedly, then allow clients to keep a small local adapter fine tuned only on their data, never uploaded.
+
+In code, this looks like:
+
+```python
+class PersonalizedModel(nn.Module):
+    def __init__(self, base_model: nn.Module, hidden_dim: int, num_classes: int):
+        super().__init__()
+        self.base = base_model
+        self.personal_head = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, x):
+        features = self.base(x)
+        return self.personal_head(features)
+
+
+# Federated part: only share base model weights
+# Local part: keep personal_head client-specific and do not send it back
+```
+
+In practice you would separate which parameters are included in `state_dict` uploads.
+
+## When federated learning is the wrong tool
+
+Federated learning has real costs, so you should be explicit about when it is overkill.
+
+I typically avoid FL if:
+
+- Data is already centralized and regulated in a way that allows ML training.
+- Real time constraints are extreme and coordination delays are unacceptable.
+- Model size or update size is too large for client bandwidth.
+
+Alternative privacy mechanisms from the NLP privacy posts can be enough:
+
+- Tokenization and entity redaction (*Building Custom Tokenizers for Domain-Specific NLP*, *Named Entity Recognition with Modern NLP*).
+- Centralized differential privacy with robust access controls.
+- Local only inference without any training.
+
+Federated learning shines when:
+
+- Data cannot leave device or organization.
+- Regulatory or contractual constraints forbid central logging.
+- User trust and product positioning depend on a strong privacy story.
+
+## Practical checklist for shipping FL in production
+
+Some concrete steps if you are considering deploying federated learning:
+
+1. **Threat model**: specify exactly what adversary you are defending against and what "privacy" means for your application.
+2. **Update size budget**: estimate model or adapter size, number of rounds per day, and client bandwidth limits.
+3. **Client selection**: design a scheduler that respects device constraints, regional regulations, and fairness (do not always pick the same fast clients).
+4. **Secure aggregation**: integrate a mature protocol instead of reinventing crypto primitives.
+5. **Differential privacy**: pick clip norms and noise multipliers, track privacy loss over time, and validate impact on utility.
+6. **Evaluation**: hold out a central, consented dataset to monitor global model quality, as in *Evaluating RAG System Performance* but adapted to FL.
+7. **Monitoring and rollback**: treat each global round as a new model version, with canary deployments and rollbacks similar to *CI/CD Pipelines for Machine Learning Projects*.
+
+Once you have a first working system, you can iterate on client heterogeneity, personalization, and integration with your broader RAG or agentic stack (*Building AI Agents with LangChain and LangGraph*, *Building a Multi-Agent AI System*).
+
+## Key Takeaways
+
+- Federated learning moves training to where the data lives, which is often a hard requirement for privacy-preserving AI.
+- Raw data never leaves clients, but model updates can still leak information, so secure aggregation and differential privacy are essential.
+- The hardest problems are system design and client heterogeneity, not the averaging math.
+- Parameter efficient methods like adapters or LoRA make FL practical for NLP and LLM based systems.
+- RAG and FL complement each other: keep indices local, learn retrievers and rerankers collaboratively.
+- Not every privacy sensitive use case needs FL - weigh regulatory, bandwidth, and engineering costs before committing.
+- Treat a federated system like any other production ML system: strong monitoring, CI/CD, safe rollouts, and explicit threat models.

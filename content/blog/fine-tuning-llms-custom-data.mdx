@@ -1,0 +1,305 @@
+---
+title: "Fine-Tuning LLMs on Custom Data: A Practical Guide"
+description: "When to fine-tune vs use RAG, how to prepare your data, and a step-by-step guide to LoRA fine-tuning with Hugging Face Transformers."
+date: "2026-01-20"
+category: "Tutorials"
+tags: ["Fine-Tuning", "LLMs", "LoRA", "Hugging Face", "Tutorials"]
+difficulty: "intermediate"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+## Introduction
+
+One of the most common questions I get from clients at Ailog is: "Should we fine-tune a model or use RAG?" The answer depends on what you are trying to achieve. This guide will help you make that decision and, if fine-tuning is the right path, walk you through the process step by step using modern parameter-efficient techniques.
+
+## Fine-Tuning vs RAG: When to Use Each
+
+### Choose RAG When:
+
+- You need the model to answer questions about specific documents
+- Your knowledge base changes frequently
+- You want to cite sources in your answers
+- You have limited training data (under 1000 examples)
+- You need quick deployment (days, not weeks)
+
+### Choose Fine-Tuning When:
+
+- You want to change the model's behavior or style
+- You need the model to follow specific output formats consistently
+- You are adapting to a specialized domain vocabulary
+- You want better performance on a narrow task
+- You have enough high-quality training examples (1000+)
+
+### When to Combine Both
+
+In many production scenarios, the best approach is to fine-tune a model for your domain and style, then layer RAG on top for specific knowledge retrieval. This gives you the best of both worlds: a model that speaks your language and can reference your data.
+
+## Data Preparation
+
+The quality of your fine-tuning data is the single most important factor for success. Here is how to prepare it properly.
+
+### Data Format
+
+Most fine-tuning frameworks expect data in a conversational format:
+
+```json
+{
+  "messages": [
+    {"role": "system", "content": "You are a helpful legal assistant."},
+    {"role": "user", "content": "What is a non-compete clause?"},
+    {"role": "assistant", "content": "A non-compete clause is a contractual agreement..."}
+  ]
+}
+```
+
+### Data Quality Checklist
+
+Before training, verify your data meets these criteria:
+
+- **Consistency**: All examples follow the same format and style
+- **Accuracy**: Responses are factually correct and up to date
+- **Diversity**: Cover the range of queries your model will encounter
+- **Length**: Responses match the expected output length in production
+- **Deduplication**: Remove duplicate or near-duplicate examples
+
+### Data Cleaning Pipeline
+
+```python
+import json
+from collections import Counter
+
+def clean_dataset(data_path):
+    """Clean and validate a fine-tuning dataset."""
+    with open(data_path) as f:
+        examples = [json.loads(line) for line in f]
+
+    cleaned = []
+    seen_prompts = set()
+
+    for ex in examples:
+        messages = ex.get("messages", [])
+
+        # Skip if missing required roles
+        roles = [m["role"] for m in messages]
+        if "user" not in roles or "assistant" not in roles:
+            continue
+
+        # Skip duplicates
+        user_msg = next(m["content"] for m in messages if m["role"] == "user")
+        if user_msg in seen_prompts:
+            continue
+        seen_prompts.add(user_msg)
+
+        # Skip very short responses
+        assistant_msg = next(
+            m["content"] for m in messages if m["role"] == "assistant"
+        )
+        if len(assistant_msg.split()) < 10:
+            continue
+
+        cleaned.append(ex)
+
+    print(f"Kept {len(cleaned)}/{len(examples)} examples")
+    return cleaned
+```
+
+## Understanding LoRA and QLoRA
+
+Fine-tuning all parameters of a 7B+ model requires significant GPU memory (40GB+ VRAM). Parameter-efficient fine-tuning (PEFT) techniques solve this by only training a small subset of parameters.
+
+### LoRA (Low-Rank Adaptation)
+
+LoRA freezes the original model weights and injects small trainable matrices into each attention layer. Instead of updating a weight matrix W directly, LoRA decomposes the update into two small matrices:
+
+**W' = W + BA** where B is (d x r) and A is (r x d), with r being much smaller than d.
+
+For a 7B model with rank 16, LoRA adds only about 8 million trainable parameters (0.1% of total), while achieving 90-95% of the performance of full fine-tuning.
+
+### QLoRA (Quantized LoRA)
+
+QLoRA takes this further by loading the base model in 4-bit quantization, reducing memory requirements by 4x. A 7B model that normally needs 28GB of VRAM can be fine-tuned with QLoRA on a single 16GB GPU.
+
+## Step-by-Step Fine-Tuning with LoRA
+
+### Step 1: Install Dependencies
+
+```bash
+pip install transformers datasets peft accelerate bitsandbytes trl
+```
+
+### Step 2: Load the Model with Quantization
+
+```python
+import torch
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+)
+
+model_name = "mistralai/Mistral-7B-Instruct-v0.3"
+
+# 4-bit quantization config
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,
+)
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    quantization_config=bnb_config,
+    device_map="auto",
+)
+
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.pad_token = tokenizer.eos_token
+```
+
+### Step 3: Configure LoRA
+
+```python
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
+model = prepare_model_for_kbit_training(model)
+
+lora_config = LoraConfig(
+    r=16,                      # Rank: higher = more capacity, more memory
+    lora_alpha=32,             # Scaling factor
+    target_modules=[           # Which layers to adapt
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj"
+    ],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+# trainable params: 8,388,608 || all params: 3,752,071,168 || trainable%: 0.22
+```
+
+### Step 4: Prepare the Dataset
+
+```python
+from datasets import load_dataset
+
+dataset = load_dataset("json", data_files="training_data.jsonl")
+
+def format_chat(example):
+    """Format example into the model's chat template."""
+    text = tokenizer.apply_chat_template(
+        example["messages"],
+        tokenize=False,
+        add_generation_prompt=False
+    )
+    return {"text": text}
+
+dataset = dataset.map(format_chat)
+dataset = dataset["train"].train_test_split(test_size=0.1)
+```
+
+### Step 5: Train
+
+```python
+from trl import SFTTrainer
+from transformers import TrainingArguments
+
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=4,
+    learning_rate=2e-4,
+    weight_decay=0.01,
+    warmup_ratio=0.03,
+    logging_steps=10,
+    save_strategy="epoch",
+    evaluation_strategy="epoch",
+    bf16=True,
+    report_to="none",
+)
+
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["test"],
+    args=training_args,
+    tokenizer=tokenizer,
+    max_seq_length=2048,
+)
+
+trainer.train()
+```
+
+### Step 6: Save and Merge
+
+After training, you can save just the LoRA adapter (small, portable) or merge it with the base model:
+
+```python
+# Save adapter only (~30MB)
+model.save_pretrained("./lora-adapter")
+
+# Or merge with base model for inference
+merged_model = model.merge_and_unload()
+merged_model.save_pretrained("./merged-model")
+tokenizer.save_pretrained("./merged-model")
+```
+
+## Evaluation
+
+Never skip evaluation. Here are the key metrics to track:
+
+### Training Metrics
+- **Training loss**: Should decrease steadily
+- **Validation loss**: Watch for divergence from training loss (overfitting)
+
+### Task-Specific Metrics
+- **Exact match / F1**: For extraction and QA tasks
+- **BLEU / ROUGE**: For generation tasks (use with caution)
+- **Human evaluation**: The gold standard, especially for open-ended generation
+
+### A/B Testing in Production
+
+The most reliable evaluation is comparing your fine-tuned model against the base model on real user queries. Track metrics like user satisfaction, task completion rate, and response relevance.
+
+```python
+def evaluate_model(model, tokenizer, test_examples):
+    """Simple evaluation loop."""
+    results = []
+    for example in test_examples:
+        prompt = example["prompt"]
+        expected = example["expected"]
+
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        outputs = model.generate(**inputs, max_new_tokens=512)
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        results.append({
+            "prompt": prompt,
+            "expected": expected,
+            "generated": response,
+            "exact_match": response.strip() == expected.strip()
+        })
+
+    accuracy = sum(r["exact_match"] for r in results) / len(results)
+    print(f"Accuracy: {accuracy:.2%}")
+    return results
+```
+
+## Common Pitfalls
+
+1. **Too little data**: Fine-tuning with fewer than 100 examples rarely works well. Aim for 1000+ diverse examples.
+2. **Learning rate too high**: Start with 2e-4 for LoRA. If loss is unstable, reduce by half.
+3. **Overfitting**: If validation loss starts increasing, stop training. Use more data or increase dropout.
+4. **Wrong format**: Ensure your training data matches exactly how the model will be prompted in production.
+5. **Ignoring the base model**: Always compare against the un-fine-tuned model. Sometimes prompt engineering alone is sufficient.
+
+## Conclusion
+
+Fine-tuning with LoRA and QLoRA has made it practical to customize LLMs on modest hardware. The key to success is not the training process itself, but the quality of your data and the clarity of your evaluation criteria. Start with a clear definition of what you want the model to do differently, prepare high-quality examples of that behavior, and iterate based on evaluation results.
+
+For most applications at Ailog, we find that combining a lightly fine-tuned model with RAG provides the best results: the fine-tuning handles style and format, while RAG handles factual knowledge. This separation of concerns makes the system easier to maintain and update over time.

@@ -1,0 +1,459 @@
+---
+title: "Scaling RAG Systems to Millions of Documents"
+description: "Learn practical strategies to scale Retrieval-Augmented Generation systems to millions of documents, from indexing and storage to latency and cost tuning."
+date: "2026-02-09"
+category: "RAG Systems"
+tags: ["RAG", "Vector Databases", "Scalability", "LLMs", "Python", "MLOps"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Most Retrieval-Augmented Generation (RAG) prototypes break long before they reach a million documents. Queries slow down, costs creep up, relevance degrades, and the system becomes impossible to maintain. At Ailog I have seen this pattern repeatedly: the real challenge is not getting RAG to work, it is getting it to work at scale.
+
+In my complete RAG guide and the post on Building Production-Ready RAG Systems I focused on architecture and correctness. Here I will zoom in on one specific problem: how to scale RAG pipelines to millions of documents without losing performance or control.
+
+
+## Start with the right retrieval strategy
+
+Before thinking about infra, you need to know *what* you are scaling.
+
+At small scale you can get away with a single dense index. At millions of documents, retrieval quality and latency become tightly coupled to your design choices.
+
+### Design for hybrid retrieval from day one
+
+As I argued in Hybrid Search: Combining Dense and Sparse Retrieval, long tail queries and rare entities are where pure dense retrieval usually fails. At scale, those edge cases are your norm.
+
+A practical pattern:
+
+- Use a dense index for semantic similarity
+- Use a sparse index (BM25 or SPLADE) for lexical precision and rare terms
+- Combine scores with a learned or heuristic ranker
+
+For example, with a vector database + Elasticsearch:
+
+```python
+from typing import List, Dict
+
+import numpy as np
+from elasticsearch import Elasticsearch
+from my_vector_client import VectorClient
+
+es = Elasticsearch("http://localhost:9200")
+vec = VectorClient("http://localhost:8080")
+
+ALPHA = 0.6  # weight for dense score
+
+
+def hybrid_search(query: str, k: int = 20) -> List[Dict]:
+    # 1) dense search
+    dense_results = vec.search(query, k=k)
+    dense_scores = {r["id"]: r["score"] for r in dense_results}
+
+    # 2) sparse search
+    sparse_res = es.search(
+        index="docs",
+        query={"match": {"content": query}},
+        size=k,
+    )
+    sparse_scores = {h["_id"]: h["_score"] for h in sparse_res["hits"]["hits"]}
+
+    # 3) score fusion
+    ids = set(dense_scores) | set(sparse_scores)
+    combined = []
+    for doc_id in ids:
+        ds = dense_scores.get(doc_id, 0.0)
+        ss = sparse_scores.get(doc_id, 0.0)
+        score = ALPHA * ds + (1 - ALPHA) * ss
+        combined.append({"id": doc_id, "score": score})
+
+    combined.sort(key=lambda x: x["score"], reverse=True)
+    return combined[:k]
+```
+
+As you scale, you will want to tune ALPHA using offline evaluation, as discussed in Evaluating RAG System Performance.
+
+### Choose embedding models with scale in mind
+
+In Embedding Models Compared: OpenAI vs Open-Source I covered quality trade-offs. At millions of documents you must also think about:
+
+- Embedding size: 1M docs x 1,536 floats is much heavier than 1M x 384
+- Throughput: total time to embed your corpus matters when reindexing
+- Cost: API-based vs self-hosted at large volumes
+
+Practical rule of thumb:
+
+- For >= 1M documents, start with a 384-768 dimension model unless your domain is extremely complex
+- Prefer models that support batching efficiently
+- If you need privacy guarantees, revisit Introduction to Differential Privacy for NLP and consider noise-addition strategies at embedding time
+
+
+## Architecting the index for millions of documents
+
+Once you pass a few hundred thousand documents, naive vector storage will hurt you. Understanding Vector Databases: A Beginner's Guide is a good foundation, but at this scale we need to think about layout and sharding.
+
+### Design the document schema for retrieval, not for storage
+
+Your index schema must serve retrieval needs and chunking strategy, not raw source layout.
+
+Each indexed unit should include:
+
+- `id`: stable identifier
+- `content`: the chunk text
+- `embedding`: vector
+- `metadata`: fields used for filtering and ranking
+
+Useful metadata fields at scale:
+
+- `source_type`: doc, email, ticket, wiki...
+- `tenant_id` or `org_id` for multi-tenant isolation
+- `updated_at` for freshness filters
+- `section_type`: title, body, code, summary
+
+If you have not read Chunking Strategies for RAG Pipelines yet, that is where the retrieval object is really defined. Your chunking choices dictate both index size and retrieval precision.
+
+### Sharding and replication strategies
+
+For millions of documents you want horizontal scalability.
+
+Typical vector DB deployment:
+
+- Shards: partition embeddings across nodes
+- Replicas: duplicate shards for availability and read throughput
+
+Practical guidelines:
+
+- Start with 3-5 shards for 1M documents when using HNSW or IVF-based indexes
+- Keep vectors for a given tenant or domain on as few shards as possible to optimize filtered queries
+- Use replicas to scale reads first, and only add shards when query latency grows or node memory becomes tight
+
+Many teams over-shard too early and then fight cross-shard latency.
+
+
+## Efficient indexing and reindexing pipelines
+
+Indexing 10M documents once is easy. Keeping them fresh daily is where things break.
+
+### Use an append-only, versioned index pattern
+
+Never update documents in-place if you can avoid it. Instead:
+
+- Keep a canonical document store (e.g. Postgres, S3, object storage)
+- Maintain an index table with `doc_id`, `chunk_id`, `version` and `is_active`
+- When content changes, create a new version of the chunks and mark old ones inactive
+
+A simplified Python pattern using SQLAlchemy:
+
+```python
+from datetime import datetime
+from sqlalchemy import select, update
+
+
+def reindex_document(session, embedder, index_client, doc_id: str):
+    # 1) load latest content from canonical store
+    doc = session.execute(
+        select(Document).where(Document.id == doc_id)
+    ).scalar_one()
+
+    # 2) chunk the content
+    chunks = chunk_document(doc.content)  # from Chunking Strategies article
+
+    # 3) embed in batches
+    embeddings = embedder.embed_documents([c.text for c in chunks])
+
+    # 4) deactivate old chunks
+    session.execute(
+        update(IndexedChunk)
+        .where(IndexedChunk.doc_id == doc_id, IndexedChunk.is_active == True)
+        .values(is_active=False)
+    )
+
+    # 5) insert new chunks in DB and vector index
+    records = []
+    for chunk, emb in zip(chunks, embeddings):
+        rec = IndexedChunk(
+            doc_id=doc_id,
+            chunk_id=chunk.id,
+            content=chunk.text,
+            embedding=emb,
+            is_active=True,
+            created_at=datetime.utcnow(),
+        )
+        records.append(rec)
+
+    session.add_all(records)
+    session.commit()
+
+    index_client.upsert_many([
+        {
+            "id": f"{doc_id}:{c.chunk_id}",
+            "embedding": c.embedding,
+            "metadata": {"doc_id": doc_id},
+        }
+        for c in records
+    ])
+```
+
+This pattern plays well with CI/CD Pipelines for Machine Learning Projects since your index is reproducible from canonical data.
+
+### Scale embedding with batch workers
+
+For millions of documents, you will want an asynchronous indexing system.
+
+A practical stack:
+
+- Queue: Redis, RabbitMQ, or a cloud queue
+- Workers: Python workers with FastAPI or simple consumers
+- Monitoring: metrics per step (chunking, embedding, indexing)
+
+Simple worker skeleton:
+
+```python
+import json
+import time
+from queue_client import QueueClient
+from index_pipeline import reindex_document
+
+queue = QueueClient("index-tasks")
+
+
+def worker_loop():
+    while True:
+        msg = queue.receive(timeout=5)
+        if not msg:
+            time.sleep(1)
+            continue
+
+        payload = json.loads(msg.body)
+        try:
+            reindex_document(
+                session=get_session(),
+                embedder=get_embedder(),
+                index_client=get_index_client(),
+                doc_id=payload["doc_id"],
+            )
+            queue.ack(msg)
+        except Exception:
+            queue.nack(msg, requeue=True)
+
+
+if __name__ == "__main__":
+    worker_loop()
+```
+
+Scale by running more workers. If you pair this with Deploying ML Models with FastAPI and Docker you can containerize workers and use Kubernetes or ECS to autoscale.
+
+
+## Latency optimization at query time
+
+At millions of documents, naive retrieval often dominates end-to-end latency. Some of the techniques from Vector Database Performance Benchmarks are especially important now.
+
+### Approximate search and index tuning
+
+Main knobs in approximate nearest neighbor (ANN) indexes:
+
+- HNSW: `M` (graph connectivity), `ef_construction`, `ef_search`
+- IVF/Flat: `nlist` (number of clusters), `nprobe`
+
+Practical approach:
+
+1. Start from vendor defaults
+2. Run queries from your production logs
+3. Evaluate recall vs latency with a smaller ground truth set
+
+For example, a simple benchmark harness:
+
+```python
+import time
+from statistics import mean
+
+
+def benchmark_search(index_client, queries, k=10):
+    latencies = []
+    for q in queries:
+        t0 = time.time()
+        _ = index_client.search(q, k=k)
+        latencies.append(1000 * (time.time() - t0))
+    return {
+        "p50_ms": np.percentile(latencies, 50),
+        "p95_ms": np.percentile(latencies, 95),
+        "mean_ms": mean(latencies),
+    }
+```
+
+Use the evaluation strategies from Evaluating RAG System Performance to make sure recall stays acceptable while you tune for latency.
+
+### Pre-filtering and hierarchical retrieval
+
+Hard filtering before vector search can hurt recall if overused, but done well it is one of the biggest wins at scale.
+
+Examples:
+
+- Tenant filters: always restrict to the right `tenant_id`
+- Document type filters: code vs natural language vs tables
+- Temporal filters: last 90 days for support tickets
+
+For even larger corpora, consider hierarchical retrieval:
+
+1. First stage: retrieve relevant *documents* (titles, summaries) with small vectors
+2. Second stage: retrieve *chunks* inside those documents
+
+This avoids searching millions of chunks at once.
+
+
+## Keeping relevance high at scale
+
+As your corpus grows, naive top-k retrieval often returns redundant or marginally relevant chunks.
+
+### Use re-ranking for top-k
+
+Borrowing ideas from Semantic Search vs Keyword Search, you can treat the initial vector search as a *candidate generator*, then apply a more expensive re-ranker on the top 50-100 results.
+
+If you cannot afford a cross-encoder, a fast trick is to re-score by:
+
+- Distance to query embedding
+- Chunk position (earlier sections may be more important)
+- Document authority (page rank, manual weights)
+
+Simple heuristic example:
+
+```python
+import math
+
+
+def rerank_candidates(candidates, query_embedding):
+    # candidates: list of {"id", "embedding", "metadata", "score"}
+
+    def extra_score(c):
+        pos = c["metadata"].get("position", 0)
+        doc_weight = c["metadata"].get("doc_weight", 1.0)
+        # earlier chunks get slightly higher weight
+        pos_factor = 1.0 / (1.0 + math.log1p(pos))
+        return doc_weight * pos_factor
+
+    for c in candidates:
+        c["rerank_score"] = c["score"] * extra_score(c)
+
+    candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+    return candidates
+```
+
+This is simple, but at millions of documents these small adjustments compound.
+
+### De-duplicate and diversify context
+
+Your generation quality will tank if you send 8 nearly identical chunks to the model.
+
+Strategies:
+
+- Remove near-duplicates with cosine similarity threshold
+- Enforce diversity by source or section type
+
+Quick de-duplication pattern:
+
+```python
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+
+def deduplicate(chunks, similarity_threshold=0.95):
+    if not chunks:
+        return []
+
+    vecs = np.stack([c["embedding"] for c in chunks])
+    keep = []
+    used = np.zeros(len(chunks), dtype=bool)
+
+    for i in range(len(chunks)):
+        if used[i]:
+            continue
+        keep.append(chunks[i])
+        sims = cosine_similarity(vecs[i : i + 1], vecs)[0]
+        used |= sims >= similarity_threshold
+
+    return keep
+```
+
+
+## Cost, monitoring, and failure modes
+
+Scaling is not only about speed. It is also about *not* getting surprised by your bill or by silent degradation.
+
+### Monitor the right metrics
+
+Borrowing from Python Best Practices for ML Engineers and CI/CD Pipelines for Machine Learning Projects, treat your RAG system as a production ML service.
+
+Monitor at least:
+
+- Index size and growth rate
+- Query latency (p50, p95) for retrieval and full pipeline
+- Per-tenant query volume and cost
+- Fraction of queries with zero hits or low similarity
+- Embedding throughput and error rate
+
+Wire simple logging around your retrieval function:
+
+```python
+import logging
+import time
+
+logger = logging.getLogger("rag")
+
+
+def logged_retrieval(query, tenant_id):
+    t0 = time.time()
+    results = hybrid_search(query)
+    dt = 1000 * (time.time() - t0)
+
+    logger.info(
+        "retrieval",
+        extra={
+            "tenant_id": tenant_id,
+            "latency_ms": dt,
+            "num_results": len(results),
+        },
+    )
+    return results
+```
+
+Feed this into your metrics stack and dashboards.
+
+### Manage privacy and data isolation
+
+At millions of documents across organizations, privacy concerns are unavoidable. The posts Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models cover the theory.
+
+Practically for RAG:
+
+- Physically or logically separate indices per tenant if possible
+- Enforce `tenant_id` filters at the query layer, never trust client-provided filters
+- Consider encryption at rest for embeddings and metadata
+- For very sensitive settings, explore differential privacy techniques from Introduction to Differential Privacy for NLP, especially if you export embeddings or train new models on them
+
+
+## Putting it together as a scalable architecture
+
+A robust architecture for millions of documents usually looks like this:
+
+1. **Ingestion service**: pulls from source systems, normalizes documents
+2. **Chunking + metadata enrichment**: uses strategies from Chunking Strategies for RAG Pipelines
+3. **Embedding workers**: scalable, stateless workers
+4. **Vector + sparse indices**: hybrid retrieval
+5. **RAG API**: FastAPI service as in Deploying ML Models with FastAPI and Docker
+6. **Evaluation & monitoring**: regular offline evaluation plus live metrics as in Evaluating RAG System Performance
+
+You can layer agent-like orchestration on top, as discussed in Building a Multi-Agent AI System and Building AI Agents with LangChain and LangGraph, but the retrieval foundation must be solid first.
+
+As you cross the million-document mark you will inevitably iterate on every layer. Design your system so that chunking, embedding, indexing, and ranking can all be improved independently without rewriting the world.
+
+
+## Key Takeaways
+
+- Design for hybrid retrieval early, combining dense and sparse search to handle long tail queries at scale.
+- Choose embedding models with dimensionality, throughput, and cost in mind, not only raw quality.
+- Architect your index around retrieval objects (chunks + metadata), with clear sharding and replication strategies.
+- Use append-only, versioned indexing pipelines so reindexing millions of documents is safe and incremental.
+- Scale embedding through asynchronous workers and queues, tied into your CI/CD and monitoring stack.
+- Optimize latency via ANN index tuning, smart filtering, and hierarchical retrieval strategies.
+- Maintain relevance with re-ranking, de-duplication, and context diversification before sending data to the LLM.
+- Monitor growth, latency, errors, and zero-hit queries, and treat privacy and tenant isolation as first-class concerns.
+- Keep components modular so you can iterate on chunking, models, and ranking without destabilizing the whole system.

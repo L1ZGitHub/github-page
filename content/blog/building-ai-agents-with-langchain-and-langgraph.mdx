@@ -1,0 +1,393 @@
+---
+title: "Building AI Agents with LangChain and LangGraph"
+description: "Learn how to build robust AI agents with LangChain and LangGraph, from simple tool calls to multi-step workflows, with practical Python examples."
+date: "2026-02-09"
+category: "Tutorials"
+tags: ["LangChain", "LangGraph", "RAG", "AI Agents", "Python", "LLMs"]
+difficulty: "intermediate"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Engineers love clean abstractions, until those abstractions hide what is actually going on. That is exactly what happens with many “AI agents” demos: a single function call that magically orchestrates tools, memory, and control flow, until it breaks in production.
+
+LangChain and LangGraph take a different path. They let you keep the high-level agent abstraction, while still exposing the graph underneath - the actual states, transitions, and tools used by the model. For production systems, especially those involving Retrieval-Augmented Generation (RAG) and privacy constraints, this explicit control is not a luxury. It is the difference between “it works on my laptop” and something you can trust.
+
+In this article I will walk through how I build AI agents using LangChain and LangGraph, from a single-tool agent to a multi-step, graph-based workflow that plays nicely with RAG and privacy-preserving constraints.
+
+
+## From Prompting to Agents
+
+At the simplest level, an agent is just:
+
+1. A language model that decides what to do
+2. A set of tools it can call
+3. A loop that keeps going until some goal is reached
+
+If you have read my pieces on Retrieval-Augmented Generation or Building Production-Ready RAG Systems, you already know that the “tool” can be a retrieval call, a vector database query, or a custom microservice. LangChain wraps these into a unified interface.
+
+LangGraph then lets you describe the loop explicitly as a state machine. Instead of trusting an opaque “agent executor”, you see every step in the graph: which nodes run, with which state, and why.
+
+
+## Setting up a Minimal LangChain Agent
+
+Let us start with a simple tool-using agent in LangChain. Assume you have an LLM and a basic tool.
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.tools import tool
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.prompts import ChatPromptTemplate
+
+llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the weather for a city. Returns a fake response for demo."""
+    return f"The weather in {city} is sunny with 22°C."
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant. Use tools when needed."),
+    ("user", "{input}"),
+])
+
+tools = [get_weather]
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+result = agent_executor.invoke({"input": "What is the weather in Stockholm?"})
+print(result["output"])
+```
+
+At this level you have:
+
+- An LLM that can decide when to call `get_weather`
+- A tool exposed via the standard LangChain `tool` decorator
+- An agent executor that takes user input and orchestrates tool calls
+
+This is sufficient for small demos. It is not sufficient for robust multi-step workflows, especially when you add RAG, long-term memory, or complex business rules. That is when I reach for LangGraph.
+
+
+## Why LangGraph for Agents
+
+In classic LangChain agents, control flow is largely implicit. The LLM decides what to do, and the agent executor loops until a stop condition. Debugging this can be painful:
+
+- Why did the agent call the wrong tool three times in a row?
+- Why did it hallucinate instead of using retrieval?
+- Why did it loop forever on some edge case?
+
+LangGraph treats your agent as a graph:
+
+- Nodes: functions or “steps” (LLM calls, tools, routers, retrievers)
+- Edges: transitions between nodes, based on state
+- State: all the data that flows through the graph
+
+You describe the workflow declaratively, then LangGraph executes it. If you are familiar with my article on Chunking Strategies for RAG Pipelines, think of LangGraph as the orchestration layer that stitches all those components together.
+
+
+## Defining Agent State in LangGraph
+
+We start every LangGraph agent with a state definition. You can think of it as the schema of your agent’s memory for a single run.
+
+```python
+from typing import List, TypedDict
+from langgraph.graph import StateGraph, END
+
+class AgentState(TypedDict):
+    messages: List[dict]  # chat messages, e.g. OpenAI format
+    scratchpad: str       # optional intermediate notes
+```
+
+You can extend this with:
+
+- `retrieval_context`: list of retrieved documents
+- `tool_results`: logs of tool outputs
+- `user_profile`: privacy-filtered user information
+
+For privacy-sensitive applications, I often split the state into two layers: one that can be logged, and one that must stay in a secure environment. This connects directly with the practices I discussed in Privacy-Preserving NLP: protect sensitive fields early, not as an afterthought.
+
+
+## A Simple LangGraph LLM Node
+
+Let us define a node that calls an LLM and appends the response to the message list.
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
+
+llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+async def llm_node(state: AgentState) -> AgentState:
+    messages = state["messages"]
+    # Convert dicts to LC message objects if needed
+    lc_messages = []
+    for msg in messages:
+        if msg["role"] == "user":
+            lc_messages.append(HumanMessage(content=msg["content"]))
+        else:
+            lc_messages.append(AIMessage(content=msg["content"]))
+
+    response = await llm.ainvoke(lc_messages)
+    messages.append({"role": "assistant", "content": response.content})
+
+    return {"messages": messages}
+```
+
+This node:
+
+- Reads the current conversation from `state["messages"]`
+- Calls the LLM
+- Appends the response back into the state
+
+
+## Adding a Tool Node
+
+Next we integrate a tool. Instead of using the high-level LangChain agent, we let the graph decide when to call tools vs when to answer directly.
+
+Define a tool (or reuse `get_weather`):
+
+```python
+from langchain.tools import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the weather for a city."""
+    return f"The weather in {city} is sunny with 22°C."
+```
+
+Define a router node that decides, using the LLM, whether to call the tool.
+
+```python
+from langchain_openai import ChatOpenAI
+
+router_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+async def router_node(state: AgentState) -> dict:
+    user_message = next(
+        (m["content"] for m in reversed(state["messages"]) if m["role"] == "user"),
+        "",
+    )
+
+    prompt = (
+        "You are a router. If the user asks about weather, "
+        "respond with 'CALL_TOOL' and the city. Otherwise respond 'ANSWER'.\n" \
+        f"User: {user_message}"
+    )
+
+    decision = await router_llm.ainvoke(prompt)
+    text = decision.content.strip()
+
+    if text.startswith("CALL_TOOL"):
+        # naive city extraction for demo
+        parts = text.split(":", 1)
+        city = parts[1].strip() if len(parts) > 1 else ""
+        return {"next": "tool", "city": city}
+    return {"next": "llm"}
+```
+
+And a tool node:
+
+```python
+async def tool_node(state: AgentState, city: str) -> AgentState:
+    weather = get_weather(city)
+    state["messages"].append({
+        "role": "assistant",
+        "content": weather,
+    })
+    return {"messages": state["messages"]}
+```
+
+In practice I prefer to let the model use structured tool calling, as in LangChain’s `create_tool_calling_agent`, rather than manual parsers. I am keeping this example minimal to focus on LangGraph concepts.
+
+
+## Wiring the Graph
+
+Now we connect these nodes in a LangGraph `StateGraph`.
+
+```python
+from langgraph.graph import StateGraph, END
+
+# Create the graph
+graph = StateGraph(AgentState)
+
+# Add nodes
+graph.add_node("router", router_node)     # decides what to do next
+graph.add_node("llm", llm_node)           # general LLM response
+graph.add_node("tool", tool_node)         # weather tool
+
+# Define entry point
+graph.set_entry_point("router")
+
+# Add edges
+def route_decision(state: AgentState) -> str:
+    # router_node stored its decision separately in a real implementation
+    # For simplicity, assume router wrote into state["scratchpad"]
+    decision = state.get("scratchpad", "llm")
+    if decision == "tool":
+        return "tool"
+    return "llm"
+
+# From router to either tool or llm
+# (in practice, use ConditionalEdges in LangGraph)
+graph.add_conditional_edges(
+    "router",
+    route_decision,
+    {
+        "tool": "tool",
+        "llm": "llm",
+    },
+)
+
+# From tool or llm, we end for this simple example
+graph.add_edge("tool", END)
+graph.add_edge("llm", END)
+
+# Compile
+typed_graph = graph.compile()
+
+# Run
+initial_state = {
+    "messages": [{"role": "user", "content": "What is the weather in Stockholm?"}],
+    "scratchpad": "",
+}
+
+result_state = typed_graph.invoke(initial_state)
+print(result_state["messages"][-1]["content"])
+```
+
+A few notes:
+
+- The graph explicitly encodes control flow, rather than hiding it in an agent executor
+- You can visualize the graph for debugging
+- You can add logging or tracing at node boundaries
+
+In a real application I usually rely on LangGraph’s `Branching` and `Command` features, and I keep routing logic in a dedicated router node with a clear schema.
+
+
+## Integrating RAG into the Agent
+
+Most interesting agents need context. That is where your RAG stack comes in: embeddings, vector databases, and retrieval logic, as covered in Retrieval-Augmented Generation and Understanding Vector Databases.
+
+Let us add a `retrieve` node that fetches relevant documents and lets the LLM use them.
+
+```python
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+vectorstore = FAISS.load_local("./faiss_index", embeddings, allow_dangerous_deserialization=True)
+retriever = vectorstore.as_retriever(k=4)
+
+class RAGState(AgentState):
+    context_docs: List[str]
+
+async def retrieve_node(state: RAGState) -> RAGState:
+    user_message = next(
+        (m["content"] for m in reversed(state["messages"]) if m["role"] == "user"),
+        "",
+    )
+    docs = await retriever.aget_relevant_documents(user_message)
+    state["context_docs"] = [d.page_content for d in docs]
+    return state
+
+async def rag_llm_node(state: RAGState) -> RAGState:
+    context_text = "\n\n".join(state.get("context_docs", []))
+    user_message = next(m for m in reversed(state["messages"]) if m["role"] == "user")
+
+    prompt = (
+        "You are a helpful assistant. Use the following context when useful.\n\n"
+        f"Context:\n{context_text}\n\n"
+        f"User: {user_message['content']}"
+    )
+
+    response = await llm.ainvoke(prompt)
+    state["messages"].append({"role": "assistant", "content": response.content})
+    return state
+```
+
+You can now build a graph like:
+
+- `router` node: decides between direct answer, retrieval + answer, or tool
+- `retrieve` node: fetches documents
+- `rag_llm` node: answers with context
+
+This pattern is exactly what we use in production RAG systems: a small DSL on top of a state graph, not an opaque one-shot agent.
+
+
+## Adding Privacy Constraints
+
+When working with user data, tools and retrievers should never see raw PII unless strictly necessary. The privacy-preserving strategies I discussed in Privacy-Preserving NLP map nicely to graph nodes:
+
+- `sanitize_input` node that redacts or pseudonymizes sensitive fields
+- `policy_check` node that decides whether a tool call is allowed
+- `logging_filter` node that strips sensitive fields before storing state
+
+A simple `sanitize_input` node might look like this:
+
+```python
+import re
+
+PII_EMAIL_PATTERN = re.compile(r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}")
+
+async def sanitize_node(state: AgentState) -> AgentState:
+    sanitized_messages = []
+    for msg in state["messages"]:
+        content = msg["content"]
+        content = PII_EMAIL_PATTERN.sub("[REDACTED_EMAIL]", content)
+        sanitized_messages.append({"role": msg["role"], "content": content})
+
+    state["messages"] = sanitized_messages
+    return state
+```
+
+Insert `sanitize_node` as the first step in your graph and you automatically enforce a privacy baseline for every agent run.
+
+
+## Debugging and Observability
+
+One of the strongest arguments for LangGraph is observability. When an agent misbehaves, I want to know:
+
+- Which node ran last
+- What the state looked like
+- Which tools were called with what inputs
+
+LangGraph’s graph structure integrates nicely with tracing tools and custom logging. You can log at node boundaries, or attach middleware that runs on every state transition.
+
+For production RAG agents this is non-negotiable. As I discussed in Building Production-Ready RAG Systems, you need evaluation loops, regression tests, and structured traces to iterate safely.
+
+
+## When to Use LangChain + LangGraph
+
+You do not need LangGraph for every chatbot. I typically reach for it when:
+
+- Control flow is more than “one LLM call plus retrieval”
+- I need multiple tools, branches, or retries
+- I need strict privacy boundaries and auditability
+- I want to integrate model fine-tuning or specialized models, as in Fine-Tuning LLMs on Custom Data
+
+A rough rule of thumb:
+
+- Simple FAQ bot with single retriever: LangChain RAG chain is fine
+- Multi-tool assistant with RAG, routing, and policies: LangChain + LangGraph
+
+
+## Practical Tips
+
+A few patterns that have worked well for me in real systems:
+
+1. **Keep state small and explicit**  - avoid dumping everything into one dict. Define clear fields and types.
+2. **Separate routing from reasoning**  - use small, cheap models for routing nodes, and larger models for heavy reasoning.
+3. **Make tools deterministic when possible**  - side effects and flaky tools make agents brittle.
+4. **Use embeddings consistently**  - as in Embedding Models Compared: OpenAI vs Open-Source, decide early which embedding model to standardize on, and do not mix them within the same index.
+5. **Start with a static graph**  - avoid self-modifying graphs or too much “agentic” structure at first. Get reliability, then add autonomy.
+
+
+## Key Takeaways
+
+- LangChain gives you a convenient interface for tools, LLMs, and RAG, but complex workflows benefit from explicit control.
+- LangGraph models agents as state graphs, which makes routing, branching, and debugging much easier than opaque executors.
+- Define a clear state schema for your agent, and treat it as part of your system design, not an afterthought.
+- RAG fits naturally into LangGraph as dedicated `retrieve` and `rag_llm` nodes, reusing your existing vector databases and chunking strategies.
+- Privacy constraints can be enforced as graph nodes, such as `sanitize_input` and `policy_check`, which gives you auditable guarantees.
+- Use small router models, deterministic tools, and consistent embedding choices to make agents robust in production.
+- Start from a static, well-defined graph, then iterate toward more autonomy, rather than jumping straight to “AGI-style” agents.
