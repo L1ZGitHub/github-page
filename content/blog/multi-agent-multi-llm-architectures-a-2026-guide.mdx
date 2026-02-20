@@ -15,7 +15,7 @@ I have been building these systems at Ailog for the past year, and the patterns 
 
 ## Agent roles and specialization
 
-The first design decision is how to assign roles to agents. In my earlier article on *[Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)*, I covered the basics of when multi-agent setups make sense. Here, I want to go deeper into how you assign different LLMs to different roles.
+The first design decision is how to assign roles to agents. In my earlier article on *Building a Multi-Agent AI System*, I covered the basics of when multi-agent setups make sense. Here, I want to go deeper into how you assign different LLMs to different roles.
 
 A typical production architecture looks like this:
 
@@ -134,11 +134,11 @@ class MessageBus:
         return await self._queues[agent_id].get()
 ```
 
-In practice, I recommend starting with hub-and-spoke, moving to pipeline for well-understood workflows, and only using mesh when you have the monitoring infrastructure to support it. Which brings us to the topic I covered in *[Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)*, applied here at the multi-agent level.
+In practice, I recommend starting with hub-and-spoke, moving to pipeline for well-understood workflows, and only using mesh when you have the monitoring infrastructure to support it. Which brings us to the topic I covered in *Monitoring ML Models in Production*, applied here at the multi-agent level.
 
-## RLVR, GRPO, and why they matter for [multi-agent systems](/blog/end-to-end-multi-agent-systems-design-patterns-from-ieee-cai-2026)
+## RLVR, GRPO, and why they matter for multi-agent systems
 
-DeepSeek R1 demonstrated something important: reinforcement learning with verifiable rewards (RLVR) and Group Relative Policy Optimization (GRPO) can train models that are exceptionally good at structured reasoning and self-verification. This has direct implications for multi-[agent architecture](/blog/anatomy-of-an-openclaw-agent)s.
+DeepSeek R1 demonstrated something important: reinforcement learning with verifiable rewards (RLVR) and Group Relative Policy Optimization (GRPO) can train models that are exceptionally good at structured reasoning and self-verification. This has direct implications for multi-agent architectures.
 
 In a multi-LLM setup, you want your reasoning agent to produce outputs that other agents can verify. RLVR-trained models excel here because they are optimized to reach correct, verifiable conclusions rather than just plausible-sounding text. GRPO improves on standard PPO by computing advantages relative to a group of sampled responses, which reduces variance and makes training more stable.
 
@@ -182,7 +182,7 @@ MLSys 2026 benchmarks showed that architectures combining specialized dense mode
 
 ## Monitoring and distributed scalability
 
-Multi-agent multi-LLM systems are distributed systems, and they need to be treated as such. Every lesson from *[CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)* and *Monitoring ML Models in Production* applies here, multiplied by the number of agents.
+Multi-agent multi-LLM systems are distributed systems, and they need to be treated as such. Every lesson from *CI/CD Pipelines for Machine Learning Projects* and *Monitoring ML Models in Production* applies here, multiplied by the number of agents.
 
 Key monitoring requirements:
 
@@ -221,9 +221,3 @@ For horizontal scaling, the pattern that works best in practice is stateless age
 - RLVR and GRPO-trained models like DeepSeek R1 are excellent reasoning agents because they produce structured, verifiable outputs that other agents can check.
 - MoE models like Mistral serve well as generalist fallback agents, reducing total inference cost by 35-45% compared to dense models.
 - Treat multi-agent systems as distributed systems: trace every message, monitor per-agent metrics, attribute costs, and scale agents independently behind task queues.
-
-## Related Articles
-
-- [AI Trends 2026: The Agentic Revolution and Hybrid Architectures](/blog/ai-trends-2026-the-agentic-revolution-and-hybrid-architectures)
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [The Multi-Agent Systems Explosion: 327% Adoption Growth in 2026](/blog/the-multi-agent-systems-explosion-327-adoption-growth-in-2026)

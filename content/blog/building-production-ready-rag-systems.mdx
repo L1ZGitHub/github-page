@@ -11,7 +11,7 @@ author: "Hélain Zimmermann"
 
 ## Introduction
 
-Retrieval-Augmented Generation (RAG) has emerged as the most practical way to make [Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models) (LLMs) work with your own data. Instead of fine-tuning a model on proprietary documents, RAG retrieves relevant context at query time and feeds it into the LLM prompt. This approach is cheaper, more maintainable, and avoids the hallucination problems that plague vanilla LLM deployments.
+Retrieval-Augmented Generation (RAG) has emerged as the most practical way to make Large Language Models (LLMs) work with your own data. Instead of fine-tuning a model on proprietary documents, RAG retrieves relevant context at query time and feeds it into the LLM prompt. This approach is cheaper, more maintainable, and avoids the hallucination problems that plague vanilla LLM deployments.
 
 At Ailog, we have built RAG systems for clients across industries, from legal document analysis to customer support automation. In this article, I will walk through the key architectural decisions that separate a prototype from a production-ready system.
 
@@ -19,7 +19,7 @@ At Ailog, we have built RAG systems for clients across industries, from legal do
 
 A production RAG pipeline consists of two main phases:
 
-**Indexing Pipeline** (offline): Documents are loaded, split into chunks, embedded into vectors, and stored in a [vector database](/blog/vector-database-performance-benchmarks).
+**Indexing Pipeline** (offline): Documents are loaded, split into chunks, embedded into vectors, and stored in a vector database.
 
 **Query Pipeline** (online): A user query is embedded, similar chunks are retrieved from the vector store, and both the query and retrieved context are sent to an LLM for answer generation.
 
@@ -103,7 +103,7 @@ The choice of embedding model directly affects retrieval quality. Here are the k
 - **Cohere embed-v3**: Strong multilingual support. Useful when dealing with documents in multiple languages.
 - **BGE / E5**: Open-source alternatives that can be self-hosted. Important for data-sensitive applications where you cannot send documents to third-party APIs.
 
-> **Tip**: Always evaluate [embedding models](/blog/embedding-models-compared-openai-vs-open-source) on your actual data. Create a small test set of queries and expected document matches, then measure retrieval precision.
+> **Tip**: Always evaluate embedding models on your actual data. Create a small test set of queries and expected document matches, then measure retrieval precision.
 
 ## Vector Store Selection
 
@@ -161,9 +161,3 @@ Rephrase the user query into multiple variants to improve recall. An LLM can gen
 Building a production RAG system is more engineering than science. The core concepts are straightforward, but the details matter: chunk sizes, embedding models, retrieval strategies, and monitoring all compound to determine the quality of your system. Start simple, measure everything, and iterate based on real user queries.
 
 At Ailog, we have learned these lessons through deploying RAG systems for real businesses. The key takeaway is that there is no one-size-fits-all solution. Every deployment requires tuning for the specific domain, document types, and query patterns of your users.
-
-## Related Articles
-
-- [2026: The Year of AI Memory Beyond Basic RAG](/blog/2026-the-year-of-ai-memory-beyond-basic-rag)
-- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
-- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)

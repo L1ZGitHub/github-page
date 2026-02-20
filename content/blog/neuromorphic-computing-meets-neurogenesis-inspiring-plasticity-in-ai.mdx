@@ -25,7 +25,7 @@ We now know that the dentate gyrus of the hippocampus continuously produces new 
 - **Support pattern separation**, the ability to distinguish similar but distinct memories, which directly prevents interference between old and new knowledge.
 - **Modulate forgetting**, selectively weakening old memories that conflict with new learning while preserving those that remain relevant.
 
-This is exactly the set of capabilities that artificial neural networks lack. The catastrophic forgetting problem, where training on new data destroys performance on old tasks, has been a central challenge in deep learning for years. Standard architectures like the transformers I discussed in [Understanding Transformer Architectures](/blog/understanding-transformer-architectures) have no built-in mechanism for growing new capacity or selectively protecting old knowledge.
+This is exactly the set of capabilities that artificial neural networks lack. The catastrophic forgetting problem, where training on new data destroys performance on old tasks, has been a central challenge in deep learning for years. Standard architectures like the transformers I discussed in Understanding Transformer Architectures have no built-in mechanism for growing new capacity or selectively protecting old knowledge.
 
 
 ## Neuromorphic hardware: the substrate for brain-inspired computing
@@ -55,8 +55,8 @@ Current neuromorphic hardware supports synaptic plasticity (changing connection 
 Jeff Hawkins' cortical column theory, detailed in his Thousand Brains framework, proposes that the neocortex is built from thousands of semi-independent processing units that each maintain a model of objects and concepts. This modular architecture has interesting parallels with:
 
 - **Mixture of Experts** models in deep learning, where only a subset of parameters is active for any given input.
-- **[Multi-agent systems](/blog/end-to-end-multi-agent-systems-design-patterns-from-ieee-cai-2026)** like the ones I described in Building a Multi-Agent AI System, where independent agents collaborate on complex tasks.
-- **Federated learning** architectures from [Federated Learning for Privacy-Preserving AI](/blog/federated-learning-for-privacy-preserving-ai), where learning is distributed across independent nodes.
+- **Multi-agent systems** like the ones I described in Building a Multi-Agent AI System, where independent agents collaborate on complex tasks.
+- **Federated learning** architectures from Federated Learning for Privacy-Preserving AI, where learning is distributed across independent nodes.
 
 The key insight is that modularity enables local adaptation without global disruption. A cortical column can update its model without interfering with neighboring columns. Neurogenesis takes this further by allowing the system to allocate entirely new modules when existing ones are saturated.
 
@@ -214,7 +214,7 @@ Several research directions are likely to shape this space over the next few yea
 
 **Hardware-software co-design.** As neuromorphic chips gain structural plasticity support, we will need programming models that expose neuron creation and deletion as first-class operations, not just weight updates.
 
-**Scaling neurogenesis-inspired methods.** Current dynamic network expansion works well on small benchmarks. Making it work reliably at the scale of modern transformers and the deep architectures discussed in [Getting Started with PyTorch for Deep Learning](/blog/getting-started-with-pytorch-for-deep-learning) requires solving hard optimization problems around when and where to add capacity.
+**Scaling neurogenesis-inspired methods.** Current dynamic network expansion works well on small benchmarks. Making it work reliably at the scale of modern transformers and the deep architectures discussed in Getting Started with PyTorch for Deep Learning requires solving hard optimization problems around when and where to add capacity.
 
 **Biological fidelity vs. engineering pragmatism.** Not every detail of hippocampal neurogenesis will translate usefully to silicon. The field needs rigorous ablation studies to identify which biological mechanisms (pattern separation, critical periods, complementary learning) provide real benefits and which are implementation details of wetware.
 
@@ -230,9 +230,3 @@ Several research directions are likely to shape this space over the next few yea
 - The **complementary learning systems** theory (fast hippocampal learning plus slow neocortical consolidation) maps directly to dual-network architectures that balance rapid adaptation with long-term stability.
 - The most promising path forward is **integration**: combining neurogenesis-inspired methods with existing transformer, RL, and federated learning architectures rather than treating them as replacements.
 - Bridging biological insight with engineering pragmatism requires careful ablation studies to identify which neuroscience mechanisms yield real performance benefits in artificial systems.
-
-## Related Articles
-
-- [Adult Neurogenesis: How Your Brain Keeps Growing New Neurons](/blog/adult-neurogenesis-how-your-brain-keeps-growing-new-neurons)
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [FinAgent and Beyond: Multimodal Foundation Agents for Trading](/blog/finagent-and-beyond-multimodal-foundation-agents-for-trading)

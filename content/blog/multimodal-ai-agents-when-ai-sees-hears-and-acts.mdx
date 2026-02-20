@@ -15,7 +15,7 @@ That is changing fast. Multimodal AI agents are systems that perceive multiple t
 
 ## What makes an agent "multimodal"?
 
-A traditional AI agent, like the ones I described in [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph), takes text instructions, reasons about them, calls tools, and produces a text response. A multimodal agent does the same thing but with a richer set of inputs and outputs.
+A traditional AI agent, like the ones I described in Building AI Agents with LangChain and LangGraph, takes text instructions, reasons about them, calls tools, and produces a text response. A multimodal agent does the same thing but with a richer set of inputs and outputs.
 
 Concretely, a multimodal agent can:
 
@@ -69,7 +69,7 @@ If you are curious about what happens inside a multimodal agent, the process is 
 
 The most common approach is to map different modalities into a shared vector space. Text, images, and audio all get converted into embeddings of the same dimension. Once they share a space, you can compute similarity across modalities, retrieve images from text queries or find relevant audio clips based on a written description.
 
-This is the same principle behind CLIP and the dual-encoder architectures I covered in [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source), extended to more modalities.
+This is the same principle behind CLIP and the dual-encoder architectures I covered in Embedding Models Compared: OpenAI vs Open-Source, extended to more modalities.
 
 ### Early fusion vs. late fusion
 
@@ -130,7 +130,7 @@ You do not need to train your own vision encoder to build a multimodal agent. He
 1. **Pick a multimodal foundation model** like Qwen3-VL (open weights, good for self-hosting) or Claude/GPT-4o (API-based, great quality)
 2. **Define your tools**, a product search API, a database query, a notification sender, whatever your use case requires
 3. **Build a simple agent loop** that passes user input (text + images) to the model and handles tool calls
-4. **Add retrieval** if you need grounding on private data, using the RAG patterns from [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)
+4. **Add retrieval** if you need grounding on private data, using the RAG patterns from Retrieval-Augmented Generation: A Complete Guide
 
 For orchestration, tools like N8N or LangGraph can handle the workflow without writing everything from scratch.
 
@@ -140,7 +140,7 @@ Multimodal agents introduce new failure modes beyond what text-only systems face
 
 - **Visual hallucinations**: the model confidently describes objects that are not in the image. Always verify critical visual claims.
 - **Modality mismatch**: the model ignores the image and answers from text priors only. Test with inputs where the image contradicts the text.
-- **Privacy risks**: images can contain faces, license plates, screens with sensitive data. Apply the same care I described in [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp).
+- **Privacy risks**: images can contain faces, license plates, screens with sensitive data. Apply the same care I described in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
 - **Latency**: processing images and audio adds significant compute time. Budget for this in your architecture.
 
 Evaluation is also harder. You need test sets that cover each modality and their combinations. The techniques from Evaluating RAG System Performance extend naturally, but you will want separate metrics for text retrieval accuracy and visual understanding.
@@ -153,9 +153,3 @@ Evaluation is also harder. You need test sets that cover each modality and their
 - You can build multimodal agents today using foundation models like Qwen3-VL or GPT-4o, combined with standard agent patterns and RAG pipelines.
 - New failure modes around visual hallucinations, modality mismatch, and image privacy require careful evaluation and testing.
 - Start simple with an API-based multimodal model, a few tools, and an agent loop, then add complexity as your use case demands.
-
-## Related Articles
-
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [FinAgent and Beyond: Multimodal Foundation Agents for Trading](/blog/finagent-and-beyond-multimodal-foundation-agents-for-trading)
-- [Multimodal AI: Combining Vision and Language Models](/blog/multimodal-ai-combining-vision-and-language-models)

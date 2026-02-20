@@ -208,7 +208,7 @@ A robust RAG evaluation checks at least three things:
 
 ### 3.1 Retrieval quality
 
-Retrieval metrics are covered in depth in **Evaluating RAG System Performance**, **[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)**, and **Vector Database Performance Benchmarks**. Practically, you want:
+Retrieval metrics are covered in depth in **Evaluating RAG System Performance**, **Semantic Search vs Keyword Search: When to Use What**, and **Vector Database Performance Benchmarks**. Practically, you want:
 
 - Recall@k - Is the relevant document in the top k?
 - Precision@k - How many of the top k are actually relevant?
@@ -228,7 +228,7 @@ def recall_at_k(labels: List[List[str]], preds: List[List[str]], k: int = 5) -> 
     return hits / total if total > 0 else 0.0
 ```
 
-This is directly influenced by your choice of embeddings (see **[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)**) and your retrieval strategy (pure dense, sparse, or **[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)**).
+This is directly influenced by your choice of embeddings (see **Embedding Models Compared: OpenAI vs Open-Source**) and your retrieval strategy (pure dense, sparse, or **Hybrid Search: Combining Dense and Sparse Retrieval**).
 
 ### 3.2 Groundedness and hallucinations
 
@@ -246,7 +246,7 @@ Output a JSON object with:
 - justification
 ```
 
-This ties directly to the patterns from **[Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)**, where part of the goal is exactly to reduce hallucination by constraining what the model can use.
+This ties directly to the patterns from **Knowledge Graphs Meet LLMs: Structured RAG Architectures**, where part of the goal is exactly to reduce hallucination by constraining what the model can use.
 
 ### 3.3 Task success and user-centric metrics
 
@@ -282,7 +282,7 @@ Combine human scores with automated ones. If they diverge, inspect examples and 
 
 If you work on privacy or compliance heavy use cases, evaluation must include privacy and safety, not just quality.
 
-This connects directly to topics from **[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)**, **Federated Learning for Privacy-Preserving AI**, and **Introduction to Differential Privacy for NLP**.
+This connects directly to topics from **Privacy-Preserving NLP: Protecting Sensitive Data in Language Models**, **Federated Learning for Privacy-Preserving AI**, and **Introduction to Differential Privacy for NLP**.
 
 ### Privacy checks
 
@@ -392,8 +392,3 @@ Then build metrics on top of those logs. For example, average steps per task, to
 - Treat evaluation as code: version datasets, script metrics, integrate with CI, and monitor drifts over time.
 - Complex systems like agents and tool-using LLMs require end-to-end task-level evaluation and careful instrumentation.
 
-## Related Articles
-
-- [Building a RAG Chatbot from Scratch with Python](/blog/building-a-rag-chatbot-from-scratch-with-python)
-- [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)
-- [Evaluating RAG System Performance](/blog/evaluating-rag-system-performance)

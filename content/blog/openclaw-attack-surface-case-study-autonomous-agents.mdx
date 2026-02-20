@@ -11,7 +11,7 @@ author: "Hélain Zimmermann"
 
 The security model for a chatbot is straightforward. The user sends text, the model generates text, and the attack surface is limited to prompt injection and data exfiltration through the output channel. The security model for an autonomous agent, one that can browse the web, execute code, send emails, manage files, and interact with external APIs, is fundamentally different. The agent is not just processing information; it is acting on the world with real credentials, real network access, and real consequences.
 
-OpenClaw, the open-source autonomous agent framework that gained rapid adoption in late 2025 and early 2026, provides an instructive case study. As CrowdStrike's security analysis documented, OpenClaw instances deployed in production environments presented attack surfaces that would be considered unacceptable in any traditional application. The problem is not unique to OpenClaw. It is structural to [autonomous agents](/blog/ai-and-finance-how-autonomous-agents-are-transforming-trading). But OpenClaw's popularity and its open codebase make it a concrete example worth examining in detail.
+OpenClaw, the open-source autonomous agent framework that gained rapid adoption in late 2025 and early 2026, provides an instructive case study. As CrowdStrike's security analysis documented, OpenClaw instances deployed in production environments presented attack surfaces that would be considered unacceptable in any traditional application. The problem is not unique to OpenClaw. It is structural to autonomous agents. But OpenClaw's popularity and its open codebase make it a concrete example worth examining in detail.
 
 ## Why "AI With Hands" Changes Everything
 
@@ -165,7 +165,7 @@ This is a simplified example, but it illustrates the principle: extensions shoul
 
 ### 4. Persistent Memory Compromise
 
-Most agent frameworks, including OpenClaw, implement persistent memory: a store of facts, preferences, and instructions that the agent carries across sessions. This memory is typically stored as text in a [vector database](/blog/vector-database-performance-benchmarks) or a simple key-value store. It is loaded into the agent's context at the beginning of each session.
+Most agent frameworks, including OpenClaw, implement persistent memory: a store of facts, preferences, and instructions that the agent carries across sessions. This memory is typically stored as text in a vector database or a simple key-value store. It is loaded into the agent's context at the beginning of each session.
 
 An attacker who can write to the agent's memory can inject instructions that persist across sessions and influence all future behavior. This is sometimes called "memory poisoning" or "sleeper injection."
 
@@ -259,9 +259,3 @@ The autonomous agent paradigm is powerful precisely because agents can act with 
 The organizations deploying autonomous agents in production today need to treat them with the same security rigor they apply to their most privileged infrastructure components, because that is exactly what they are.
 
 *Sources: CrowdStrike, "What Security Teams Need to Know About OpenClaw AI Super Agent" (2026). Forbes coverage of autonomous agent security incidents in enterprise deployments. MITRE ATT&CK framework adapted for AI agent threat modeling.*
-
-## Related Articles
-
-- [Agents + Open Weights: Toward a Linux of AI Agents, Or a Security Nightmare?](/blog/agents-plus-open-weights-linux-of-agents-or-security-nightmare)
-- [Anatomy of an OpenClaw Agent: Architecture, Integrations, and Limits](/blog/anatomy-of-an-openclaw-agent)
-- [End-to-End Multi-Agent Systems: Design Patterns from IEEE CAI 2026](/blog/end-to-end-multi-agent-systems-design-patterns-from-ieee-cai-2026)

@@ -41,7 +41,7 @@ From real deployments, a few patterns keep showing up where vanilla RAG is not e
 - **Multi-hop questions**: "How did our Q3 revenue compare to the year when we first launched product X?" requires joining information from multiple documents and sometimes external tools.
 - **Underspecified queries**: Users often ask "What are our security requirements?" with no project context. The system needs to ask a clarification question.
 - **Tool coordination**: In non-trivial systems you have several tools: vector DB, SQL, search API, internal services. Someone needs to orchestrate them.
-- **Verification and safety**: You may want a second pass that rechecks the answer, especially in privacy-sensitive NLP scenarios which I covered in [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models).
+- **Verification and safety**: You may want a second pass that rechecks the answer, especially in privacy-sensitive NLP scenarios which I covered in Data Privacy in the Age of Large Language Models.
 
 Agentic RAG addresses these by giving the LLM the ability to:
 
@@ -59,7 +59,7 @@ A few principles guide the design.
 
 ### 1. Keep retrieval as a first-class tool
 
-Do not bury retrieval logic deep inside an opaque agent. Retrieval is still your primary way of grounding the model and limiting hallucinations, as discussed in [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide) and Chunking Strategies for RAG Pipelines.
+Do not bury retrieval logic deep inside an opaque agent. Retrieval is still your primary way of grounding the model and limiting hallucinations, as discussed in Retrieval-Augmented Generation: A Complete Guide and Chunking Strategies for RAG Pipelines.
 
 Treat retrieval as just another tool the agent can call, but with:
 
@@ -109,7 +109,7 @@ On each turn, the control loop is:
 Assume you have:
 
 - An LLM that can emit structured JSON specifying the next action
-- A retrieval tool over a vector database, as in [Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases) and Vector Database Performance Benchmarks
+- A retrieval tool over a vector database, as in Understanding Vector Databases: A Beginner's Guide and Vector Database Performance Benchmarks
 
 ```python
 import json
@@ -231,7 +231,7 @@ For serious RAG systems, a single vector index is rarely enough. Leveraging idea
 - `hybrid_retrieval` that combines both
 - `table_retrieval` or `sql_query` for structured data
 
-The planner chooses which to use based on the query. For compliance or privacy-sensitive data, you can expose a `pii_safe_retrieval` tool that filters or masks personal data, building on the patterns in [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp).
+The planner chooses which to use based on the query. For compliance or privacy-sensitive data, you can expose a `pii_safe_retrieval` tool that filters or masks personal data, building on the patterns in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
 
 ### 2. Verification agents
 
@@ -274,7 +274,7 @@ You can then conditionally replace the answer or display a warning.
 
 ## Prompting strategies specific to Agentic RAG
 
-Prompting in Agentic RAG is less about style and more about *control*. Some tips building on [Prompt Engineering Best Practices for Production](/blog/prompt-engineering-best-practices-for-production):
+Prompting in Agentic RAG is less about style and more about *control*. Some tips building on Prompt Engineering Best Practices for Production:
 
 - Be explicit about JSON schemas and give 1-2 examples
 - Penalize unnecessary tool calls: "If the answer is already clear, respond with ANSWER directly"
@@ -391,9 +391,3 @@ As always, start from the problem. If single-shot RAG is failing due to reasonin
 - Treat privacy and security as core design constraints, especially when agents can call multiple tools.
 - Instrument every agent step with structured logs and metrics for reliable debugging and evaluation.
 - Start with a minimal loop and a few tools, then iterate based on real user failures before adding more complexity.
-
-## Related Articles
-
-- [2026: The Year of AI Memory Beyond Basic RAG](/blog/2026-the-year-of-ai-memory-beyond-basic-rag)
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)

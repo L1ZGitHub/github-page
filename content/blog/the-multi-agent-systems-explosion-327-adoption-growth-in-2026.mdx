@@ -9,9 +9,9 @@ readTime: "7 min read"
 author: "Hélain Zimmermann"
 ---
 
-Something strange happened in the last twelve months. Multi-agent AI systems went from a niche research topic to the fastest-growing category in enterprise AI adoption. According to Databricks' 2026 State of AI report, production deployments of [multi-agent systems](/blog/end-to-end-multi-agent-systems-design-patterns-from-ieee-cai-2026) grew by 327% year over year. That is not incremental. That is an explosion.
+Something strange happened in the last twelve months. Multi-agent AI systems went from a niche research topic to the fastest-growing category in enterprise AI adoption. According to Databricks' 2026 State of AI report, production deployments of multi-agent systems grew by 327% year over year. That is not incremental. That is an explosion.
 
-If you have been following this blog, you know I have been building and writing about multi-agent systems for a while, from *[Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)* to *[Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)*. What changed is not the technology. What changed is that everyone else finally caught up to the idea that a single LLM, no matter how powerful, is not enough for real-world workflows.
+If you have been following this blog, you know I have been building and writing about multi-agent systems for a while, from *Building a Multi-Agent AI System* to *Building AI Agents with LangChain and LangGraph*. What changed is not the technology. What changed is that everyone else finally caught up to the idea that a single LLM, no matter how powerful, is not enough for real-world workflows.
 
 Let me explain what is driving this boom, and why it matters even if you have never built an AI agent.
 
@@ -97,13 +97,13 @@ Good multi-agent systems share a few traits:
 - **Clear role separation.** Each agent has a well-defined job. If you cannot explain what an agent does in one sentence, it probably should not exist.
 - **Explicit communication.** Agents pass structured data to each other, not free-form text. This makes the system predictable and debuggable.
 - **Graceful failure handling.** When one agent fails or returns garbage, the system should not collapse. Retries, fallbacks, and human escalation paths matter.
-- **Observability.** You need to see what each agent is doing, what it decided, and why. This connects directly to the monitoring practices I outlined in *[Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)*.
+- **Observability.** You need to see what each agent is doing, what it decided, and why. This connects directly to the monitoring practices I outlined in *Monitoring ML Models in Production*.
 
 ## The "swarm" hype vs. reality
 
 Let me be honest about the hype. The term "swarm" sounds exciting, but most production multi-agent systems are closer to well-orchestrated pipelines than to emergent swarm intelligence. You are not building a hive mind. You are building a workflow where specialized components collaborate.
 
-That said, the results are real. The 327% growth figure from the Databricks report reflects actual production deployments, not just experiments. Companies are finding that multi-[agent architecture](/blog/anatomy-of-an-openclaw-agent)s solve problems that monolithic AI systems struggle with: complex workflows, multi-step reasoning, and tasks that require different kinds of expertise.
+That said, the results are real. The 327% growth figure from the Databricks report reflects actual production deployments, not just experiments. Companies are finding that multi-agent architectures solve problems that monolithic AI systems struggle with: complex workflows, multi-step reasoning, and tasks that require different kinds of expertise.
 
 ## Getting started
 
@@ -123,9 +123,3 @@ The multi-agent explosion is not a fad. It is the natural evolution of how we bu
 - Real-world use cases include customer service swarms, coding assistant teams, and automated startup workflows.
 - Good multi-agent design requires clear roles, structured communication, failure handling, and observability.
 - Start simple: build one agent, pick a real workflow, then gradually add coordination between agents.
-
-## Related Articles
-
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [Multimodal AI Agents: When AI Sees, Hears, and Acts](/blog/multimodal-ai-agents-when-ai-sees-hears-and-acts)
-- [OpenClaw Explained: What Is the AI Agent Everyone Is Talking About?](/blog/openclaw-explained-for-beginners)

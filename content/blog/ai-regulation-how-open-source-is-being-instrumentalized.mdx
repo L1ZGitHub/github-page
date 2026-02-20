@@ -47,7 +47,7 @@ Consider the spectrum:
 
 - **DeepSeek V3**: MIT licensed, with a technical report that describes the architecture and training methodology in unusual detail. Still, the training data is proprietary, and the specific infrastructure optimizations that enabled the sub-$6M training cost are not fully documented.
 
-- **OpenClaw**: An [autonomous agent](/blog/openclaw-attack-surface-case-study-autonomous-agents) framework that releases its full codebase, but as CrowdStrike's security analysis demonstrated, this openness created immediate security consequences when the code was deployed in production without adequate hardening.
+- **OpenClaw**: An autonomous agent framework that releases its full codebase, but as CrowdStrike's security analysis demonstrated, this openness created immediate security consequences when the code was deployed in production without adequate hardening.
 
 The ProMarket research found that when policymakers reference "open source AI," they are typically imagining the full-stack transparency of traditional open-source software. What they are getting, in most cases, is weight release by companies that retain exclusive control over every other part of the stack. This gap between expectation and reality is where instrumentalization occurs.
 
@@ -63,7 +63,7 @@ This is not an argument against weight release. Open weights are strictly better
 
 A related concern is the governance of evaluation. When we say a model is "safe" or "aligned," we are making a claim that depends on specific benchmarks, specific evaluation methodologies, and specific definitions of harm. These standards are currently set by the same organizations that train the models.
 
-The open-source community has made progress here. Efforts like EleutherAI's Language [Model Evaluation](/blog/monitoring-ml-models-in-production) Harness, the Open LLM Leaderboard, and various community-driven red-teaming initiatives provide independent evaluation infrastructure. But these efforts are chronically underfunded relative to their importance, and they struggle to keep pace with the rapid model release cadence.
+The open-source community has made progress here. Efforts like EleutherAI's Language Model Evaluation Harness, the Open LLM Leaderboard, and various community-driven red-teaming initiatives provide independent evaluation infrastructure. But these efforts are chronically underfunded relative to their importance, and they struggle to keep pace with the rapid model release cadence.
 
 The EU AI Act recognizes the need for harmonized standards but largely delegates their development to existing standardization bodies (CEN, CENELEC) whose experience with AI systems is limited. There is a real risk that the standards that emerge will be either too vague to enforce or too rigid to accommodate the pace of technical change.
 
@@ -88,9 +88,3 @@ The instrumentalization of open source in AI regulation is not a conspiracy. It 
 This does not mean open source is irrelevant to AI governance. It means that the policy conversation needs to move beyond the binary of "open vs. closed" toward a more granular understanding of what specific forms of openness actually deliver in terms of accountability, safety, and public benefit. The stakes are high enough that getting the definitions right matters.
 
 *Sources: ProMarket / Stigler Center, "Open Source Is Having a Moment in AI Regulation: Here Is What the Data Says" (2025). PromptFoo, overview of AI regulation frameworks and open-source provisions. EU AI Act text, Articles 52-53 on GPAI model obligations and open-source exemptions.*
-
-## Related Articles
-
-- [AI Agents in Finance: MNPI Risks and Cross-Deal Contamination](/blog/ai-agents-in-finance-mnpi-risks-and-cross-deal-contamination)
-- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
-- [Named Entity Recognition with Modern NLP](/blog/named-entity-recognition-with-modern-nlp)

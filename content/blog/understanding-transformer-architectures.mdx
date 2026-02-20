@@ -78,7 +78,7 @@ A few key points that matter in real systems:
 - Scaling by `sqrt(d_k)` stabilizes gradients for large dimensions
 - Masks let you control visibility, which is critical for causal generation and for privacy constraints
 
-This is the primitive that everything else builds on. For RAG systems (see "[Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)" and "Building Production-Ready RAG Systems"), you are indirectly tuning these attention patterns through prompt construction and retrieval.
+This is the primitive that everything else builds on. For RAG systems (see "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems"), you are indirectly tuning these attention patterns through prompt construction and retrieval.
 
 ## Multi-head attention: attention with multiple perspectives
 
@@ -227,7 +227,7 @@ class TransformerBlock(nn.Module):
 
 The MLP is often 4x larger than `d_model` and is a major contributor to compute. When optimizing for inference cost, decreasing `d_ff` or using low-rank adapters can be effective.
 
-If you have read "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)", you have seen low-rank adaptation (LoRA) and similar tricks that manipulate these linear layers instead of full fine-tuning.
+If you have read "Fine-Tuning LLMs on Custom Data: A Practical Guide", you have seen low-rank adaptation (LoRA) and similar tricks that manipulate these linear layers instead of full fine-tuning.
 
 ## Encoder, decoder, encoder-decoder
 
@@ -241,7 +241,7 @@ Examples: BERT, RoBERTa, DistilBERT.
 - Well suited for classification, regression, and retrieval
 - Core in many semantic search and embedding systems
 
-This connects directly to "Semantic Search vs Keyword Search" and "[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)". Most embedding models are encoder-only transformers with pooling and normalization.
+This connects directly to "Semantic Search vs Keyword Search" and "Embedding Models Compared: OpenAI vs Open-Source". Most embedding models are encoder-only transformers with pooling and normalization.
 
 A minimal encoder-only architecture:
 
@@ -366,11 +366,11 @@ class TransformerEmbedder(nn.Module):
         return emb
 ```
 
-This is essentially what most open-source embedding models do, as discussed in "Embedding Models Compared: OpenAI vs Open-Source" and "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)".
+This is essentially what most open-source embedding models do, as discussed in "Embedding Models Compared: OpenAI vs Open-Source" and "Understanding Vector Databases: A Beginner's Guide".
 
 ## Privacy and attention control
 
-In "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" I discussed strategies to avoid leaking sensitive data. Transformers give you several hooks for this.
+In "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" I discussed strategies to avoid leaking sensitive data. Transformers give you several hooks for this.
 
 Some practical tools:
 
@@ -416,9 +416,3 @@ If you are already comfortable with transformers, the next logical steps are exp
 - Architectural variants like efficient attention and MoE matter when you scale to long contexts or tight latency budgets
 - For RAG and semantic search, transformer architecture is important, but data quality, chunking, and retrieval often matter more
 - Privacy constraints can be expressed as attention masks and preprocessing rules integrated directly into the transformer pipeline
-
-## Related Articles
-
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [Multimodal AI: Combining Vision and Language Models](/blog/multimodal-ai-combining-vision-and-language-models)
-- [Named Entity Recognition with Modern NLP](/blog/named-entity-recognition-with-modern-nlp)

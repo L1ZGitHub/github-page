@@ -75,7 +75,7 @@ As you scale, you will want to tune ALPHA using offline evaluation, as discussed
 
 ### Choose embedding models with scale in mind
 
-In [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source) I covered quality trade-offs. At millions of documents you must also think about:
+In Embedding Models Compared: OpenAI vs Open-Source I covered quality trade-offs. At millions of documents you must also think about:
 
 - Embedding size: 1M docs x 1,536 floats is much heavier than 1M x 384
 - Throughput: total time to embed your corpus matters when reindexing
@@ -90,7 +90,7 @@ Practical rule of thumb:
 
 ## Architecting the index for millions of documents
 
-Once you pass a few hundred thousand documents, naive vector storage will hurt you. [Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases) is a good foundation, but at this scale we need to think about layout and sharding.
+Once you pass a few hundred thousand documents, naive vector storage will hurt you. Understanding Vector Databases: A Beginner's Guide is a good foundation, but at this scale we need to think about layout and sharding.
 
 ### Design the document schema for retrieval, not for storage
 
@@ -420,7 +420,7 @@ Feed this into your metrics stack and dashboards.
 
 ### Manage privacy and data isolation
 
-At millions of documents across organizations, privacy concerns are unavoidable. The posts [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models) and [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp) cover the theory.
+At millions of documents across organizations, privacy concerns are unavoidable. The posts Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models cover the theory.
 
 Practically for RAG:
 
@@ -457,9 +457,3 @@ As you cross the million-document mark you will inevitably iterate on every laye
 - Maintain relevance with re-ranking, de-duplication, and context diversification before sending data to the LLM.
 - Monitor growth, latency, errors, and zero-hit queries, and treat privacy and tenant isolation as first-class concerns.
 - Keep components modular so you can iterate on chunking, models, and ranking without destabilizing the whole system.
-
-## Related Articles
-
-- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
-- [Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)
-- [Vector Database Performance Benchmarks](/blog/vector-database-performance-benchmarks)

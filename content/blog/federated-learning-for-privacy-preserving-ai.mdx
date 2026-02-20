@@ -23,7 +23,7 @@ Many teams try to solve privacy by centralizing data but wrapping it in good acc
 - Legal constraints (GDPR, HIPAA, banking regulations) sometimes forbid centralization entirely.
 - Even with pseudonymization, re-identification is often possible.
 
-In earlier posts on *Data Privacy in the Age of Large Language Models* and *[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)*, I covered techniques like differential privacy, tokenization, and secure logging. Federated learning is a complementary layer at the system level:
+In earlier posts on *Data Privacy in the Age of Large Language Models* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models*, I covered techniques like differential privacy, tokenization, and secure logging. Federated learning is a complementary layer at the system level:
 
 - Data never leaves the client device or organization.
 - The server only sees aggregated model updates or gradients.
@@ -272,7 +272,7 @@ Given my focus on privacy-preserving NLP and RAG systems, the interesting questi
 
 One compelling use case is personalizing LLM-based assistants or search systems to user behavior without central logs.
 
-Imagine a semantic search engine (see *[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)* and *[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)*) that runs in a SaaS product. Instead of streaming user queries and clicks back to your server, you could:
+Imagine a semantic search engine (see *Semantic Search vs Keyword Search: When to Use What* and *Hybrid Search: Combining Dense and Sparse Retrieval*) that runs in a SaaS product. Instead of streaming user queries and clicks back to your server, you could:
 
 - Store interaction logs locally in the browser or mobile app.
 - Periodically run a small local model that predicts click behavior or query reformulations.
@@ -309,7 +309,7 @@ One pattern I like:
 - Local: user specific vector index and lightweight reranker.
 - Federated: updates to reranker parameters or query encoder.
 
-This aligns nicely with the architectures in *Retrieval-Augmented Generation: A Complete Guide* and *[Knowledge Graphs Meet LLMs: Structured RAG Architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures)*: the "knowledge" remains local, only the reasoning and scoring components are learned collaboratively.
+This aligns nicely with the architectures in *Retrieval-Augmented Generation: A Complete Guide* and *Knowledge Graphs Meet LLMs: Structured RAG Architectures*: the "knowledge" remains local, only the reasoning and scoring components are learned collaboratively.
 
 ## Handling non IID data and client drift
 
@@ -355,7 +355,7 @@ I typically avoid FL if:
 
 Alternative privacy mechanisms from the NLP privacy posts can be enough:
 
-- Tokenization and entity redaction (*[Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)*, *Named Entity Recognition with Modern NLP*).
+- Tokenization and entity redaction (*Building Custom Tokenizers for Domain-Specific NLP*, *Named Entity Recognition with Modern NLP*).
 - Centralized differential privacy with robust access controls.
 - Local only inference without any training.
 
@@ -388,9 +388,3 @@ Once you have a first working system, you can iterate on client heterogeneity, p
 - RAG and FL complement each other: keep indices local, learn retrievers and rerankers collaboratively.
 - Not every privacy sensitive use case needs FL - weigh regulatory, bandwidth, and engineering costs before committing.
 - Treat a federated system like any other production ML system: strong monitoring, CI/CD, safe rollouts, and explicit threat models.
-
-## Related Articles
-
-- [Building Custom Tokenizers for Domain-Specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp)
-- [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)
-- [Introduction to Differential Privacy for NLP](/blog/introduction-to-differential-privacy-for-nlp)

@@ -9,7 +9,7 @@ readTime: "11 min read"
 author: "Hélain Zimmermann"
 ---
 
-OpenClaw has become one of the most discussed open-source projects of early 2026. As [CNBC reported](https://www.cnbc.com/), the framework's rapid adoption, and the controversies that followed, have made it a lightning rod for debates about AI agents, privacy, and the future of personal computing. But beneath the headlines, OpenClaw is a genuinely interesting piece of [software engineering](/blog/python-best-practices-for-ml-engineers). In this article, I want to look at how it actually works: the architecture, the integration model, the memory system, and the places where it falls short.
+OpenClaw has become one of the most discussed open-source projects of early 2026. As [CNBC reported](https://www.cnbc.com/), the framework's rapid adoption, and the controversies that followed, have made it a lightning rod for debates about AI agents, privacy, and the future of personal computing. But beneath the headlines, OpenClaw is a genuinely interesting piece of software engineering. In this article, I want to look at how it actually works: the architecture, the integration model, the memory system, and the places where it falls short.
 
 ## The Agent Loop: Perceive, Think, Act, Remember
 
@@ -55,7 +55,7 @@ OpenClaw's memory system is arguably its most consequential architectural decisi
 
 **Short-term memory** holds the current conversation context, the last N messages and any active task state. This is essentially the LLM's context window, managed through a sliding window with summarization. When the conversation exceeds the context limit, older messages are summarized by the LLM and the summaries replace the originals.
 
-**Long-term memory** stores persistent facts about users, preferences, and past interactions. This is implemented as a [vector database](/blog/vector-database-performance-benchmarks) (ChromaDB by default) that the agent queries during the Think phase to retrieve relevant context. When you tell your agent "I prefer window seats on flights," that preference is embedded and stored for future retrieval.
+**Long-term memory** stores persistent facts about users, preferences, and past interactions. This is implemented as a vector database (ChromaDB by default) that the agent queries during the Think phase to retrieve relevant context. When you tell your agent "I prefer window seats on flights," that preference is embedded and stored for future retrieval.
 
 **Task memory** tracks multi-step tasks in progress. If you ask your agent to book a restaurant for Saturday, it creates a task object that persists across agent restarts. The task tracks its current state (searching, comparing options, waiting for confirmation), any intermediate results, and the original request for reference.
 
@@ -108,9 +108,3 @@ These limitations are not unique to OpenClaw. They are fundamental challenges of
 OpenClaw's architecture is a reasonable first attempt at solving a genuinely hard problem: building a general-purpose agent framework that is flexible enough to be useful and simple enough to be accessible. Its adapter pattern, memory model, and plugin system are solid engineering choices. Its weaknesses, security, sandboxing, error handling, are the expected growing pains of a young project tackling an unsolved problem.
 
 The more interesting question is whether the agent paradigm itself will mature fast enough to deliver on its promise before user trust is eroded by security incidents and reliability failures. OpenClaw is, in many ways, a test case for that question.
-
-## Related Articles
-
-- [Building Real-Time ML Inference Pipelines](/blog/building-real-time-ml-inference-pipelines)
-- [CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)
-- [OpenClaw as a Case Study in Autonomous Agent Attack Surfaces](/blog/openclaw-attack-surface-case-study-autonomous-agents)

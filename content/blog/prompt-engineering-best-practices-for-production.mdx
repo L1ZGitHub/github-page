@@ -67,7 +67,7 @@ This simple pattern already brings benefits:
 - You can log which template was used for each request
 - You can test each template separately
 
-This is similar in spirit to how we structure components when [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker).
+This is similar in spirit to how we structure components when Deploying ML Models with FastAPI and Docker.
 
 ### Use clear sections and formatting
 
@@ -100,7 +100,7 @@ Label:"""
 
 This style avoids ambiguity, and it also makes it easier to build evaluation scripts later.
 
-If you have read [Understanding Transformer Architectures](/blog/understanding-transformer-architectures), think of this as shaping the input sequence distribution that the model sees, which heavily influences its behavior.
+If you have read Understanding Transformer Architectures, think of this as shaping the input sequence distribution that the model sees, which heavily influences its behavior.
 
 ## Be explicit about task, constraints, and persona
 
@@ -215,7 +215,7 @@ When you move to tool calling or function calling APIs, the idea is similar. You
 
 ### Use delimiters to avoid prompt injection
 
-If you use RAG (see [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide) and Chunking Strategies for RAG Pipelines), user-provided content and retrieved context will sit next to your instructions. That is a classic place for prompt injection.
+If you use RAG (see Retrieval-Augmented Generation: A Complete Guide and Chunking Strategies for RAG Pipelines), user-provided content and retrieved context will sit next to your instructions. That is a classic place for prompt injection.
 
 Use clear delimiters and instructions like:
 
@@ -308,7 +308,7 @@ For RAG systems, good prompts are as important as good embeddings and chunking.
 
 ### Connect prompts to your retrieval strategy
 
-If you are using a vector database (see [Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases) and Embedding Models Compared), retrieval quality and prompt design must work together.
+If you are using a vector database (see Understanding Vector Databases: A Beginner's Guide and Embedding Models Compared), retrieval quality and prompt design must work together.
 
 A typical flow:
 
@@ -464,9 +464,3 @@ Treat prompts as part of a system that includes data, architecture, and UX.
 - Control verbosity and context size to manage latency and cost in production.
 - Add self-checks and verification for high-stakes tasks to reduce hallucinations.
 - Iterate systematically, with hypotheses and metrics, instead of random prompt tweaks.
-
-## Related Articles
-
-- [Building a RAG Chatbot from Scratch with Python](/blog/building-a-rag-chatbot-from-scratch-with-python)
-- [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)
-- [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity)

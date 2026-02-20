@@ -195,7 +195,7 @@ You can compute PSI daily per feature and alert if it exceeds a threshold (e.g. 
 
 ### Embedding and RAG-specific drift
 
-If you have seen *[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)* or *[Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)*, you know embeddings change how we represent text.
+If you have seen *Embedding Models Compared: OpenAI vs Open-Source* or *Hybrid Search: Combining Dense and Sparse Retrieval*, you know embeddings change how we represent text.
 
 In RAG systems, I monitor:
 
@@ -220,7 +220,7 @@ class EmbeddingDriftMonitor:
         return float(np.mean(sims))
 ```
 
-Low similarity over time tells you your model is seeing qualitatively new queries. This ties directly to topics I discussed in *[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)*.
+Low similarity over time tells you your model is seeing qualitatively new queries. This ties directly to topics I discussed in *Semantic Search vs Keyword Search: When to Use What*.
 
 
 ## 4. Prediction quality: online, offline, and without labels
@@ -294,7 +294,7 @@ You can sample a subset of traffic for such evaluations and log the scores to mo
 
 Monitoring depends on logging, and logging is where privacy risk explodes, especially for NLP.
 
-From *[Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)* and *[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)*, you know that you must treat logs as sensitive data.
+From *Data Privacy in the Age of Large Language Models* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models*, you know that you must treat logs as sensitive data.
 
 ### What to log
 
@@ -460,9 +460,3 @@ Once monitoring is in place, it also becomes a powerful tool for **experimentati
 - Define clear SLOs tied to user impact and configure alerts with sensible thresholds and windows to avoid noise.
 - Version-aware monitoring and gradual rollouts make it easy to compare models and safely deploy improvements.
 - Integrate monitoring into your ML development lifecycle and team rituals so it becomes a habit, not an afterthought.
-
-## Related Articles
-
-- [CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)
-- [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)
-- [Python Best Practices for ML Engineers](/blog/python-best-practices-for-ml-engineers)

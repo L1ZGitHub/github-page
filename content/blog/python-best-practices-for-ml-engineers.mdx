@@ -160,7 +160,7 @@ except ValidationError as e:
     print("Invalid config:", e)
 ```
 
-*[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)* and *Retrieval-Augmented Generation: A Complete Guide* both highlight how configuration choices matter. Strongly typed configs make those choices traceable and safe.
+*Embedding Models Compared: OpenAI vs Open-Source* and *Retrieval-Augmented Generation: A Complete Guide* both highlight how configuration choices matter. Strongly typed configs make those choices traceable and safe.
 
 
 ## 4. Write small, composable functions and modules
@@ -297,7 +297,7 @@ def test_load_csv_requires_label(tmp_path: Path):
         assert False, "Expected ValueError"
 ```
 
-When you move from toy scripts to production RAG pipelines, tests around chunking and retrieval (see *Chunking Strategies for RAG Pipelines* and *[Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what)*) are extremely valuable.
+When you move from toy scripts to production RAG pipelines, tests around chunking and retrieval (see *Chunking Strategies for RAG Pipelines* and *Semantic Search vs Keyword Search: When to Use What*) are extremely valuable.
 
 
 ## 7. Performance: profile before optimizing
@@ -326,7 +326,7 @@ def fast_normalize(vectors: np.ndarray) -> np.ndarray:
     return vectors / norms
 ```
 
-For vector databases and embedding pipelines, as covered in *Vector Database Performance Benchmarks* and *[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)*, batching operations is usually better than many small calls.
+For vector databases and embedding pipelines, as covered in *Vector Database Performance Benchmarks* and *Understanding Vector Databases: A Beginner's Guide*, batching operations is usually better than many small calls.
 
 ### Profile with `cProfile`
 
@@ -499,7 +499,7 @@ This pattern is similar to what I use in production setups, like those described
 
 ## 11. Privacy and security awareness
 
-If your ML system touches user data, privacy is not optional. The discussions in *[Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)* and *[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)* apply directly to how you write Python.
+If your ML system touches user data, privacy is not optional. The discussions in *Data Privacy in the Age of Large Language Models* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models* apply directly to how you write Python.
 
 Practical tips:
 
@@ -539,9 +539,3 @@ Then pass `settings` around instead of sprinkling `os.environ[...]` everywhere.
 - Design clean interfaces for models and RAG pipelines so components are swappable
 - Prepare for production by exposing models via typed, well structured APIs
 - Keep privacy and security in mind whenever you touch user or sensitive data
-
-## Related Articles
-
-- [CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)
-- [Deploying ML Models with FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker)
-- [Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)

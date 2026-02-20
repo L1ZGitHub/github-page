@@ -11,7 +11,7 @@ author: "Hélain Zimmermann"
 
 Engineers love clean abstractions, until those abstractions hide what is actually going on. That is exactly what happens with many “AI agents” demos: a single function call that magically orchestrates tools, memory, and control flow, until it breaks in production.
 
-LangChain and LangGraph take a different path. They let you keep the high-level agent abstraction, while still exposing the graph underneath - the actual states, transitions, and tools used by the model. For production systems, especially those involving [Retrieval-Augmented Generation](/blog/retrieval-augmented-generation-a-complete-guide) (RAG) and privacy constraints, this explicit control is not a luxury. It is the difference between “it works on my laptop” and something you can trust.
+LangChain and LangGraph take a different path. They let you keep the high-level agent abstraction, while still exposing the graph underneath - the actual states, transitions, and tools used by the model. For production systems, especially those involving Retrieval-Augmented Generation (RAG) and privacy constraints, this explicit control is not a luxury. It is the difference between “it works on my laptop” and something you can trust.
 
 In this article I will walk through how I build AI agents using LangChain and LangGraph, from a single-tool agent to a multi-step, graph-based workflow that plays nicely with RAG and privacy-preserving constraints.
 
@@ -24,7 +24,7 @@ At the simplest level, an agent is just:
 2. A set of tools it can call
 3. A loop that keeps going until some goal is reached
 
-If you have read my pieces on Retrieval-Augmented Generation or [Building Production-Ready RAG Systems](/blog/building-production-ready-rag-systems), you already know that the “tool” can be a retrieval call, a vector database query, or a custom microservice. LangChain wraps these into a unified interface.
+If you have read my pieces on Retrieval-Augmented Generation or Building Production-Ready RAG Systems, you already know that the “tool” can be a retrieval call, a vector database query, or a custom microservice. LangChain wraps these into a unified interface.
 
 LangGraph then lets you describe the loop explicitly as a state machine. Instead of trusting an opaque “agent executor”, you see every step in the graph: which nodes run, with which state, and why.
 
@@ -82,7 +82,7 @@ LangGraph treats your agent as a graph:
 - Edges: transitions between nodes, based on state
 - State: all the data that flows through the graph
 
-You describe the workflow declaratively, then LangGraph executes it. If you are familiar with my article on [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines), think of LangGraph as the orchestration layer that stitches all those components together.
+You describe the workflow declaratively, then LangGraph executes it. If you are familiar with my article on Chunking Strategies for RAG Pipelines, think of LangGraph as the orchestration layer that stitches all those components together.
 
 
 ## Defining Agent State in LangGraph
@@ -266,7 +266,7 @@ In a real application I usually rely on LangGraph’s `Branching` and `Command` 
 
 ## Integrating RAG into the Agent
 
-Most interesting agents need context. That is where your RAG stack comes in: embeddings, vector databases, and retrieval logic, as covered in Retrieval-Augmented Generation and [Understanding Vector Databases](/blog/understanding-vector-databases).
+Most interesting agents need context. That is where your RAG stack comes in: embeddings, vector databases, and retrieval logic, as covered in Retrieval-Augmented Generation and Understanding Vector Databases.
 
 Let us add a `retrieve` node that fetches relevant documents and lets the LLM use them.
 
@@ -378,7 +378,7 @@ A few patterns that have worked well for me in real systems:
 1. **Keep state small and explicit**  - avoid dumping everything into one dict. Define clear fields and types.
 2. **Separate routing from reasoning**  - use small, cheap models for routing nodes, and larger models for heavy reasoning.
 3. **Make tools deterministic when possible**  - side effects and flaky tools make agents brittle.
-4. **Use embeddings consistently**  - as in [Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source), decide early which embedding model to standardize on, and do not mix them within the same index.
+4. **Use embeddings consistently**  - as in Embedding Models Compared: OpenAI vs Open-Source, decide early which embedding model to standardize on, and do not mix them within the same index.
 5. **Start with a static graph**  - avoid self-modifying graphs or too much “agentic” structure at first. Get reliability, then add autonomy.
 
 
@@ -391,9 +391,3 @@ A few patterns that have worked well for me in real systems:
 - Privacy constraints can be enforced as graph nodes, such as `sanitize_input` and `policy_check`, which gives you auditable guarantees.
 - Use small router models, deterministic tools, and consistent embedding choices to make agents robust in production.
 - Start from a static, well-defined graph, then iterate toward more autonomy, rather than jumping straight to “AGI-style” agents.
-
-## Related Articles
-
-- [Agentic RAG: The Next Evolution](/blog/agentic-rag-the-next-evolution)
-- [Building a Multi-Agent AI System](/blog/building-a-multi-agent-ai-system)
-- [LLM Evaluation Frameworks: Beyond Perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity)

@@ -72,7 +72,7 @@ At a high level, a structured RAG pipeline augments the usual "query - retrieve 
 You can implement this with:
 
 - A graph database (Neo4j, ArangoDB, JanusGraph, or RDF store)
-- A vector database (see "Vector Database Performance Benchmarks" and "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)")
+- A vector database (see "Vector Database Performance Benchmarks" and "Understanding Vector Databases: A Beginner's Guide")
 - An LLM for extraction and generation
 
 The key design choice is how tight the coupling between the LLM and graph is: do you keep the LLM "graph-aware" through structured prompts, or do you use it mostly as a text backend behind a symbolic reasoning layer?
@@ -263,7 +263,7 @@ For graph-friendly queries, you want a symbolic query. You can either:
 - Expose a fixed set of graph query templates
 - Let the LLM generate a Cypher or SPARQL query then validate it
 
-For systems with strong safety or privacy requirements like those discussed in "[Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models)", I usually prefer a template-based or constrained approach.
+For systems with strong safety or privacy requirements like those discussed in "Data Privacy in the Age of Large Language Models", I usually prefer a template-based or constrained approach.
 
 Example: generate a Cypher query for multi-hop dependency questions.
 
@@ -441,7 +441,7 @@ This is very similar in spirit to the monitoring and tracing ideas in "Monitorin
 
 If you are dealing with sensitive or personal data, knowledge graphs amplify both value and risk.
 
-Some patterns from "Introduction to Differential Privacy for NLP" and "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" transfer directly:
+Some patterns from "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" transfer directly:
 
 1. **Data minimization**: do you really need to store PII as graph nodes, or can you store pseudonymized IDs and keep the mapping in a separate secure service?
 2. **Attribute-level access control**: graph stores often support fine-grained ACLs. Use them. For example, allow engineers to see service dependency edges but not customer-related nodes.
@@ -497,7 +497,7 @@ Some building blocks that work well in Python setups:
 
 ## Where this fits in the broader LLM stack
 
-If you zoom out across the topics of "Agentic RAG: The Next Evolution", "Building a Multi-Agent AI System", and "[Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data)", structured RAG is complementary:
+If you zoom out across the topics of "Agentic RAG: The Next Evolution", "Building a Multi-Agent AI System", and "Fine-Tuning LLMs on Custom Data: A Practical Guide", structured RAG is complementary:
 
 - **Fine-tuning**: improves the base model's ability to follow your ontology and relation vocabulary
 - **Agentic systems**: agents can use the graph as a world model, planning over entities and relations instead of raw text
@@ -517,9 +517,3 @@ The core idea does not change: use LLMs for high-level reasoning and generation,
 - Start with a minimal ontology, keep graph and text views in sync, and evaluate both retrieval and reasoning improvements over text-only RAG.
 - Treat the graph layer as a first-class security and privacy surface, with minimization, access control, and auditing similar to your LLM layer.
 - Structured RAG complements fine-tuning and agentic systems, providing a stable world model that LLMs can plan and reason over effectively.
-
-## Related Articles
-
-- [Chunking Strategies for RAG Pipelines](/blog/chunking-strategies-for-rag-pipelines)
-- [Hybrid Search: Combining Dense and Sparse Retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval)
-- [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)

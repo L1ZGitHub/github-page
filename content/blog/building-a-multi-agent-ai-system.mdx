@@ -157,7 +157,7 @@ The workflow:
 This involves at least four agents:
 
 - **Planner** - understands the request and decomposes it
-- **Retriever** - uses semantic search over internal docs (see [Semantic Search vs Keyword Search: When to Use What](/blog/semantic-search-vs-keyword-search-when-to-use-what))
+- **Retriever** - uses semantic search over internal docs (see Semantic Search vs Keyword Search: When to Use What)
 - **Spec Writer** - writes the specification
 - **Critic** - reviews and tightens acceptance criteria
 
@@ -256,17 +256,17 @@ Multi-agent design synergizes with RAG in several ways.
 
 Instead of every agent doing its own retrieval, create a specialized retrieval agent that:
 
-- Knows which vector database to use (see Vector Database Performance Benchmarks and [Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases))
+- Knows which vector database to use (see Vector Database Performance Benchmarks and Understanding Vector Databases: A Beginner's Guide)
 - Knows which collections to query
 - Applies filtering based on tenant, region, or privacy policies
 
-This centralizes retrieval logic, which is crucial when you have compliance or privacy constraints such as those I described in [Data Privacy in the Age of Large Language Models](/blog/data-privacy-in-the-age-of-large-language-models).
+This centralizes retrieval logic, which is crucial when you have compliance or privacy constraints such as those I described in Data Privacy in the Age of Large Language Models.
 
 ### Confidential and public contexts
 
 With strong privacy boundaries, I often split agents into:
 
-- **Private context agent** - has access to sensitive user data, uses privacy-preserving NLP techniques similar to those in [Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)
+- **Private context agent** - has access to sensitive user data, uses privacy-preserving NLP techniques similar to those in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models
 - **Public context agent** - uses public docs, general knowledge, maybe internet search
 
 A manager agent can ask both, then selectively merge their outputs, sometimes after anonymization.
@@ -403,7 +403,7 @@ Use multi-agent evaluation loops:
 - Automatic evaluators (agents) that score outputs along dimensions like correctness, style, safety
 - Compare variants of prompts, tools, or routing policies
 
-This is where articles like Embedding Models Compared: OpenAI vs Open-Source and [Fine-Tuning LLMs on Custom Data: A Practical Guide](/blog/fine-tuning-llms-custom-data) become relevant. The better your base models and embeddings, the more reliable each agent becomes.
+This is where articles like Embedding Models Compared: OpenAI vs Open-Source and Fine-Tuning LLMs on Custom Data: A Practical Guide become relevant. The better your base models and embeddings, the more reliable each agent becomes.
 
 ## Key Takeaways
 
@@ -415,9 +415,3 @@ This is where articles like Embedding Models Compared: OpenAI vs Open-Source and
 - Invest early in observability, logging, and error handling, since debugging interactions is harder than debugging single prompts.
 - When moving to production, reuse good practices from web services: FastAPI, Docker, caching, idempotency, and monitoring.
 - Leverage agents not only for doing work but also for evaluation, cross-checking, and continuous improvement of the system.
-
-## Related Articles
-
-- [Agentic RAG: The Next Evolution](/blog/agentic-rag-the-next-evolution)
-- [Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)
-- [FinAgent and Beyond: Multimodal Foundation Agents for Trading](/blog/finagent-and-beyond-multimodal-foundation-agents-for-trading)

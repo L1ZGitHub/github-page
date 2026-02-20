@@ -54,7 +54,7 @@ def health_check():
     return {"status": "ok"}
 ```
 
-This is similar to how you would design a RAG endpoint that returns answers, references, and scores, like I discussed in "[Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide)".
+This is similar to how you would design a RAG endpoint that returns answers, references, and scores, like I discussed in "Retrieval-Augmented Generation: A Complete Guide".
 
 ### Loading the model efficiently
 
@@ -245,7 +245,7 @@ docker build -t text-classifier:latest .
 docker run -p 8000:8000 text-classifier:latest
 ```
 
-This pattern is similar to how you would containerize a RAG API that uses a vector database, as discussed in "Building Production-Ready RAG Systems" and "[Understanding Vector Databases: A Beginner's Guide](/blog/understanding-vector-databases)".
+This pattern is similar to how you would containerize a RAG API that uses a vector database, as discussed in "Building Production-Ready RAG Systems" and "Understanding Vector Databases: A Beginner's Guide".
 
 ### GPU-enabled images
 
@@ -336,7 +336,7 @@ class TransformerService:
         ]
 ```
 
-Conceptually this is the same pattern as building embedding endpoints, like in "[Embedding Models Compared: OpenAI vs Open-Source](/blog/embedding-models-compared-openai-vs-open-source)", except here we return class labels and scores instead of vectors.
+Conceptually this is the same pattern as building embedding endpoints, like in "Embedding Models Compared: OpenAI vs Open-Source", except here we return class labels and scores instead of vectors.
 
 ### System-level scaling
 
@@ -385,7 +385,7 @@ def log_prediction(input_count: int, latency_ms: float):
     }))
 ```
 
-You can enhance this with anonymization techniques from "[Privacy-Preserving NLP: Protecting Sensitive Data in Language Models](/blog/privacy-preserving-nlp)" to avoid logging raw user text.
+You can enhance this with anonymization techniques from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" to avoid logging raw user text.
 
 ### Health checks and readiness
 
@@ -424,7 +424,7 @@ In Kubernetes, you would then configure readiness and liveness probes against `/
 The same patterns scale to more complex systems:
 
 - A RAG service: FastAPI app that orchestrates retrieval, ranking, and generation, with each stage possibly being its own container. This aligns with the architecture I described in "Building Production-Ready RAG Systems" and "Chunking Strategies for RAG Pipelines".
-- An AI agent backend: FastAPI app that exposes a single `/agent` endpoint, internally calling multiple tools or services. This is close to the architectures in "[Building AI Agents with LangChain and LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph)".
+- An AI agent backend: FastAPI app that exposes a single `/agent` endpoint, internally calling multiple tools or services. This is close to the architectures in "Building AI Agents with LangChain and LangGraph".
 
 The core ideas stay the same:
 
@@ -445,9 +445,3 @@ Once you have one robust Dockerized FastAPI service for a small model, reusing t
 - Add structured logging, health, and readiness endpoints to make the service observable and reliable.
 - Reuse the same FastAPI + Docker patterns for RAG services, embedding APIs, and AI agents.
 - Treat privacy and security as first-class concerns, especially when logging or handling user data.
-
-## Related Articles
-
-- [CI/CD Pipelines for Machine Learning Projects](/blog/cicd-pipelines-for-machine-learning-projects)
-- [Monitoring ML Models in Production](/blog/monitoring-ml-models-in-production)
-- [Python Best Practices for ML Engineers](/blog/python-best-practices-for-ml-engineers)
