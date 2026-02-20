@@ -1,6 +1,6 @@
 import { Metadata } from "next"
-import { getAllPosts } from "@/lib/blog"
-import { BlogCard } from "@/components/blog-card"
+import { getAllPosts, getAllCategories } from "@/lib/blog"
+import { BlogContent } from "./blog-content"
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -9,22 +9,43 @@ export const metadata: Metadata = {
 
 export default function BlogIndex() {
   const posts = getAllPosts()
+  const categories = getAllCategories()
 
   return (
-    <div className="mx-auto max-w-4xl px-6 pb-24 pt-32">
-      <div className="mb-12">
-        <h1 className="mb-3 text-4xl font-bold text-gray-900">Blog</h1>
-        <p className="text-lg text-gray-600">
-          Articles on AI, machine learning, RAG systems, and more.
-        </p>
-        <p className="mt-2 text-sm text-gray-500">{posts.length} articles</p>
-      </div>
+    <>
+      {/* Hero section with gradient blobs */}
+      <section className="relative overflow-hidden pt-32 pb-16 text-center">
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-amber-50/30" />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {posts.map((post) => (
-          <BlogCard key={post.slug} post={post} />
-        ))}
-      </div>
-    </div>
+        {/* Decorative blobs */}
+        <div className="absolute top-[20%] left-[20%] h-96 w-96 rounded-full bg-amber-100/30 blur-3xl" />
+        <div className="absolute bottom-[20%] right-[20%] h-80 w-80 rounded-full bg-violet-100/30 blur-3xl" />
+
+        {/* Content */}
+        <div className="relative mx-auto max-w-3xl px-6">
+          <h1 className="mb-4 text-4xl font-bold text-gray-900 md:text-5xl">
+            Blog
+          </h1>
+          <p className="mx-auto max-w-xl text-lg leading-relaxed text-gray-600">
+            Insights on AI, Machine Learning, RAG Systems, and the future of
+            intelligent software
+          </p>
+          <p className="mt-3 text-sm text-gray-400">
+            {posts.length} article{posts.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      </section>
+
+      {/* Articles section */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-white to-slate-50 px-6 pb-24">
+        {/* Subtle background blob */}
+        <div className="absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-100/15 blur-3xl" />
+
+        <div className="relative mx-auto max-w-[1200px]">
+          <BlogContent posts={posts} categories={categories} />
+        </div>
+      </section>
+    </>
   )
 }
