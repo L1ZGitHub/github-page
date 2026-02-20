@@ -12,17 +12,17 @@ export default function BlogIndex() {
   const categories = getAllCategories()
 
   return (
-    <>
-      {/* Hero section with gradient blobs */}
-      <section className="relative overflow-hidden pt-32 pb-16 text-center">
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-amber-50/30" />
+    <div className="relative overflow-hidden">
+      {/* Full-page background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-50 via-white via-30% to-slate-50" />
 
-        {/* Decorative blobs */}
-        <div className="absolute top-[20%] left-[20%] h-96 w-96 rounded-full bg-amber-100/30 blur-3xl" />
-        <div className="absolute bottom-[20%] right-[20%] h-80 w-80 rounded-full bg-violet-100/30 blur-3xl" />
+      {/* Decorative blobs spanning hero + cards */}
+      <div className="absolute top-[10%] left-[15%] h-[500px] w-[500px] rounded-full bg-amber-100/30 blur-3xl" />
+      <div className="absolute top-[30%] right-[10%] h-[400px] w-[400px] rounded-full bg-violet-100/25 blur-3xl" />
+      <div className="absolute bottom-[10%] left-[40%] h-[500px] w-[500px] rounded-full bg-amber-100/15 blur-3xl" />
 
-        {/* Content */}
+      {/* Hero section */}
+      <section className="relative pt-32 pb-16 text-center">
         <div className="relative mx-auto max-w-3xl px-6">
           <h1 className="mb-4 text-4xl font-bold text-gray-900 md:text-5xl">
             Blog
@@ -38,14 +38,11 @@ export default function BlogIndex() {
       </section>
 
       {/* Articles section */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-white to-slate-50 px-6 pb-24">
-        {/* Subtle background blob */}
-        <div className="absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-100/15 blur-3xl" />
-
+      <section className="relative px-6 pb-24">
         <div className="relative mx-auto max-w-[1200px]">
           <BlogContent posts={posts} categories={categories} />
         </div>
       </section>
-    </>
+    </div>
   )
 }
