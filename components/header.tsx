@@ -13,10 +13,10 @@ import {
 } from "@/components/ui/sheet"
 
 const navLinks = [
-  { href: "#about", label: "About" },
-  { href: "#projects", label: "Projects" },
-  { href: "#research", label: "Research" },
-  { href: "#resume", label: "Resume" },
+  { href: "/#about", label: "About" },
+  { href: "/#projects", label: "Projects" },
+  { href: "/#research", label: "Research" },
+  { href: "/#resume", label: "Resume" },
   { href: "/blog", label: "Blog" },
 ]
 
@@ -45,7 +45,7 @@ export function Header() {
 
         <div className="flex items-center gap-4">
           <Link
-            href="#contact"
+            href="/#contact"
             className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
           >
             Contact
