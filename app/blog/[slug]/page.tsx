@@ -5,7 +5,7 @@ import { Calendar, Clock, User, BarChart3 } from "lucide-react"
 import { getAllSlugs, getPostBySlug } from "@/lib/mdx"
 import { getRelatedPosts } from "@/lib/blog"
 import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
-import { BlogCard } from "@/components/blog-card"
+import { RelatedArticleCard } from "@/components/related-article-card"
 import { AnimatedCards } from "@/components/animated-cards"
 
 interface Props {
@@ -119,9 +119,9 @@ export default async function BlogPost({ params }: Props) {
             Related Articles
           </h2>
           <AnimatedCards>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3">
               {relatedPosts.map((related, i) => (
-                <BlogCard key={related.slug} post={related} index={i} />
+                <RelatedArticleCard key={related.slug} post={related} index={i} />
               ))}
             </div>
           </AnimatedCards>
