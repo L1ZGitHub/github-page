@@ -3,6 +3,7 @@ import path from "path"
 import matter from "gray-matter"
 import { remark } from "remark"
 import html from "remark-html"
+import remarkAutoLinkArticles from "./remark-auto-link-articles"
 
 const CONTENT_DIR = path.join(process.cwd(), "content", "blog")
 
@@ -36,7 +37,10 @@ export async function getPostBySlug(slug: string): Promise<BlogPost> {
   const fileContents = fs.readFileSync(filePath, "utf-8")
   const { data, content } = matter(fileContents)
 
-  const processedContent = await remark().use(html).process(content)
+  const processedContent = await remark()
+    .use(remarkAutoLinkArticles, { currentSlug: slug })
+    .use(html)
+    .process(content)
   const contentHtml = processedContent.toString()
 
   return {
