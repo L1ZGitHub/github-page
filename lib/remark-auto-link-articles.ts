@@ -45,6 +45,7 @@ const GENERIC_SINGLE_WORDS = new Set([
   "real", "time", "open", "source", "custom", "modern", "privacy",
   "chinese", "finance", "world", "security", "trends", "year",
   "memory", "design", "patterns", "combining", "comparing", "evaluation",
+  "architectures", "architecture", "transformer",
 ])
 
 /**
@@ -67,16 +68,19 @@ function extractKeywords(title: string): string[] {
 
   const words = normalized.split(" ")
 
-  // Extract multi-word phrases (2-3 words) that are meaningful
-  // Skip stop words at the start/end of phrases
-  const significantWords = words.filter(
-    (w) => !STOP_WORDS.has(w.toLowerCase())
-  )
-
-  // Generate 2-word and 3-word combinations from significant words
-  for (let len = 3; len >= 2; len--) {
-    for (let i = 0; i <= significantWords.length - len; i++) {
-      const phrase = significantWords.slice(i, i + len).join(" ")
+  // Generate 2-word and 3-word sliding windows from ALL title words
+  // (including stop words), then filter out phrases where ALL words are stop/generic.
+  // This preserves phrases like "building RAG" where one word is a stop word.
+  // Prioritize 2-word phrases over 3-word (2-word match prose better).
+  for (let len = 2; len <= 3; len++) {
+    for (let i = 0; i <= words.length - len; i++) {
+      const phraseWords = words.slice(i, i + len)
+      // Filter out phrases where ALL words are stop words or generic
+      const allTrivial = phraseWords.every(
+        (w) => STOP_WORDS.has(w.toLowerCase()) || GENERIC_SINGLE_WORDS.has(w.toLowerCase())
+      )
+      if (allTrivial) continue
+      const phrase = phraseWords.join(" ")
       // Only include phrases with at least 6 characters total
       if (phrase.length >= 6) {
         keywords.push(phrase.toLowerCase())
@@ -85,25 +89,23 @@ function extractKeywords(title: string): string[] {
   }
 
   // Add distinctive single words (technical terms that are unique enough)
+  // Also allow ALL-CAPS acronyms of 3+ chars (like RAG, NLP, LLM)
+  const significantWords = words.filter(
+    (w) => !STOP_WORDS.has(w.toLowerCase())
+  )
   for (const word of significantWords) {
     const lower = word.toLowerCase()
     if (
-      lower.length >= 4 &&
-      !STOP_WORDS.has(lower) &&
       !GENERIC_SINGLE_WORDS.has(lower) &&
-      // Only add single words that look like specific technical terms
-      (lower.length >= 7 || /[A-Z]/.test(word))
+      ((lower.length >= 7) || (word === word.toUpperCase() && word.length >= 3))
     ) {
-      // Check if it's distinctive enough
-      if (!GENERIC_SINGLE_WORDS.has(lower)) {
-        keywords.push(lower)
-      }
+      keywords.push(lower)
     }
   }
 
-  // Deduplicate and limit to 3 keywords
+  // Deduplicate and limit to 5 keywords
   const unique = [...new Set(keywords)]
-  return unique.slice(0, 3)
+  return unique.slice(0, 5)
 }
 
 function getAllArticles(): ArticleInfo[] {
