@@ -34,11 +34,6 @@ export const metadata: Metadata = {
     description:
       "Co-Founder & CTO at Ailog. AI Engineer specializing in RAG systems, privacy-preserving NLP, and machine learning.",
   },
-  alternates: {
-    types: {
-      "application/rss+xml": "https://helain-zimmermann.com/feed.xml",
-    },
-  },
   verification: {
     google: "fGxd4XLuu53IV4fPu1-xY_2JZTB7hBs5gAmyES6v-b0",
   },
