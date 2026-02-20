@@ -3,8 +3,10 @@ import path from "path"
 import matter from "gray-matter"
 import { unified } from "unified"
 import remarkParse from "remark-parse"
+import remarkGfm from "remark-gfm"
 import remarkAutoLinkArticles from "./remark-auto-link-articles"
 import remarkRehype from "remark-rehype"
+import rehypeSlug from "rehype-slug"
 import rehypeHighlight from "rehype-highlight"
 import rehypeStringify from "rehype-stringify"
 
@@ -42,8 +44,10 @@ export async function getPostBySlug(slug: string): Promise<BlogPost> {
 
   const processedContent = await unified()
     .use(remarkParse)
+    .use(remarkGfm)
     .use(remarkAutoLinkArticles, { currentSlug: slug })
     .use(remarkRehype)
+    .use(rehypeSlug)
     .use(rehypeHighlight)
     .use(rehypeStringify)
     .process(content)
