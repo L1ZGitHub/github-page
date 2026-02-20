@@ -3,7 +3,7 @@ import { Calendar, Clock } from "lucide-react"
 import type { BlogPostMeta } from "@/lib/mdx"
 import { getCategoryColors, getDifficultyColors } from "@/lib/category-colors"
 
-export function BlogCard({ post, index }: { post: BlogPostMeta; index?: number }) {
+export function BlogCard({ post }: { post: BlogPostMeta }) {
   const catColors = getCategoryColors(post.category)
   const diffColor = getDifficultyColors(post.difficulty).classes
 
@@ -11,7 +11,6 @@ export function BlogCard({ post, index }: { post: BlogPostMeta; index?: number }
     <Link
       href={`/blog/${post.slug}`}
       className="article-card-animated group block"
-      style={{ "--card-index": index ?? 0 } as React.CSSProperties}
     >
       <article className="flex h-full flex-col rounded-2xl border border-gray-100 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-amber-200 hover:shadow-[0_20px_40px_rgba(0,0,0,0.1)]">
         <div className="flex flex-1 flex-col p-6">

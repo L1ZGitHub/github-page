@@ -538,14 +538,18 @@ code.hljs {
   margin: 1.5rem 0;
 }
 
-/* ===== Blog card scroll-in animations (matching old site) ===== */
+/* ===== Blog card scroll-in animations (progressive enhancement) ===== */
+/* Cards are fully visible by default (SSR). JS adds .animate-ready to opt in. */
 .article-card-animated {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
-  transition-delay: calc(var(--card-index, 0) * 0.08s);
+  opacity: 1;
+  transform: translateY(0);
 }
-.article-card-animated.visible {
+.article-card-animated.animate-ready {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.article-card-animated.animate-ready.visible {
   opacity: 1;
   transform: translateY(0);
 }

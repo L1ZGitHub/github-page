@@ -28,9 +28,17 @@ export function BlogContent({ posts, categories }: BlogContentProps) {
     )
   })
 
-  /* Staggered scroll-in animation (matching old site's IntersectionObserver) */
+  /* Progressive-enhancement scroll-in animation.
+     Cards are visible by default (SSR). After hydration we add .animate-ready
+     (opacity:0 + translateY) then let IntersectionObserver add .visible to
+     fade them in quickly (0.15s, no staggered delay). */
   useEffect(() => {
     if (!gridRef.current) return
+
+    const cards = gridRef.current.querySelectorAll(".article-card-animated")
+
+    // Opt cards into animation (sets opacity:0 + translateY via CSS)
+    cards.forEach((el) => el.classList.add("animate-ready"))
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -41,11 +49,13 @@ export function BlogContent({ posts, categories }: BlogContentProps) {
           }
         })
       },
-      { rootMargin: "0px", threshold: 0.1 }
+      { rootMargin: "50px", threshold: 0.1 }
     )
 
-    const cards = gridRef.current.querySelectorAll(".article-card-animated")
-    cards.forEach((el) => observer.observe(el))
+    // Use rAF so the browser paints the animate-ready state before observing
+    requestAnimationFrame(() => {
+      cards.forEach((el) => observer.observe(el))
+    })
 
     return () => observer.disconnect()
   }, [filteredPosts])
@@ -98,8 +108,8 @@ export function BlogContent({ posts, categories }: BlogContentProps) {
       {/* Articles grid */}
       <div ref={gridRef} className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {filteredPosts.length > 0 ? (
-          filteredPosts.map((post, index) => (
-            <BlogCard key={post.slug} post={post} index={index} />
+          filteredPosts.map((post) => (
+            <BlogCard key={post.slug} post={post} />
           ))
         ) : (
           <div className="col-span-full py-16 text-center">
