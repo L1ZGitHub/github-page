@@ -2,7 +2,7 @@
 @plugin "@tailwindcss/typography";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "highlight.js/styles/monokai-sublime.css";
+/* highlight.js Pygments Monokai theme — custom override (see below) */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -336,7 +336,145 @@
   border-radius: 0;
 }
 
-/* Override highlight.js background to match old Pygments Monokai exactly */
+/* ==========================================================================
+   Pygments Monokai theme mapped to highlight.js classes.
+   Replaces the monokai-sublime.css import to match the old site exactly.
+
+   Key color differences vs monokai-sublime:
+   - Background: #272822 (not #23241f)
+   - Keywords (def, class, if, while, return, etc.): #66D9EF cyan (not #f92672 pink)
+   - Keyword.Namespace (from, import): #FF4689 pink
+   - Comments: #959077 (not #75715e)
+   - Operators (=, +, -, etc.): #FF4689 pink
+   - Functions/decorators/classes: #A6E22E green
+   - Strings: #E6DB74 yellow
+   - Numbers: #AE81FF purple
+   ========================================================================== */
+
+/* Base hljs block/inline styles */
+pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em;
+}
+code.hljs {
+  padding: 3px 5px;
+}
+
+/* Monokai background and default text color */
+.hljs {
+  background: #272822;
+  color: #F8F8F2;
+}
+
+/* Comments — Pygments uses #959077, NOT the darker #75715e */
+.hljs-comment,
+.hljs-quote {
+  color: #959077;
+}
+
+/* Keywords — Pygments Monokai uses CYAN #66D9EF for most keywords
+   (def, class, if, elif, else, while, for, return, True, False, None, etc.)
+   This is the biggest difference from monokai-sublime which uses pink. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type {
+  color: #66D9EF;
+}
+
+/* Keyword.Namespace — "from" and "import" are PINK in Pygments Monokai.
+   highlight.js marks these as .hljs-keyword too, but we handle "import"
+   statements via .hljs-meta (preprocessor-like) */
+
+/* Operators and punctuation-like operators — PINK */
+.hljs-deletion {
+  color: #FF4689;
+}
+
+/* Functions, class names, decorators — GREEN */
+.hljs-title,
+.hljs-section,
+.hljs-selector-class,
+.hljs-title.function_,
+.hljs-title.class_ {
+  color: #A6E22E;
+}
+
+/* Strings — YELLOW */
+.hljs-string,
+.hljs-template-variable,
+.hljs-variable,
+.hljs-addition,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #E6DB74;
+}
+
+/* Numbers, literals — PURPLE */
+.hljs-number,
+.hljs-literal,
+.hljs-bullet,
+.hljs-link {
+  color: #AE81FF;
+}
+
+/* Name.Attribute, symbols — CYAN */
+.hljs-symbol,
+.hljs-attribute {
+  color: #66D9EF;
+}
+
+/* Name.Builtin — default text color */
+.hljs-built_in {
+  color: #F8F8F2;
+}
+
+/* Name, tags — PINK (HTML tags, operator-like tokens) */
+.hljs-name,
+.hljs-tag {
+  color: #FF4689;
+}
+
+/* Subst, params — default text */
+.hljs-subst,
+.hljs-params {
+  color: #F8F8F2;
+}
+
+/* Attr names in HTML/XML — GREEN */
+.hljs-attr {
+  color: #A6E22E;
+}
+
+/* Regexp — YELLOW */
+.hljs-regexp {
+  color: #E6DB74;
+}
+
+/* Meta / preprocessor — #959077 (comment-like) */
+.hljs-meta {
+  color: #959077;
+}
+
+/* Meta keyword (e.g. @decorator, #include) — pink for operators */
+.hljs-meta .hljs-keyword {
+  color: #FF4689;
+}
+.hljs-meta .hljs-string {
+  color: #E6DB74;
+}
+
+/* Strong / emphasis */
+.hljs-strong {
+  font-weight: bold;
+  color: #F8F8F2;
+}
+.hljs-emphasis {
+  font-style: italic;
+  color: #F8F8F2;
+}
+
+/* Override hljs background inside article prose to match old site */
 .article-prose pre code.hljs {
   background: #272822;
   padding: 1.25rem 1.5rem;
@@ -394,4 +532,16 @@
   height: auto;
   border-radius: 0.75rem;
   margin: 1.5rem 0;
+}
+
+/* ===== Blog card scroll-in animations (matching old site) ===== */
+.article-card-animated {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition-delay: calc(var(--card-index, 0) * 0.08s);
+}
+.article-card-animated.visible {
+  opacity: 1;
+  transform: translateY(0);
 }

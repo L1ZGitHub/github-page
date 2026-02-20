@@ -13,32 +13,38 @@ export default function BlogIndex() {
 
   return (
     <div className="relative overflow-hidden">
-      {/* Full-page background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-50 via-white via-30% to-slate-50" />
+      {/* Hero section with gradient background matching old site */}
+      <section className="relative overflow-hidden pt-32 pb-16 text-center">
+        {/* Background gradient (old site: linear-gradient to bottom-right from slate-50 via white to amber-50/30) */}
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-amber-50/30" />
 
-      {/* Decorative blobs spanning hero + cards */}
-      <div className="absolute top-[10%] left-[15%] h-[500px] w-[500px] rounded-full bg-amber-100/30 blur-3xl" />
-      <div className="absolute top-[30%] right-[10%] h-[400px] w-[400px] rounded-full bg-violet-100/25 blur-3xl" />
-      <div className="absolute bottom-[10%] left-[40%] h-[500px] w-[500px] rounded-full bg-amber-100/15 blur-3xl" />
+        {/* Decorative blobs matching old site positions */}
+        <div className="absolute top-[20%] left-[20%] h-96 w-96 rounded-full bg-amber-100/30 blur-[64px]" />
+        <div className="absolute bottom-[20%] right-[20%] h-80 w-80 rounded-full bg-violet-100/30 blur-[64px]" />
 
-      {/* Hero section */}
-      <section className="relative pt-32 pb-16 text-center">
         <div className="relative mx-auto max-w-3xl px-6">
-          <h1 className="mb-4 text-4xl font-bold text-gray-900 md:text-5xl">
+          <h1 className="mb-4 text-4xl font-bold text-gray-900 md:text-[3.5rem] leading-tight">
             Blog
           </h1>
           <p className="mx-auto max-w-xl text-lg leading-relaxed text-gray-600">
             Insights on AI, Machine Learning, RAG Systems, and the future of
             intelligent software
           </p>
-          <p className="mt-3 text-sm text-gray-400">
-            {posts.length} article{posts.length !== 1 ? "s" : ""}
-          </p>
         </div>
       </section>
 
-      {/* Articles section */}
-      <section className="relative px-6 pb-24">
+      {/* Filter pills section (old site: margin-top -1rem relative to hero, margin-bottom 3rem) */}
+      <section className="relative -mt-4 mb-0 px-6">
+        <div className="mx-auto max-w-[1200px]">
+          {/* Content rendered client-side with filters + grid */}
+        </div>
+      </section>
+
+      {/* Articles section with subtle background gradient */}
+      <section className="relative px-6 pb-24" style={{ background: "linear-gradient(to bottom, white, #f8fafc)" }}>
+        {/* Background blob matching old site */}
+        <div className="absolute top-1/2 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-100/15 blur-[64px]" />
+
         <div className="relative mx-auto max-w-[1200px]">
           <BlogContent posts={posts} categories={categories} />
         </div>

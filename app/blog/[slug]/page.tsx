@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { Calendar, Clock, User, BarChart3 } from "lucide-react"
 import { getAllSlugs, getPostBySlug } from "@/lib/mdx"
 import { getRelatedPosts } from "@/lib/blog"
+import { getCategoryStyle } from "@/lib/category-colors"
 import { BlogCard } from "@/components/blog-card"
 
 interface Props {
@@ -62,8 +63,8 @@ export default async function BlogPost({ params }: Props) {
             <span className="current">{post.title}</span>
           </nav>
 
-          {/* Category badge */}
-          <span className="article-category-badge">{post.category}</span>
+          {/* Category badge with per-category colors */}
+          <span className="article-category-badge" style={getCategoryStyle(post.category)}>{post.category}</span>
 
           {/* Title */}
           <h1 className="article-title">{post.title}</h1>

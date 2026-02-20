@@ -1,60 +1,65 @@
 import Link from "next/link"
-import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, BarChart3 } from "lucide-react"
+import { Calendar, Clock } from "lucide-react"
 import type { BlogPostMeta } from "@/lib/mdx"
+import { getCategoryColors } from "@/lib/category-colors"
 
 const difficultyColors: Record<string, string> = {
-  beginner: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  intermediate: "bg-amber-50 text-amber-700 border-amber-200",
-  advanced: "bg-red-50 text-red-700 border-red-200",
+  beginner: "bg-emerald-50 text-emerald-600",
+  intermediate: "bg-amber-50 text-amber-600",
+  advanced: "bg-red-50 text-red-600",
 }
 
-export function BlogCard({ post }: { post: BlogPostMeta }) {
+export function BlogCard({ post, index }: { post: BlogPostMeta; index?: number }) {
+  const catColors = getCategoryColors(post.category)
+  const diffColor = difficultyColors[post.difficulty] || "bg-amber-50 text-amber-600"
+
   return (
-    <Link href={`/blog/${post.slug}`} className="group block">
-      <article className="rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-amber-200 hover:shadow-xl">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Badge
-            variant="outline"
-            className={`text-xs ${difficultyColors[post.difficulty] || ""}`}
+    <Link
+      href={`/blog/${post.slug}`}
+      className="article-card-animated group block"
+      style={{ "--card-index": index ?? 0 } as React.CSSProperties}
+    >
+      <article className="flex h-full flex-col rounded-2xl border border-gray-100 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-amber-200 hover:shadow-[0_20px_40px_rgba(0,0,0,0.1)]">
+        <div className="flex flex-1 flex-col p-6">
+          {/* Category badge with per-category colors */}
+          <span
+            className={`mb-3 inline-block w-fit rounded-full px-3 py-1 text-xs font-semibold ${catColors.classes}`}
           >
-            {post.difficulty}
-          </Badge>
-          <span className="text-xs text-gray-400">{post.category}</span>
-        </div>
-
-        <h3 className="mb-2 text-lg font-bold text-gray-900 group-hover:text-amber-600 transition-colors line-clamp-2">
-          {post.title}
-        </h3>
-
-        <p className="mb-4 text-sm leading-relaxed text-gray-600 line-clamp-2">
-          {post.description}
-        </p>
-
-        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            <Calendar className="size-3" />
-            {new Date(post.date).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })}
+            {post.category}
           </span>
-          <span className="flex items-center gap-1">
-            <Clock className="size-3" />
-            {post.readTime}
-          </span>
-        </div>
 
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {post.tags.slice(0, 4).map((tag) => (
+          {/* Title */}
+          <h2 className="mb-2 text-lg font-bold leading-snug text-gray-900 line-clamp-2">
+            {post.title}
+          </h2>
+
+          {/* Description */}
+          <p className="mb-auto text-sm leading-relaxed text-gray-600 line-clamp-2">
+            {post.description}
+          </p>
+
+          {/* Meta row with border-top, matching old site */}
+          <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4">
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <Calendar className="size-3" />
+                {new Date(post.date).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="size-3" />
+                {post.readTime}
+              </span>
+            </div>
             <span
-              key={tag}
-              className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+              className={`rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold capitalize ${diffColor}`}
             >
-              {tag}
+              {post.difficulty}
             </span>
-          ))}
+          </div>
         </div>
       </article>
     </Link>
