@@ -4,7 +4,6 @@ import matter from "gray-matter"
 import { unified } from "unified"
 import remarkParse from "remark-parse"
 import remarkGfm from "remark-gfm"
-import remarkAutoLinkArticles from "./remark-auto-link-articles"
 import remarkRehype from "remark-rehype"
 import rehypeSlug from "rehype-slug"
 import rehypeHighlight from "rehype-highlight"
@@ -17,6 +16,7 @@ export interface BlogPost {
   title: string
   description: string
   date: string
+  dateModified?: string
   category: string
   tags: string[]
   difficulty: string
@@ -30,6 +30,7 @@ export interface BlogPostMeta {
   title: string
   description: string
   date: string
+  dateModified?: string
   category: string
   tags: string[]
   difficulty: string
@@ -45,7 +46,6 @@ export async function getPostBySlug(slug: string): Promise<BlogPost> {
   const processedContent = await unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .use(remarkAutoLinkArticles, { currentSlug: slug })
     .use(remarkRehype)
     .use(rehypeSlug)
     .use(rehypeHighlight)
@@ -58,6 +58,7 @@ export async function getPostBySlug(slug: string): Promise<BlogPost> {
     title: data.title,
     description: data.description,
     date: data.date,
+    dateModified: data.dateModified || data.date,
     category: data.category,
     tags: data.tags || [],
     difficulty: data.difficulty,
@@ -77,6 +78,7 @@ export function getPostMetaBySlug(slug: string): BlogPostMeta {
     title: data.title,
     description: data.description,
     date: data.date,
+    dateModified: data.dateModified || data.date,
     category: data.category,
     tags: data.tags || [],
     difficulty: data.difficulty,

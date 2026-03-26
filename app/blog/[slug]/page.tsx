@@ -24,11 +24,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: post.title,
       description: post.description,
+      alternates: {
+        canonical: `https://helain-zimmermann.com/blog/${slug}`,
+      },
       openGraph: {
         title: post.title,
         description: post.description,
+        url: `https://helain-zimmermann.com/blog/${slug}`,
         type: "article",
         publishedTime: post.date,
+        modifiedTime: post.dateModified || post.date,
         authors: [post.author],
         tags: post.tags,
       },
@@ -52,6 +57,51 @@ export default async function BlogPost({ params }: Props) {
 
   return (
     <article>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            headline: post.title,
+            description: post.description,
+            datePublished: post.date,
+            dateModified: post.dateModified || post.date,
+            author: {
+              "@type": "Person",
+              name: post.author,
+              url: "https://helain-zimmermann.com",
+              jobTitle: "Co-Founder & CTO",
+              worksFor: { "@type": "Organization", name: "Ailog" },
+            },
+            publisher: {
+              "@type": "Organization",
+              name: "Ailog",
+              url: "https://www.ailog.fr",
+            },
+            mainEntityOfPage: {
+              "@type": "WebPage",
+              "@id": `https://helain-zimmermann.com/blog/${slug}`,
+            },
+            keywords: post.tags.join(", "),
+            articleSection: post.category,
+          }),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Blog", item: "https://helain-zimmermann.com/blog" },
+              { "@type": "ListItem", position: 2, name: post.category, item: "https://helain-zimmermann.com/blog" },
+              { "@type": "ListItem", position: 3, name: post.title, item: `https://helain-zimmermann.com/blog/${slug}` },
+            ],
+          }),
+        }}
+      />
       {/* Article header with gradient background */}
       <section className="article-header-hero" style={{ padding: "8rem 1.5rem 3rem" }}>
         <div style={{ maxWidth: "800px", margin: "0 auto" }}>
