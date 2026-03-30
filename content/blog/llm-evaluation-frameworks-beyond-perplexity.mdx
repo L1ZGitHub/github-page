@@ -2,7 +2,7 @@
 title: "LLM Evaluation Frameworks: Beyond Perplexity"
 description: "Go beyond perplexity with practical LLM evaluation: task metrics, judge models, rubrics, RAG-specific checks, and production feedback loops."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Tutorials"
 tags: ["LLMs", "Evaluation", "RAG", "Python", "MLOps", "NLP"]
 difficulty: "intermediate"
@@ -16,7 +16,7 @@ For most real-world systems - chatbots, RAG applications, agents, internal tools
 
 As I have scaled RAG systems and privacy-preserving NLP pipelines into production, the evaluation question has come up again and again: *How do we know this is actually better?* That is where we need to go beyond perplexity.
 
-In this post I will walk through practical ways to evaluate LLMs and LLM-based systems, with code, focusing on what you can implement without building a full research lab. If you already read the articles on **Retrieval-Augmented Generation: A Complete Guide**, **Evaluating RAG System Performance**, and **Monitoring ML Models in Production**, this will fit naturally on top of those topics.
+In this post I will walk through practical ways to evaluate LLMs and LLM-based systems, with code, focusing on what you can implement without building a full research lab.
 
 
 ## Why perplexity is not enough
@@ -33,7 +33,7 @@ When I compare models for a production use case, I care about things like:
 - Does it follow instructions consistently?
 - Does it hallucinate less, especially in RAG settings?
 - Does it respect privacy constraints?
-- Does it degrade gracefully on long contexts, multimodal inputs, or tool calls?
+- Does it degrade gracefully on long contexts, [multimodal inputs](/blog/multimodal-ai-combining-vision-and-language-models), or tool calls?
 
 These are system-level behaviors, not token prediction quality.
 
@@ -51,10 +51,10 @@ You rarely need all of this at once. Start simple, then iterate.
 
 ## 1. Task-level metrics: still useful, used carefully
 
-If your task has a clear notion of “right answer”, traditional metrics are still your best friend. For example:
+If your task has a clear notion of "right answer", traditional metrics are still your best friend. For example:
 
 - Classification or routing - accuracy, AUROC, F1.
-- Extraction (like Named Entity Recognition from **Named Entity Recognition with Modern NLP**) - span-level F1, exact match.
+- Extraction (like Named Entity Recognition) - span-level F1, exact match.
 - Structured outputs - JSON schema validation plus field-level metrics.
 
 For open-ended generation, metrics like BLEU and ROUGE are noisy, but can still catch regressions.
@@ -111,20 +111,20 @@ if __name__ == "__main__":
     evaluate_dataset(dev_set)
 ```
 
-You can plug this into the CI/CD flows discussed in **CI/CD Pipelines for Machine Learning Projects** and trigger it on prompt changes or model upgrades.
+You can plug this into CI/CD and trigger it on prompt changes or model upgrades.
 
 
 ## 2. LLM-as-a-judge: automatic grading at scale
 
-For many realistic tasks, there is no single ground truth answer. Responses can be good in different ways. A binary “correct / incorrect” label is too crude.
+For many realistic tasks, there is no single ground truth answer. Responses can be good in different ways. A binary "correct / incorrect" label is too crude.
 
-This is where **LLM-as-a-judge** approaches shine. The idea:
+This is where LLM-as-a-judge approaches shine. The idea:
 
 - Use a strong, usually more capable, judge model.
 - Provide the user query, the system answer, and possibly a reference answer.
 - Ask the judge to score the answer along explicit dimensions.
 
-This is very similar to prompt engineering principles from **Prompt Engineering Best Practices for Production**. The difference is that the prompt is now a rubric for grading.
+The judge prompt is essentially a rubric for grading, and the same [prompt engineering principles](/blog/prompt-engineering-best-practices-for-production) that apply to production prompts apply here too.
 
 ### Designing a scoring rubric
 
@@ -194,14 +194,14 @@ With this in place, you can:
 
 - Compare models on the same dataset.
 - Track scores over time as you iterate prompts and system design.
-- Detect regressions as part of your deployment pipeline, similar to **Monitoring ML Models in Production**.
+- Detect regressions as part of your deployment pipeline.
 
 
 ## 3. Evaluating RAG systems: retrieval + generation
 
-For RAG, evaluating the model in isolation is often misleading. As I described in **Building Production-Ready RAG Systems** and **Scaling RAG Systems to Millions of Documents**, retrieval quality matters as much as, or more than, model choice.
+For RAG, evaluating the model in isolation is often misleading. Retrieval quality matters as much as, or more than, model choice.
 
-A robust RAG evaluation checks at least three things:
+A robust [RAG evaluation](/blog/evaluating-rag-system-performance) checks at least three things:
 
 1. **Retrieval quality** - Do we fetch the right documents?
 2. **Groundedness** - Does the answer rely on the retrieved context, or hallucinate?
@@ -209,7 +209,7 @@ A robust RAG evaluation checks at least three things:
 
 ### 3.1 Retrieval quality
 
-Retrieval metrics are covered in depth in **Evaluating RAG System Performance**, **Semantic Search vs Keyword Search: When to Use What**, and **Vector Database Performance Benchmarks**. Practically, you want:
+Practically, you want:
 
 - Recall@k - Is the relevant document in the top k?
 - Precision@k - How many of the top k are actually relevant?
@@ -229,7 +229,7 @@ def recall_at_k(labels: List[List[str]], preds: List[List[str]], k: int = 5) -> 
     return hits / total if total > 0 else 0.0
 ```
 
-This is directly influenced by your choice of embeddings (see **Embedding Models Compared: OpenAI vs Open-Source**) and your retrieval strategy (pure dense, sparse, or **Hybrid Search: Combining Dense and Sparse Retrieval**).
+This is directly influenced by your choice of embeddings and retrieval strategy (pure dense, sparse, or hybrid). If you store embeddings in a dedicated store, [understanding how vector databases work](/blog/understanding-vector-databases) helps you pick the right index and distance metric for your recall targets.
 
 ### 3.2 Groundedness and hallucinations
 
@@ -247,7 +247,7 @@ Output a JSON object with:
 - justification
 ```
 
-This ties directly to the patterns from **Knowledge Graphs Meet LLMs: Structured RAG Architectures**, where part of the goal is exactly to reduce hallucination by constraining what the model can use.
+Constraining what the model can use through structured knowledge sources is one way to reduce hallucination at the architecture level, rather than only catching it at evaluation time.
 
 ### 3.3 Task success and user-centric metrics
 
@@ -256,7 +256,7 @@ Ultimately, your RAG system exists to answer someone's question in a specific wo
 - Task completion rate - Did the user get what they needed without escalating?
 - Re-ask rate - How often did users need to rephrase or ask again?
 - Human escalation rate - How often did support agents need to step in?
-- Time-to-answer - Especially if you have real-time constraints as in **Building Real-Time ML Inference Pipelines**.
+- Time-to-answer - Especially relevant if you have real-time latency constraints.
 
 Instrument these in your application backend, not just your model code.
 
@@ -271,7 +271,7 @@ From experience:
 
 - Keep it cheap - 50 to 200 examples are often enough for directional decisions.
 - Use a simple UI - even a Google Sheet with columns: question, answer A, answer B, preferred, comments.
-- Ask one question per judgment - “Which answer is better for this user?” is often enough.
+- Ask one question per judgment - "Which answer is better for this user?" is often enough.
 - Sample real traffic - synthetic prompts from prompt libraries are rarely representative.
 
 You can use the same categories you defined for automated judging: correctness, relevance, clarity, safety.
@@ -282,8 +282,6 @@ Combine human scores with automated ones. If they diverge, inspect examples and 
 ## 5. Evaluation for privacy-preserving and safe NLP
 
 If you work on privacy or compliance heavy use cases, evaluation must include privacy and safety, not just quality.
-
-This connects directly to topics from **Privacy-Preserving NLP: Protecting Sensitive Data in Language Models**, **Federated Learning for Privacy-Preserving AI**, and **Introduction to Differential Privacy for NLP**.
 
 ### Privacy checks
 
@@ -308,14 +306,14 @@ Evaluate both refusal rates and quality of safe alternatives. This becomes part 
 
 ## 6. Building an evaluation harness you can live with
 
-The most important advice I can give as an engineer: treat evaluation like you treat your build system, not like a one-off notebook.
+Treat evaluation like you treat your build system, not like a one-off notebook.
 
 A minimal but realistic setup:
 
-1. **Datasets in version control**  - A small but curated set of prompts and expected behavior stored as JSON or CSV.
-2. **Evaluation scripts in Python**  - Metrics, LLM-judge calls, and report generation.
-3. **CI integration**  - On every model or prompt change, run the evaluation and fail the build if key metrics drop.
-4. **Dashboarding**  - Store results in a database or simple files and visualize trends.
+1. **Datasets in version control** - A small but curated set of prompts and expected behavior stored as JSON or CSV.
+2. **Evaluation scripts in Python** - Metrics, LLM-judge calls, and report generation.
+3. **CI integration** - On every model or prompt change, run the evaluation and fail the build if key metrics drop.
+4. **Dashboarding** - Store results in a database or simple files and visualize trends.
 
 Example skeleton for an eval CLI:
 
@@ -363,12 +361,10 @@ if __name__ == "__main__":
     run_eval(args.dataset, args.model_name)
 ```
 
-Tie this into the tooling you already use from **Python Best Practices for ML Engineers**, **Deploying ML Models with FastAPI and Docker**, and **Monitoring ML Models in Production** and you get a reproducible, observable system.
-
 
 ## 7. Special cases: agents and tool-using systems
 
-For more complex systems like those in **Building a Multi-Agent AI System**, **Agentic RAG: The Next Evolution**, or **Building AI Agents with LangChain and LangGraph**, evaluation becomes more like software testing:
+For agentic systems and tool-using LLMs, evaluation becomes more like software testing:
 
 - **End-to-end task success** - Did the agent complete the workflow? Place the order, update the record, generate the report?
 - **Tool call correctness** - Were tools used correctly, with valid parameters, and in a minimal number of steps?
@@ -392,4 +388,3 @@ Then build metrics on top of those logs. For example, average steps per task, to
 - Privacy, safety, and policy compliance should be first-class evaluation dimensions, not afterthoughts.
 - Treat evaluation as code: version datasets, script metrics, integrate with CI, and monitor drifts over time.
 - Complex systems like agents and tool-using LLMs require end-to-end task-level evaluation and careful instrumentation.
-

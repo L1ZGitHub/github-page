@@ -2,7 +2,7 @@
 title: "CI/CD Pipelines for Machine Learning Projects"
 description: "Learn how to design practical CI/CD pipelines for ML projects, covering testing, data checks, model evaluation, deployment and MLOps tooling."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Engineering"
 tags: ["MLOps", "CI/CD", "Machine Learning", "Python", "RAG", "DevOps"]
 difficulty: "intermediate"
@@ -14,7 +14,7 @@ Software engineers have enjoyed solid CI/CD practices for years, while many ML t
 
 In ML, the challenge is not just deploying code. We also deploy data, models, and infrastructure. That makes CI/CD more complex, but also more valuable when it is done well.
 
-In this post I will walk through how I approach CI/CD for ML projects, from simple research repos to production RAG systems, connecting concepts from model evaluation, deployment, and privacy-aware NLP.
+This post walks through how to approach CI/CD for ML projects, from simple research repos to production RAG systems.
 
 ## Why CI/CD for ML is different
 
@@ -23,13 +23,13 @@ Traditional CI/CD focuses on building, testing, and deploying code. In ML projec
 1. **Code** - model definitions, data pipelines, API servers, RAG orchestration logic.
 2. **Data** - training data, evaluation datasets, prompts, retrieval corpora.
 3. **Models** - versioned artifacts, checkpoints, embedding models, LLM adapters.
-4. **Infrastructure** - vector databases, GPUs, workers, API gateways.
+4. **Infrastructure** - [vector databases](/blog/understanding-vector-databases), GPUs, workers, API gateways.
 
-This aligns with themes from *Building Production-Ready RAG Systems* and *Retrieval-Augmented Generation: A Complete Guide*. A robust ML CI/CD pipeline needs to:
+A robust ML CI/CD pipeline needs to:
 
 - Keep experiments reproducible.
 - Prevent regressions in prediction quality.
-- Protect user data, as in *Data Privacy in the Age of Large Language Models*.
+- Protect user data through anonymization and differential privacy.
 - Make deployments boring and reversible.
 
 I like to think of it in three stages:
@@ -70,13 +70,11 @@ A clean repo layout makes CI/CD much easier. For a typical ML service or RAG sys
 └── requirements.txt / pyproject.toml
 ``
 
-Good structure plays well with tests and deployment. If you have RAG-specific components, you might also mirror concepts from *Chunking Strategies for RAG Pipelines* and *Understanding Vector Databases: A Beginner's Guide* in `src/data` and `pipelines/preprocess.py`.
-
 ## Continuous Integration (CI) for ML projects
 
 ### 1. Basic CI: linting, formatting, unit tests
 
-This part is similar to what I outlined in *Python Best Practices for ML Engineers*.
+This part is standard [Python engineering](/blog/python-best-practices-for-ml-engineers): formatting, static analysis, and unit tests.
 
 Typical steps:
 
@@ -177,7 +175,7 @@ You do not want a PR to silently degrade model quality. I usually maintain:
 - A small **golden dataset** for fast checks on every PR.
 - Larger **evaluation datasets** for nightly or pre-release runs.
 
-This is aligned with the evaluation patterns in *Evaluating RAG System Performance*.
+This follows the same principles used when [evaluating RAG system performance](/blog/evaluating-rag-system-performance): define metrics upfront, automate measurement, and fail on regressions.
 
 At minimum, you can:
 
@@ -234,11 +232,9 @@ For RAG, quality checks could cover:
 - Exact match / F1 for answers.
 - Latency and cost per request.
 
-These metrics echo the frameworks described in *Retrieval-Augmented Generation: A Complete Guide* and *Semantic Search vs Keyword Search: When to Use What*.
-
 ### 4. Privacy and security checks
 
-If you work with sensitive data, your CI/CD pipeline must help enforce privacy commitments, as discussed in *Introduction to Differential Privacy for NLP* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models*.
+If you work with sensitive data, your CI/CD pipeline must help enforce privacy commitments.
 
 Ideas:
 
@@ -264,7 +260,7 @@ CI should run these tests on every change to the relevant modules.
 
 ## Continuous Delivery (CD) of ML models and services
 
-Once CI passes, you want a reliable way to ship models and services. For many teams, the deployment pattern in *Deploying ML Models with FastAPI and Docker* is a strong baseline.
+Once CI passes, you want a reliable way to ship models and services. A common baseline is [serving behind FastAPI in Docker](/blog/deploying-ml-models-with-fastapi-and-docker), then layering on artifact versioning and staged rollouts.
 
 A typical ML CD pipeline involves:
 
@@ -343,8 +339,6 @@ docker build -t "$IMAGE_TAG" -f docker/Dockerfile.api .
 docker push "$IMAGE_TAG"
 ```
 
-This ties nicely into the patterns covered in *Deploying ML Models with FastAPI and Docker*.
-
 ### 3. Environment-specific deployment stages
 
 A classic pattern:
@@ -411,15 +405,15 @@ For canaries, the implementation depends on your stack (Kubernetes, API gateway,
 - Trigger traffic-splitting rules.
 - Collect metrics (latency, error rate, key model metrics) for a few minutes.
 
-This pattern is powerful for RAG systems where new embedding models, prompt templates, or chunking strategies can change behavior in unexpected ways. It combines ideas from *Embedding Models Compared: OpenAI vs Open-Source*, *Chunking Strategies for RAG Pipelines*, and *Prompt Engineering Best Practices for Production*.
+This pattern is especially useful for RAG systems where new embedding models, prompt templates, or chunking strategies can change behavior in unexpected ways.
 
 ## CI/CD for RAG and multi-agent systems
 
-When dealing with RAG or multi-agent setups as in *Building a Multi-Agent AI System* and *Building AI Agents with LangChain and LangGraph*, there are extra moving parts:
+When dealing with RAG or [multimodal](/blog/multimodal-ai-combining-vision-and-language-models) pipelines, there are extra moving parts:
 
 - Indexing pipelines for the document store.
 - Multiple services (retriever API, generator API, orchestrator).
-- Vector DB migrations and performance constraints, related to *Vector Database Performance Benchmarks*.
+- Vector DB migrations and performance constraints.
 
 In CI/CD, you should:
 
@@ -457,7 +451,7 @@ A few practical tips so your pipeline does not collapse under its own weight:
 - **Automate reproducibility**: store config files and random seeds with model artifacts.
 - **Document the flow**: developers should know what happens when they open a PR or tag a release.
 
-I have found that once teams experience the peace of mind of a well tuned ML CI/CD pipeline, they rarely want to go back to manual experiments and ad hoc deployments.
+Once teams experience the reliability of a well-tuned ML CI/CD pipeline, they rarely want to go back to manual experiments and ad hoc deployments.
 
 ## Key Takeaways
 

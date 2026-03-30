@@ -2,7 +2,7 @@
 title: "Building a RAG Chatbot from Scratch with Python"
 description: "Learn how to build a Retrieval-Augmented Generation (RAG) chatbot from scratch in Python, from data loading to retrieval and LLM integration."
 date: "2026-02-10"
-dateModified: "2026-02-10"
+dateModified: "2026-03-30"
 category: "Tutorials"
 tags: ["Python", "RAG", "LLMs", "Vector Databases", "AI Engineering", "NLP"]
 difficulty: "beginner"
@@ -10,18 +10,16 @@ readTime: "10 min read"
 author: "Hélain Zimmermann"
 ---
 
-Most people meet RAG systems through polished products: a chat window, a clean UI, answers that magically reference internal docs. Behind that magic is a surprisingly simple idea - give an LLM the right context at the right time. In this guide, we will build a minimal but real RAG chatbot in Python, step by step.
-
-If you have already read my pieces on *Retrieval-Augmented Generation: A Complete Guide* or *Building Production-Ready RAG Systems*, think of this as the "hello world" implementation that ties those concepts together in code.
+Most people meet RAG systems through polished products: a chat window, a clean UI, answers that reference internal docs. Behind that is a simple idea -- give an LLM the right context at the right time. In this guide, we will build a minimal but real RAG chatbot in Python, step by step.
 
 ## What We Are Building
 
 At a high level, our chatbot will:
 
 1. Ingest a small set of documents
-2. Split them into chunks (crucial for RAG, as discussed in *Chunking Strategies for RAG Pipelines*)
+2. Split them into chunks
 3. Convert chunks to embeddings
-4. Store embeddings in a simple vector store
+4. Store embeddings in a simple [vector store](/blog/understanding-vector-databases)
 5. At query time, retrieve the most relevant chunks
 6. Feed those chunks into an LLM prompt to answer the user
 
@@ -31,12 +29,10 @@ We will use Python, open-source tools, and a simple in-memory vector store so yo
 
 - Python 3.10+
 - `sentence-transformers` for embeddings
-- `faiss-cpu` as vector index (a lightweight alternative to full vector databases; see *Understanding Vector Databases: A Beginner's Guide*)
+- `faiss-cpu` as vector index
 - `transformers` or an API client for the LLM
 
-You can later swap components out for production setups as in *Scaling RAG Systems to Millions of Documents* or *Vector Database Performance Benchmarks*.
-
-## Step 1 - Setting Up the Environment
+## Step 1 -- Setting Up the Environment
 
 Install the dependencies:
 
@@ -45,8 +41,6 @@ pip install "sentence-transformers>=3.0.0" faiss-cpu "transformers>=4.38.0" torc
 ```
 
 If you use an external LLM API (OpenAI, Anthropic, etc.), install the relevant SDK instead of `transformers` or in addition to it.
-
-To keep things clean, I recommend following some of the structure and discipline I describe in *Python Best Practices for ML Engineers*, even for simple projects.
 
 A basic project layout:
 
@@ -70,9 +64,9 @@ rag_chatbot/
 
 We will not fill every file exhaustively, but this shows how you might organize a growing RAG codebase.
 
-## Step 2 - Loading and Chunking Documents
+## Step 2 -- Loading and Chunking Documents
 
-Retrieval performance lives and dies by chunking. As covered in *Chunking Strategies for RAG Pipelines*, good chunks are:
+Retrieval performance lives and dies by chunking. Good chunks are:
 
 - small enough to fit in the context window comfortably
 - large enough to preserve meaning
@@ -125,11 +119,11 @@ def chunk_documents(docs: List[str], chunk_size: int = 500, overlap: int = 100) 
     return all_chunks
 ```
 
-This is intentionally simple. In production, you will likely want token-based chunking and structure-aware splitting, as I discuss in the RAG series and in *Building Custom Tokenizers for Domain-Specific NLP*.
+This is intentionally simple. In production, you will likely want token-based chunking and structure-aware splitting.
 
-## Step 3 - Embedding Text Chunks
+## Step 3 -- Embedding Text Chunks
 
-Embeddings convert text into numerical vectors that capture semantic meaning. If you read *Embedding Models Compared: OpenAI vs Open-Source*, you know there is a tradeoff between quality, latency, and privacy.
+Embeddings convert text into numerical vectors that capture semantic meaning. There is a tradeoff between quality, latency, and privacy when choosing an embedding model.
 
 For a local beginner setup, we will use `sentence-transformers` with an open model.
 
@@ -152,9 +146,9 @@ class EmbeddingModel:
 
 This gives us a reusable embedding component. If you later move to an API-based embedding model, you can keep the same interface.
 
-## Step 4 - Building a Simple Vector Store with FAISS
+## Step 4 -- Building a Simple Vector Store with FAISS
 
-Vector databases such as Pinecone, Weaviate or Milvus add scalability and durability, but for a small chatbot you can start with `faiss` in memory. For large scale architectures, refer to *Vector Database Performance Benchmarks* and *Scaling RAG Systems to Millions of Documents*.
+Vector databases such as Pinecone, Weaviate or Milvus add scalability and durability, but for a small chatbot you can start with `faiss` in memory.
 
 Create `rag/store.py`:
 
@@ -191,7 +185,7 @@ class VectorStore:
 
 FAISS uses Euclidean distance by default in this configuration. For many sentence embedding models cosine similarity works well, but for small experiments L2 is usually fine. You can normalize vectors to approximate cosine.
 
-## Step 5 - Wiring Up a Retriever
+## Step 5 -- Wiring Up a Retriever
 
 The retriever is the component that, given a query, finds the most relevant chunks. It combines the embedding model and the vector store.
 
@@ -222,16 +216,16 @@ class Retriever:
         return results
 ```
 
-Notice how each piece is small and composable. In more advanced RAG designs, such as the structured architectures from *Knowledge Graphs Meet LLMs: Structured RAG Architectures* or the hybrid strategies in *Hybrid Search: Combining Dense and Sparse Retrieval*, this composability becomes essential.
+Notice how each piece is small and composable. This composability becomes important as your RAG system grows in complexity.
 
-## Step 6 - Adding the LLM Layer
+## Step 6 -- Adding the LLM Layer
 
 For the LLM, you have two main choices:
 
 - Local open-source model via `transformers` and PyTorch
 - Hosted API such as OpenAI, Anthropic, etc.
 
-For beginners and laptops, an API is often easier. For privacy-sensitive applications, the themes from *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models* and *Data Privacy in the Age of Large Language Models* become very important when making this choice.
+For beginners and laptops, an API is often easier. For privacy-sensitive applications, the choice matters more since you may be sending user data to a third party.
 
 Below is an example using a generic `transformers` model, but you can replace the `LLMClient` with your own API client.
 
@@ -276,9 +270,9 @@ class LLMClient:
         return "mock answer"
 ```
 
-This separation lets you switch models easily, which is useful for evaluation and monitoring as described in *LLM Evaluation Frameworks: Beyond Perplexity* and *Monitoring ML Models in Production*.
+This separation lets you switch models easily, which is useful when you start [evaluating retrieval quality](/blog/evaluating-rag-system-performance).
 
-## Step 7 - Building the Chatbot Orchestrator
+## Step 7 -- Building the Chatbot Orchestrator
 
 Now we tie everything together into a simple chatbot class that:
 
@@ -324,9 +318,7 @@ class RAGChatbot:
         return answer, context_chunks
 ```
 
-This is the core of a basic RAG system, just with fewer bells and whistles than the setups I explore in *Agentic RAG: The Next Evolution* or *Building a Multi-Agent AI System*.
-
-## Step 8 - Wiring Everything In `main.py`
+## Step 8 -- Wiring Everything In `main.py`
 
 Now we instantiate the components, index our documents, and run a simple chat loop.
 
@@ -392,23 +384,21 @@ At this point, you can copy a few `.txt` files into `data/docs`, run `python mai
 
 ## Where To Go Next
 
-Once you have this minimal chatbot working, you can gradually introduce more advanced ideas from the other posts:
+Once you have this minimal chatbot working, you can gradually improve it:
 
-- Upgrade retrieval by combining dense and sparse methods as in *Hybrid Search: Combining Dense and Sparse Retrieval* or *Semantic Search vs Keyword Search: When to Use What*.
-- Integrate retrieval-specific evaluation criteria from *Evaluating RAG System Performance* so you can measure improvements instead of guessing.
-- Add a simple API using FastAPI, inspired by *Deploying ML Models with FastAPI and Docker*, then containerize your chatbot.
-- Introduce streaming responses and real-time constraints following patterns from *Building Real-Time ML Inference Pipelines*.
-- If you handle user data, adopt techniques from *Federated Learning for Privacy-Preserving AI* and *Introduction to Differential Privacy for NLP* to reduce privacy risks.
+- Add a simple API layer using [FastAPI and Docker](/blog/deploying-ml-models-with-fastapi-and-docker) to serve the chatbot over HTTP.
+- Introduce retrieval-specific evaluation criteria so you can measure improvements instead of guessing.
+- Explore [multimodal inputs](/blog/multimodal-ai-combining-vision-and-language-models) if your documents contain images or mixed media.
+- Consider adding tool use and planning on top of retrieval for more autonomous behavior.
 
-RAG systems are powerful precisely because they are composable. Once you understand each block - loading, chunking, embedding, storing, retrieving, prompting - you can iterate quickly and adapt the system to real-world constraints.
+RAG systems are powerful precisely because they are composable. Once you understand each block -- loading, chunking, embedding, storing, retrieving, prompting -- you can iterate quickly and adapt the system to real-world constraints.
 
 ## Key Takeaways
 
-- A RAG chatbot is mostly about plumbing: wiring retrieval and generation together cleanly.
+- A RAG chatbot is mostly plumbing: wiring retrieval and generation together cleanly.
 - Start small with local files, simple chunking, `sentence-transformers`, and FAISS before jumping to complex infrastructure.
-- Good chunking has a huge impact on answer quality; experiment with sizes and overlaps as discussed in the dedicated chunking article.
+- Good chunking has a huge impact on answer quality; experiment with sizes and overlaps.
 - Keep components modular: loader, chunker, embeddings, store, retriever, LLM, and chatbot should be separable.
 - The LLM is often the easiest part to swap, so design an abstraction like `LLMClient` from the start.
-- Evaluation and monitoring are critical once you move beyond experiments; borrow ideas from the RAG and monitoring articles on this site.
-- Privacy considerations should be addressed early if you ingest sensitive data, using techniques explored in the privacy-preserving NLP series.
-- Once the basics work, you can explore structured RAG, hybrid search, and agentic workflows to push your chatbot toward production readiness.
+- Evaluation and monitoring matter once you move beyond experiments.
+- Privacy considerations should be addressed early if you ingest sensitive data.

@@ -2,7 +2,7 @@
 title: "Building a Multi-Agent AI System"
 description: "Learn how to design, coordinate, and deploy robust multi-agent AI systems, from architecture and tools to failure modes and production concerns."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["AI Agents", "RAG", "LangGraph", "LLMs", "Python", "Distributed Systems"]
 difficulty: "advanced"
@@ -12,7 +12,7 @@ author: "Hélain Zimmermann"
 
 Multi-agent systems are what you reach for when a single LLM prompt and a long context window stop being enough. You start needing specialization, parallelism, tool orchestration, and long-running workflows that behave more like software systems than chatbots.
 
-I have hit this wall multiple times building production RAG systems and AI agents at Ailog. The good news is that most of the hard problems of multi-agent design are familiar from distributed systems, classic software architecture, and the topics I already covered in Building Production-Ready RAG Systems and Building AI Agents with LangChain and LangGraph.
+I have hit this wall multiple times building production RAG systems and AI agents at Ailog. Most of the hard problems of multi-agent design are familiar from distributed systems and classic software architecture.
 
 This post is about going from "I have one agent with tools" to "I have a coordinated team of agents that actually gets work done".
 
@@ -20,16 +20,16 @@ This post is about going from "I have one agent with tools" to "I have a coordin
 
 Before wiring graphs and message buses, it is worth asking whether multiple agents are justified. Often, better prompt engineering or a solid RAG setup is enough. The following are strong signals that you might benefit from multi-agent design:
 
-1. **Distinct skill domains**  
+1. **Distinct skill domains**
    Example: a system that must combine legal reasoning, code generation, and product requirement synthesis. A single system prompt tends to dilute these skills.
 
-2. **Different tools, different security boundaries**  
+2. **Different tools, different security boundaries**
    Some tasks need access to private customer data, others should only see anonymized aggregates. Tying this to different agents is easier than trying to conditionally constrain one giant agent.
 
-3. **Workflow-like processes**  
-   For example: retrieve documents using RAG, summarize, then run consistency checks. In my Retrieval-Augmented Generation: A Complete Guide article I show that this pipeline logic already looks like a graph. Multi-agent orchestration generalizes that.
+3. **Workflow-like processes**
+   For example: retrieve documents using RAG, summarize, then run consistency checks. This pipeline logic already looks like a graph, and multi-agent orchestration generalizes that.
 
-4. **Need for parallelism**  
+4. **Need for parallelism**
    You want multiple subtasks (retrieval, code execution, evaluation) in parallel to reduce latency.
 
 If your use case matches at least two of these, multi-agent is probably worth the complexity.
@@ -42,7 +42,7 @@ At a high level, a multi-agent system is just:
 - A communication protocol (messages, shared memory, or both)
 - A scheduler or orchestrator (who talks to whom, in what order)
 
-You can implement this with raw Python and queues, or with frameworks like LangGraph which I discussed in Building AI Agents with LangChain and LangGraph.
+You can implement this with raw Python and queues, or with a framework like LangGraph.
 
 ### Pattern 1: Orchestrator + specialists
 
@@ -121,7 +121,7 @@ User request:
 If tools are needed, respond with a JSON object:
 {{"tool": <tool_name>, "args": <json args>}}
 Otherwise, respond with natural language.
-"""  # no em dash
+"""
 
     def __call__(self, message: str, state: Dict[str, Any]) -> Dict[str, Any]:
         prompt = self._build_prompt(message, state)
@@ -157,10 +157,10 @@ The workflow:
 
 This involves at least four agents:
 
-- **Planner** - understands the request and decomposes it
-- **Retriever** - uses semantic search over internal docs (see Semantic Search vs Keyword Search: When to Use What)
-- **Spec Writer** - writes the specification
-- **Critic** - reviews and tightens acceptance criteria
+- **Planner** -- understands the request and decomposes it
+- **Retriever** -- uses semantic search over internal docs
+- **Spec Writer** -- writes the specification
+- **Critic** -- reviews and tightens acceptance criteria
 
 ### State model and orchestrator
 
@@ -243,44 +243,38 @@ class Orchestrator:
 
 This is deliberately synchronous and simple, but it illustrates the key design principle: isolate agent responsibilities and make orchestration explicit.
 
-Notice how this uses techniques from:
-
-- Retrieval-Augmented Generation: A Complete Guide for the retriever
-- Chunking Strategies for RAG Pipelines for how we index internal docs
-- Prompt Engineering Best Practices for Production for the system and task prompts
-
 ## RAG and multi-agent systems
 
-Multi-agent design synergizes with RAG in several ways.
+Multi-agent design pairs well with RAG in several ways.
 
 ### Dedicated retrieval agents
 
 Instead of every agent doing its own retrieval, create a specialized retrieval agent that:
 
-- Knows which vector database to use (see Vector Database Performance Benchmarks and Understanding Vector Databases: A Beginner's Guide)
+- Knows which [vector database](/blog/understanding-vector-databases) to query and how to pick the right index
 - Knows which collections to query
 - Applies filtering based on tenant, region, or privacy policies
 
-This centralizes retrieval logic, which is crucial when you have compliance or privacy constraints such as those I described in Data Privacy in the Age of Large Language Models.
+This centralizes retrieval logic, which is crucial when you have compliance or privacy constraints.
 
 ### Confidential and public contexts
 
 With strong privacy boundaries, I often split agents into:
 
-- **Private context agent** - has access to sensitive user data, uses privacy-preserving NLP techniques similar to those in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models
-- **Public context agent** - uses public docs, general knowledge, maybe internet search
+- **Private context agent** -- has access to sensitive user data, applies privacy-preserving techniques at the NLP layer
+- **Public context agent** -- uses public docs, general knowledge, maybe internet search
 
 A manager agent can ask both, then selectively merge their outputs, sometimes after anonymization.
 
 ### Cross-checking and evaluation agents
 
-Evaluation is where multi-agent truly shines. For example, a **fact-checker agent** can:
+Evaluation is where multi-agent design pays off. For example, a **fact-checker agent** can:
 
 - Take the final answer
 - Independently re-run retrieval
 - Flag unsupported claims
 
-This is especially powerful in RAG systems where hallucinations can still occur if retrieval is weak.
+This is especially powerful in [RAG systems where hallucinations can still occur](/blog/evaluating-rag-system-performance) if retrieval is weak or evaluation is missing.
 
 ## Coordination, control, and failure modes
 
@@ -350,11 +344,11 @@ def safe_call(agent, message, state, retries=2):
                     "error": str(e),
                     "message": f"Agent {agent.name} failed after retries."
                 }
-``` 
+```
 
 ## From prototype to production
 
-Once a multi-agent system works on your laptop, getting it to production involves many of the engineering considerations I covered in Deploying ML Models with FastAPI and Docker.
+Once a multi-agent system works on your laptop, getting it to production involves standard web service engineering: containerization, API design, caching, and monitoring.
 
 ### Serving architecture
 
@@ -404,7 +398,7 @@ Use multi-agent evaluation loops:
 - Automatic evaluators (agents) that score outputs along dimensions like correctness, style, safety
 - Compare variants of prompts, tools, or routing policies
 
-This is where articles like Embedding Models Compared: OpenAI vs Open-Source and Fine-Tuning LLMs on Custom Data: A Practical Guide become relevant. The better your base models and embeddings, the more reliable each agent becomes.
+The better your base models and embeddings, the more reliable each agent becomes. If you are choosing between embedding providers, the gap between commercial and open-source options has [narrowed considerably for multimodal tasks](/blog/multimodal-ai-combining-vision-and-language-models), so benchmark on your own data before committing.
 
 ## Key Takeaways
 
@@ -415,4 +409,4 @@ This is where articles like Embedding Models Compared: OpenAI vs Open-Source and
 - Make orchestration explicit in code, with clear state transitions and limits on depth and steps.
 - Invest early in observability, logging, and error handling, since debugging interactions is harder than debugging single prompts.
 - When moving to production, reuse good practices from web services: FastAPI, Docker, caching, idempotency, and monitoring.
-- Leverage agents not only for doing work but also for evaluation, cross-checking, and continuous improvement of the system.
+- Agents are useful not only for doing work but also for evaluation, cross-checking, and [continuous improvement of the system](/blog/ai-and-finance-how-autonomous-agents-are-transforming-trading) through autonomous feedback loops.

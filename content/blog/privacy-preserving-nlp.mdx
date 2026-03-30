@@ -2,7 +2,7 @@
 title: "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models"
 description: "Exploring techniques for mitigating memorization risks in LLMs, from differential privacy to anonymization, based on research at INRIA."
 date: "2026-01-28"
-dateModified: "2026-01-28"
+dateModified: "2026-03-30"
 category: "NLP & Privacy"
 tags: ["NLP", "Privacy", "Differential Privacy", "LLMs", "Research"]
 difficulty: "advanced"
@@ -12,7 +12,7 @@ author: "Hélain Zimmermann"
 
 ## Introduction
 
-Large Language Models have demonstrated remarkable capabilities, but they come with a significant privacy risk: they can memorize and reproduce sensitive information from their training data. Names, addresses, phone numbers, medical records, and other personally identifiable information (PII) can be extracted from trained models through targeted prompting.
+Large Language Models can memorize and reproduce sensitive information from their training data. Names, addresses, phone numbers, medical records, and other personally identifiable information (PII) can be extracted from trained models through targeted prompting.
 
 During my research internship at INRIA Grenoble, I worked on this exact problem. Our paper, [Towards the Anonymization of Language Modeling](https://arxiv.org/html/2501.02407v2), investigates how language structure affects memorization behavior and proposes techniques to mitigate these risks. In this article, I will share key insights from that work and the broader landscape of privacy-preserving NLP.
 
@@ -20,9 +20,9 @@ During my research internship at INRIA Grenoble, I worked on this exact problem.
 
 ### What Is Memorization?
 
-When we say a model "memorizes" data, we mean it can generate verbatim or near-verbatim copies of training examples. This is different from learning general patterns. A model that has learned English grammar is useful; a model that can recite a specific patient's medical record is dangerous.
+When we say a model "memorizes" data, we mean it can generate verbatim or near-verbatim copies of training examples. A model that has learned English grammar is useful; a model that can recite a specific patient's medical record is dangerous.
 
-Research by Carlini et al. (2021) demonstrated that GPT-2 could reproduce hundreds of verbatim training examples, including personal phone numbers and email addresses. Larger models memorize more data, making this an increasingly critical problem as models scale.
+Research by Carlini et al. (2021) demonstrated that GPT-2 could reproduce hundreds of verbatim training examples, including personal phone numbers and email addresses. Larger models memorize more data, making this a growing problem as models scale.
 
 ### Why Does It Happen?
 
@@ -34,7 +34,7 @@ Memorization occurs because:
 
 ## Differential Privacy in NLP
 
-Differential Privacy (DP) provides a mathematical framework for limiting what a model can learn about individual training examples.
+[Differential Privacy](/blog/introduction-to-differential-privacy-for-nlp) (DP) provides a mathematical framework for limiting what a model can learn about individual training examples.
 
 ### DP-SGD: The Standard Approach
 
@@ -76,7 +76,7 @@ epsilon = privacy_engine.get_epsilon(delta=1e-5)
 
 ### The Utility-Privacy Trade-off
 
-The fundamental challenge with DP-SGD is that stronger privacy guarantees (lower epsilon) require more noise, which degrades model utility. In our research at INRIA, we found that this trade-off is especially pronounced for language models, where the noise can disrupt the subtle statistical patterns needed for fluent text generation.
+The core challenge with DP-SGD is that stronger privacy guarantees (lower epsilon) require more noise, which degrades model utility. In our research at INRIA, we found that this trade-off is especially pronounced for language models, where the noise can disrupt the subtle statistical patterns needed for fluent text generation.
 
 Typical epsilon values in practice:
 
@@ -86,7 +86,7 @@ Typical epsilon values in practice:
 
 ## Language-Specific Memorization Patterns
 
-One of the key findings from our INRIA research was that memorization behavior varies significantly across languages. We compared French and English language models and found:
+One of the key findings from our INRIA research was that memorization behavior varies across languages. We compared French and English language models and found:
 
 ### Structural Differences Matter
 
@@ -94,7 +94,7 @@ French has richer morphology (verb conjugations, gender agreements) than English
 
 ### Named Entity Leakage
 
-We specifically measured the leakage of named entities, including person names, locations, and organizations. Our analysis showed that the position and context of named entities within a sentence significantly affects memorization risk. Entities at the beginning of documents or in repeated patterns are more vulnerable.
+We measured the leakage of named entities, including person names, locations, and organizations. Our analysis showed that the position and context of named entities within a sentence affects memorization risk. Entities at the beginning of documents or in repeated patterns are more vulnerable. [Named Entity Recognition pipelines](/blog/named-entity-recognition-with-modern-nlp) play a central role in both detecting and mitigating this leakage.
 
 ### Evaluation Methodology
 
@@ -145,7 +145,7 @@ Beyond differential privacy, several practical anonymization techniques can redu
 
 ### Data Deduplication
 
-Simply removing duplicate and near-duplicate entries from training data significantly reduces memorization. Tools like MinHash LSH can efficiently identify near-duplicates in large corpora.
+Removing duplicate and near-duplicate entries from training data reduces memorization substantially. Tools like MinHash LSH can efficiently identify near-duplicates in large corpora.
 
 ```python
 from datasketch import MinHash, MinHashLSH
@@ -191,7 +191,7 @@ Based on our research and practical experience, here are recommendations for dep
 
 ## Conclusion
 
-Privacy-preserving NLP is not just an academic concern; it is a practical requirement for responsible AI deployment. As LLMs become more capable and are trained on more data, the risk of sensitive information leakage grows. The techniques discussed here, from differential privacy to anonymization and deduplication, provide a toolkit for mitigating these risks.
+Privacy-preserving NLP is a practical requirement for responsible AI deployment. As LLMs are trained on more data, the risk of sensitive information leakage grows. The techniques discussed here, from differential privacy to anonymization and deduplication, provide a toolkit for mitigating these risks. For a broader view of [data privacy strategies for LLM-based systems](/blog/data-privacy-in-the-age-of-large-language-models), output filtering and architecture-level controls are equally important.
 
 Our work at INRIA on language-specific memorization patterns highlights that privacy solutions need to be adapted to the linguistic and cultural context of the data. There is no universal solution, but combining multiple defense layers provides robust protection for most applications.
 

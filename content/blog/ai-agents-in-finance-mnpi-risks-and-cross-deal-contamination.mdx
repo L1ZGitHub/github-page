@@ -2,7 +2,7 @@
 title: "AI Agents in Finance: MNPI Risks and Cross-Deal Contamination"
 description: "How RAG systems in finance can leak MNPI across deals, and practical mitigation strategies for quants building compliant AI pipelines"
 date: "2026-02-19"
-dateModified: "2026-02-19"
+dateModified: "2026-03-30"
 category: "NLP & Privacy"
 tags: ["MNPI", "RAG", "Finance", "Compliance", "Privacy", "Python"]
 difficulty: "intermediate"
@@ -10,11 +10,11 @@ readTime: "8 min read"
 author: "Hélain Zimmermann"
 ---
 
-A quant fund deploys a RAG-based research agent. The agent has access to earnings transcripts, satellite imagery analytics, credit card transaction panels, and a few alternative data feeds. An analyst on Deal A asks it a question. The agent, doing what it was designed to do, retrieves the most relevant context from every source it can reach, including a data feed that happens to contain material non-public information relevant to Deal B. Nobody intended this. But the information just crossed a wall.
+A quant fund deploys a RAG-based research agent. The agent has access to earnings transcripts, satellite imagery analytics, credit card transaction panels, and a few alternative data feeds. An analyst on Deal A asks it a question. The agent retrieves the most relevant context from every source it can reach, including a data feed that contains material non-public information relevant to Deal B. Nobody intended this. But the information just crossed a wall.
 
-This scenario is not hypothetical. As AI agents become standard infrastructure at hedge funds, proprietary trading desks, and investment banks, the risk of cross-deal contamination through automated retrieval is becoming one of the most consequential compliance challenges in financial AI.
+This scenario is not hypothetical. As AI agents become standard infrastructure at hedge funds, proprietary trading desks, and investment banks, the risk of cross-deal contamination through automated retrieval is one of the most pressing compliance challenges in financial AI.
 
-Having built RAG systems that handle sensitive data across multiple domains, I have seen firsthand how retrieval pipelines can silently break information barriers that compliance teams spent years constructing.
+Having built RAG systems that handle sensitive data across multiple domains, I have seen how retrieval pipelines can silently break information barriers that compliance teams spent years constructing.
 
 
 ## What makes MNPI so dangerous in RAG pipelines
@@ -27,7 +27,7 @@ RAG systems break this model in subtle ways:
 
 - **Retrieval is non-deterministic.** The same query can surface different documents depending on embeddings, index state, and ranking thresholds. Compliance cannot pre-approve what the system will retrieve.
 - **Alternative data blurs the line.** Satellite imagery, web scraping, credit card panels, and sensor data may contain information that qualifies as MNPI depending on context.
-- **Agents aggregate across sources.** A multi-tool agent, as described in my earlier posts on Agentic RAG and Building a Multi-Agent AI System, naturally combines information from multiple retrieval backends. That combination can itself constitute MNPI even when individual sources do not.
+- **Agents aggregate across sources.** A [multi-agent system](/blog/building-a-multi-agent-ai-system) with access to multiple retrieval backends naturally combines information from several sources. That combination can itself constitute MNPI even when individual sources do not.
 - **Context windows are large.** Modern LLMs can process hundreds of thousands of tokens. An agent that stuffs its context with broadly retrieved data is far more likely to accidentally include deal-sensitive material.
 
 
@@ -51,15 +51,15 @@ In a typical financial RAG setup, contamination can occur at several layers:
 
 ### At the data layer
 
-Multiple data feeds are indexed into the same vector store or knowledge base. Deal A's private information sits in the same index as Deal B's alternative data. Unless retrieval is strictly partitioned, any query can reach any document.
+Multiple data feeds are indexed into the same vector store or knowledge base. Deal A's private information sits in the same index as Deal B's alternative data. Unless retrieval is strictly partitioned, any query can reach any document. Choosing the right [vector database](/blog/understanding-vector-databases) and configuring proper namespace isolation is the first line of defense.
 
 ### At the agent layer
 
-An agentic system with access to multiple tools, such as a vector database, a SQL database, and an API for market data, can combine fragments from each tool into a single response. Even if each tool individually enforces access controls, the agent's synthesis step operates on the union of retrieved data.
+An agentic system with access to multiple tools (a vector database, a SQL database, an API for market data) can combine fragments from each tool into a single response. Even if each tool individually enforces access controls, the agent's synthesis step operates on the union of retrieved data.
 
 ### At the inference layer
 
-LLMs can memorize and leak information from their context. If sensitive data enters the context window, it can influence the output in ways that are difficult to audit. This connects directly to the concerns I discussed in Data Privacy in the Age of Large Language Models.
+LLMs can memorize and leak information from their context. If sensitive data enters the context window, it can influence the output in ways that are [difficult to audit](/blog/data-privacy-in-the-age-of-large-language-models). This risk grows with context size and the number of sources feeding into a single prompt.
 
 
 ## Mitigation strategies
@@ -100,7 +100,7 @@ For most hedge funds, full physical isolation is expensive. A pragmatic middle g
 
 ### 2. Authorization-aware retrieval
 
-Every retrieval call must be filtered by the requesting user's clearance and deal scope. This is the same principle I described in Building Production-Ready RAG Systems, but with financial-specific access controls.
+Every retrieval call must be filtered by the requesting user's clearance and deal scope.
 
 ```python
 from typing import Optional
@@ -195,7 +195,7 @@ def log_retrieval_event(
 
 ### 4. Information barriers in the RAG pipeline
 
-Implement barriers at the pipeline level, not just the data level. This means the agent itself should be scoped to a deal context and should not have the ability to query outside its boundary.
+Implement barriers at the pipeline level, not just the data level. The agent itself should be scoped to a deal context and should not have the ability to query outside its boundary.
 
 ```python
 class ScopedRAGAgent:
@@ -233,7 +233,7 @@ class ScopedRAGAgent:
 
 Before any data enters your RAG pipeline, classify it. Do not rely on post-hoc filtering alone. Tag every document with its deal association, classification level, source, and ingestion timestamp.
 
-This connects to the ideas in Introduction to Differential Privacy for NLP, where we discussed that privacy controls are most effective when applied as early as possible in the data pipeline.
+Privacy controls are most effective when applied as early as possible in the data pipeline.
 
 
 ## Testing and validation
@@ -243,15 +243,15 @@ Compliance teams should run regular "contamination tests" against the RAG system
 - Submit queries designed to elicit cross-deal information.
 - Verify that retrieval filters are correctly blocking out-of-scope documents.
 - Check that audit logs capture every retrieval event, including blocked documents.
-- Run adversarial prompt tests to see if the agent can be tricked into ignoring deal boundaries.
+- Run adversarial prompt tests to see if the agent can be tricked into ignoring deal boundaries. The same [prompt injection techniques](/blog/ai-security-how-agents-like-openclaw-can-be-exploited) used against general-purpose agents apply here, with higher stakes.
 
-This is analogous to the evaluation techniques in Evaluating RAG System Performance, but with a compliance lens rather than a pure accuracy lens.
+[Systematic evaluation](/blog/evaluating-rag-system-performance) of retrieval accuracy and filter effectiveness should be part of the regular compliance review cycle, not a one-time exercise.
 
 
 ## Key Takeaways
 
 - RAG systems in finance can silently break information barriers by retrieving MNPI across deals, creating serious regulatory and legal risk.
-- The CFTC and SEC hold firms responsible for their AI systems' compliance, algorithmic trading on MNPI carries the same penalties as human insider trading.
+- The CFTC and SEC hold firms responsible for their AI systems' compliance. Algorithmic trading on MNPI carries the same penalties as human insider trading.
 - Mitigate cross-deal contamination through **data isolation** (separate indices or strict namespace filtering), **authorization-aware retrieval** (per-user, per-deal access controls), and **scoped agents** (agents hard-bound to a single deal context).
 - Every retrieval and generation event must produce a **complete audit trail** with provenance, classification labels, and blocking decisions.
 - Classify and tag data **before ingestion** into the RAG pipeline, not after retrieval.

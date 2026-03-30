@@ -2,7 +2,7 @@
 title: "Multimodal AI: Combining Vision and Language Models"
 description: "Learn how to build practical multimodal AI systems that combine vision and language models, from architectures to PyTorch and CLIP code examples."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Multimodal", "Vision-Language", "RAG", "PyTorch", "Contrastive Learning", "Embeddings"]
 difficulty: "intermediate"
@@ -10,11 +10,11 @@ readTime: "9 min read"
 author: "Hélain Zimmermann"
 ---
 
-Modern AI systems are finally starting to see.
+Modern AI systems are starting to see.
 
-Once you plug images into the same pipeline as text, everything from search to agents to RAG feels very different. Interfaces get simpler, edge cases vanish, and entirely new products appear: visual search, image-grounded copilots, multimodal RAG over PDFs, or agents that can read dashboards and UIs.
+Once you plug images into the same pipeline as text, everything from search to agents to RAG changes. Interfaces get simpler, edge cases vanish, and new products appear: visual search, image-grounded copilots, multimodal RAG over PDFs, or agents that can read dashboards and UIs.
 
-From an engineering perspective, multimodal AI is not magic. It is mostly: embeddings, alignment losses, shared latent spaces, plus the same production concerns I cover in Building Production-Ready RAG Systems and Monitoring ML Models in Production.
+From an engineering perspective, multimodal AI is not magic. It is mostly embeddings, alignment losses, shared latent spaces, plus the same production concerns around monitoring and reliability.
 
 In this post I will walk through how to combine vision and language models in practical ways, with code, and how to think about architectures that actually ship.
 
@@ -29,12 +29,12 @@ Multimodal systems are useful when:
 
 Some concrete product patterns:
 
-- Visual search: “show me shoes like this photo”
-- Image-grounded assistants: “explain this error on my CNC machine display”
+- Visual search: "show me shoes like this photo"
+- Image-grounded assistants: "explain this error on my CNC machine display"
 - Document copilots: upload a 200-page technical PDF, then ask questions that require reading tables and plots
-- UI agents: “click the Export button, then download the CSV” from a screenshot or remote session
+- UI agents: "click the Export button, then download the CSV" from a screenshot or remote session
 
-If you have already read Retrieval-Augmented Generation: A Complete Guide or Scaling RAG Systems to Millions of Documents, you can almost reuse that entire toolbox for multimodal, with one upgrade: image embeddings.
+If you have built a text-based RAG pipeline before, you can reuse most of that toolbox for multimodal work, with one upgrade: image embeddings.
 
 
 ## Core multimodal architectures
@@ -47,7 +47,7 @@ This is the CLIP-style approach:
 - A text encoder maps text to vectors
 - A contrastive loss aligns related image-text pairs
 
-You end up with a shared latent space where similarity works across modalities. This is extremely powerful, because everything you know from Embedding Models Compared: OpenAI vs Open-Source and Semantic Search vs Keyword Search now also applies to images.
+You end up with a shared latent space where similarity works across modalities. This means everything you know about [text embeddings and vector similarity](/blog/embedding-models-compared-openai-vs-open-source) now also applies to images.
 
 Typical usage patterns:
 
@@ -68,7 +68,7 @@ Here you want the model to produce language conditioned on an image:
 
 - Image captioning
 - Visual question answering (VQA)
-- Multimodal chat (“what is happening in this picture?”)
+- Multimodal chat ("what is happening in this picture?")
 
 Modern systems usually:
 
@@ -76,22 +76,22 @@ Modern systems usually:
 2. Optionally project visual tokens to the LLM hidden size
 3. Feed visual tokens as additional context tokens to the LLM
 
-This is quite similar to RAG: the image acts like retrieved context chunks, just in a different embedding basis. The mental model is very close to Chunking Strategies for RAG Pipelines plus an additional projection layer.
+This is similar to RAG: the image acts like retrieved context chunks, just in a different embedding basis. The mental model is text chunking plus an additional projection layer.
 
 
 ### 3. Multimodal RAG
 
-Once you treat image embeddings as just another vector type, you can build:
+Once you treat image embeddings as another vector type, you can build:
 
 - RAG over screenshots and PDFs
 - Hybrid search mixing text, tables, diagrams, and UI states
 
-The pipeline resembles what I described in Hybrid Search: Combining Dense and Sparse Retrieval and Building a Multi-Agent AI System, with these additions:
+The pipeline works like this:
 
 1. Ingestion extracts text, images, tables from documents
 2. Text encoder processes text chunks
 3. Vision encoder processes images or image patches
-4. You store both in a vector database (see Vector Database Performance Benchmarks)
+4. You store both in a [vector database](/blog/understanding-vector-databases)
 5. At query time, you convert the query to text and maybe also accept an image
 6. Retrieve multimodal neighbors and feed them as context to an LLM
 
@@ -173,12 +173,12 @@ def search_images(text_query_tokens, text_encoder, image_embs, image_ids, k=5):
     return [image_ids[i] for i in topk.indices]
 ```
 
-For large scale, you will move this into a vector database as discussed in Understanding Vector Databases: A Beginner's Guide.
+For large scale, you will move this into a vector database with approximate nearest neighbor indexing.
 
 
 ## Practical multimodal RAG pipeline
 
-Let us sketch a production-style multimodal RAG over PDFs with diagrams and screenshots. This builds on concepts from Building Production-Ready RAG Systems and Evaluating RAG System Performance.
+Let us sketch a production-style multimodal RAG over PDFs with diagrams and screenshots.
 
 ### 1. Ingestion and chunking
 
@@ -186,7 +186,7 @@ For each document:
 
 1. Extract text with OCR where needed
 2. Detect figures, tables, diagrams, and crop them as separate images
-3. Apply chunking for text (see Chunking Strategies for RAG Pipelines)
+3. Apply chunking for text (fixed-size overlapping windows or semantic boundaries)
 4. For each text chunk, store its page number and bounding boxes
 5. For each image, store page number and caption or nearby text
 
@@ -234,8 +234,8 @@ Metadata should include:
 
 A query can be:
 
-- Pure text: “Explain the loss function used in figure 3”
-- Text + image: screenshot of a figure plus “what does this chart say about model performance?”
+- Pure text: "Explain the loss function used in figure 3"
+- Text + image: screenshot of a figure plus "what does this chart say about model performance?"
 
 You can route queries:
 
@@ -264,8 +264,6 @@ Then feed the top-k context items to an LLM as text. For images you can:
 - Caption them with a vision-language model
 - Or use an LLM that directly accepts image inputs
 
-This is very similar to the agentic patterns I described in Agentic RAG: The Next Evolution and Building AI Agents with LangChain and LangGraph, just with an extra vision tool.
-
 
 ## Design choices and tradeoffs
 
@@ -273,11 +271,11 @@ This is very similar to the agentic patterns I described in Agentic RAG: The Nex
 
 You need to pick encoders that match your budget and latency constraints.
 
-- OpenAI and other hosted multimodal models: great quality, but with privacy and cost tradeoffs. For sensitive data, see Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
+- OpenAI and other hosted multimodal models: good quality, but with privacy and cost tradeoffs
 - Open source CLIP or SigLIP models: good for search and retrieval, easy to self host
 - Larger multimodal LLMs: best quality for rich reasoning, but expensive
 
-As discussed in Embedding Models Compared: OpenAI vs Open-Source, there is usually a sweet spot with mid size open models fine tuned on your domain.
+There is usually a sweet spot with mid-size open models fine-tuned on your domain.
 
 
 ### Alignment and evaluation
@@ -288,28 +286,28 @@ Multimodal systems fail in new ways:
 - Misreading charts or UI text
 - Ignoring the image and answering from priors only
 
-For evaluation you can extend the ideas in Evaluating RAG System Performance:
+For [evaluating multimodal retrieval](/blog/evaluating-rag-system-performance) you can measure:
 
 - Retrieval metrics per modality: recall@k for image vs text
 - Faithfulness metrics conditioned on both text and image context
 - Human eval on subsets that heavily rely on visuals, for example reading tables
 
-Monitor in production like any ML system (see Monitoring ML Models in Production):
+In production, monitor:
 
-- Log inputs with image hashes and feature summaries
-- Track performance per modality mix (text only vs image + text)
+- Inputs with image hashes and feature summaries
+- Performance per modality mix (text only vs image + text)
 
 
 ### Privacy and compliance
 
-Images can contain sensitive data: faces, license plates, screens with PII. Many principles from Introduction to Differential Privacy for NLP and Privacy-Preserving NLP: Protecting Sensitive Data in Language Models carry over:
+Images can contain sensitive data: faces, license plates, screens with PII. Key practices:
 
 - Mask or blur sensitive regions before encoding
 - Avoid storing raw images unless strictly necessary
 - Consider hashing and access controls for image content
 - If you store embeddings, treat them as potentially re-identifiable
 
-If you are building internal tools that process screenshots of internal dashboards, this is not optional.
+If you are building internal tools that process screenshots of internal dashboards, this is not optional. The same concerns apply in [finance](/blog/ai-and-finance-how-autonomous-agents-are-transforming-trading) and healthcare, where visual data carries regulatory obligations.
 
 
 ## A lightweight multimodal assistant pattern
@@ -329,7 +327,7 @@ Combining all of this, a simple but powerful architecture looks like this:
 
 4. LLM responds with a grounded explanation or action plan
 
-You can implement steps 2-3 with the same FastAPI patterns described in Deploying ML Models with FastAPI and Docker and the general engineering practices in Python Best Practices for ML Engineers and CI/CD Pipelines for Machine Learning Projects.
+You can implement steps 2-3 with a FastAPI backend serving the encoders and coordinating retrieval, then streaming the LLM response back to the client.
 
 
 ## Key Takeaways

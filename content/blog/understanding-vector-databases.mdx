@@ -2,7 +2,7 @@
 title: "Understanding Vector Databases: A Beginner's Guide"
 description: "Learn what vector databases are, how they work under the hood, and which one to choose for your AI application."
 date: "2026-02-01"
-dateModified: "2026-02-01"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Vector Databases", "AI", "Embeddings", "Infrastructure"]
 difficulty: "beginner"
@@ -77,7 +77,7 @@ Here is a comparison of the most popular options available today:
 Best for teams that want zero infrastructure management. You get a fully managed service with automatic scaling. The downside is vendor lock-in and cost at scale.
 
 ### Weaviate
-Excellent choice if you need hybrid search combining vector similarity with traditional keyword matching. Its GraphQL API is powerful for complex queries. Available as both managed cloud and self-hosted.
+Excellent choice if you need [hybrid search](/blog/hybrid-search-combining-dense-and-sparse-retrieval) combining vector similarity with traditional keyword matching. Its GraphQL API is powerful for complex queries. Available as both managed cloud and self-hosted.
 
 ### Qdrant
 Written in Rust, Qdrant offers excellent performance and advanced filtering. Its payload (metadata) filtering is particularly powerful, supporting nested conditions and geo-spatial queries. Great for performance-critical applications.
@@ -91,16 +91,16 @@ If your application already uses PostgreSQL, pgvector lets you add vector search
 ## Real-World Use Cases
 
 ### Semantic Search
-Replace keyword-based search with meaning-based search. Users can find relevant documents even when they use different terminology than what is in the documents.
+Replace keyword-based search with meaning-based search. Users can find relevant documents even when they use different terminology than what is in the documents. Choosing between [semantic and keyword search](/blog/semantic-search-vs-keyword-search-when-to-use-what) depends on your data and query patterns.
 
 ### Recommendation Systems
 Store user and item embeddings, then find similar items or users. Netflix, Spotify, and Amazon all use vector similarity for recommendations.
 
 ### RAG (Retrieval-Augmented Generation)
-The most common use case in the LLM era. Store your knowledge base as vectors and retrieve relevant context when answering user questions. This is the backbone of most enterprise AI chatbots.
+The most common use case in the LLM era. Store your knowledge base as vectors and retrieve relevant context when answering user questions. [Evaluating your RAG pipeline](/blog/evaluating-rag-system-performance) is critical once you move beyond prototyping.
 
 ### Image Search
-Store image embeddings and find visually similar images. Used in e-commerce (find similar products) and content moderation.
+Store image embeddings and find visually similar images. [Multimodal AI models](/blog/multimodal-ai-combining-vision-and-language-models) that combine vision and language produce the embeddings that power this. Used in e-commerce (find similar products) and content moderation.
 
 ### Anomaly Detection
 Normal data points cluster together in vector space. Points far from any cluster indicate anomalies, useful in fraud detection and system monitoring.

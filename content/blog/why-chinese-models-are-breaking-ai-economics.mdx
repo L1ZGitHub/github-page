@@ -2,7 +2,7 @@
 title: "Why Chinese AI Models Are Breaking the Economics of AI"
 description: "With benchmark scores rivaling GPT-4 at a fraction of the cost, Chinese LLMs are reshaping how startups and developers choose their AI models."
 date: "2026-02-14"
-dateModified: "2026-02-14"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Chinese AI", "AI Economics", "DeepSeek", "Kimi K2", "SWE-bench", "Cost Optimization"]
 difficulty: "intermediate"
@@ -10,15 +10,15 @@ readTime: "10 min read"
 author: "Hélain Zimmermann"
 ---
 
-Something remarkable has happened in the AI industry over the past six months, and it has less to do with model capabilities than with model economics. Chinese AI labs, DeepSeek, Moonshot (Kimi), Zhipu (GLM), and others, have released a wave of large language models that match or closely approach the performance of GPT-4 and Claude Opus 4 on major benchmarks, at a fraction of the inference cost. For startups, developers, and anyone building AI-powered products, this shift changes the calculus of model selection in fundamental ways.
+Something remarkable has happened in the AI industry over the past six months, and it has less to do with model capabilities than with model economics. Chinese AI labs -- DeepSeek, Moonshot (Kimi), Zhipu (GLM), and others -- have released a wave of large language models that match or closely approach the performance of GPT-4 and Claude Opus 4 on major benchmarks, at a fraction of the inference cost. For startups, developers, and anyone building AI-powered products, this shift changes the calculus of model selection.
 
-As the [Latent Space newsletter reported](https://www.latent.space/p/ainews-zai-glm-5-new-sota-open-weights) in its coverage of GLM-5's release, we are witnessing a new wave of open-weights models that achieve state-of-the-art results while being dramatically more affordable to run. The implications ripple through every layer of the AI stack, from infrastructure to applications to business models.
+As the [Latent Space newsletter reported](https://www.latent.space/p/ainews-zai-glm-5-new-sota-open-weights) in its coverage of GLM-5's release, we are witnessing a new wave of open-weights models that achieve state-of-the-art results while being dramatically more affordable to run. The implications ripple through every layer of the AI stack, from infrastructure to applications to business models. For a broader look at how these labs reached this point, see [the trajectory of Chinese AI models catching up to Western counterparts](/blog/chinese-ai-models-catching-up-and-surpassing-the-west).
 
 ## The Benchmark Shock
 
 The moment that crystallized this trend was DeepSeek-V3's performance on SWE-bench Verified, the widely-used benchmark for evaluating AI models on real-world software engineering tasks. DeepSeek-V3 scored 67.3%, placing it in the same tier as GPT-4o and ahead of many Western models that cost significantly more to operate. Kimi K2, released shortly after, posted similarly competitive numbers across a range of coding and reasoning benchmarks.
 
-But the headline performance is only half the story. The other half is cost. Running DeepSeek-V3 through its API costs approximately $0.27 per million input tokens and $1.10 per million output tokens. Compare this with GPT-4o at $2.50/$10.00 or Claude Opus 4 at $15.00/$75.00 for the same token volumes. The gap is not incremental, it is an order of magnitude.
+But the headline performance is only half the story. The other half is cost. Running DeepSeek-V3 through its API costs approximately $0.27 per million input tokens and $1.10 per million output tokens. Compare this with GPT-4o at $2.50/$10.00 or Claude Opus 4 at $15.00/$75.00 for the same token volumes. The gap is not incremental -- it is an order of magnitude.
 
 For a concrete example: processing 1,000 customer support tickets, each averaging 500 tokens of input and 300 tokens of output, costs roughly $0.47 with DeepSeek-V3, $3.25 with GPT-4o, and $11.25 with Claude Opus 4. When you scale to millions of interactions per month, these differences translate to tens or hundreds of thousands of dollars in annual savings.
 
@@ -36,17 +36,17 @@ The cost advantage of Chinese models stems from several factors, not all of them
 
 ## Why This Matters for Startups
 
-For AI-native startups, and increasingly for any software company incorporating AI features, model cost is becoming a strategic variable, not just an operational one.
+For AI-native startups, and increasingly for any software company incorporating AI features, model cost is becoming a strategic variable, not just an operational one. The choice between [open-source and closed AI providers](/blog/open-source-vs-closed-ai-why-everyone-is-talking-about-it) now carries direct financial weight.
 
 Consider a startup building an AI coding assistant. At GPT-4o pricing, each user generating 50,000 tokens per day costs roughly $1.25/day or $37.50/month in model inference alone. At DeepSeek-V3 pricing, the same usage costs approximately $0.19/day or $5.70/month. If the product charges $30/month, the difference between 125% gross margin and negative unit economics is the choice of model backend.
 
 This does not mean everyone should immediately switch to the cheapest model. Quality differences exist, and they matter. For tasks requiring nuanced reasoning, complex instruction following, or safety-critical outputs, frontier models from OpenAI and Anthropic often outperform. But for many production workloads, summarization, classification, extraction, code generation, customer support, the gap has narrowed enough that cheaper models are not just viable but rational.
 
-The result is a segmentation of model usage by task. Sophisticated AI teams now route queries to different models based on complexity: simple questions go to small, cheap models; complex reasoning goes to expensive frontier models. This routing strategy, sometimes called a "model cascade," can reduce total inference costs by 60 to 80 percent without meaningful degradation in output quality.
+The result is a segmentation of model usage by task. Sophisticated AI teams now route queries to different models based on complexity: simple questions go to small, cheap models; complex reasoning goes to expensive frontier models. This routing strategy, sometimes called a "model cascade," can reduce total inference costs by 60 to 80 percent without meaningful degradation in output quality. Storing and retrieving context efficiently across these tiers often relies on [vector databases](/blog/understanding-vector-databases) under the hood.
 
 ## The European Developer Perspective
 
-For developers working in Europe, as I do, the rise of Chinese models introduces both opportunities and complications.
+For developers working in Europe, as I do, the rise of Chinese models introduces both opportunities and complications. Tasks that combine vision and text, for instance, benefit from [multimodal AI pipelines](/blog/multimodal-ai-combining-vision-and-language-models) where cheaper inference unlocks use cases that were previously too expensive.
 
 **Latency** is a practical concern. DeepSeek's API servers are primarily located in Asia, and while they have expanded to some US endpoints, European developers often face 200 to 400 milliseconds of additional round-trip latency compared to OpenAI or Anthropic endpoints in Europe. For real-time applications, chatbots, IDE copilots, this latency is noticeable. For batch processing or async workloads, it is irrelevant.
 

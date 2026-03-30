@@ -2,7 +2,7 @@
 title: "AI and Finance: How Autonomous Agents Are Transforming Trading"
 description: "How autonomous AI agents with their own wallets are reshaping trading and DeFi, from market making to risk management and ethical concerns"
 date: "2026-02-19"
-dateModified: "2026-02-19"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["AI Agents", "Finance", "DeFi", "Trading", "Autonomous Systems", "Ethics"]
 difficulty: "beginner"
@@ -10,9 +10,9 @@ readTime: "6 min read"
 author: "Hélain Zimmermann"
 ---
 
-Somewhere right now, an AI agent with its own cryptocurrency wallet is buying and selling assets on a decentralized exchange. It has no human operator approving each trade. It perceives market conditions, reasons about strategy, executes transactions, and learns from outcomes, all autonomously. This is not science fiction. It is happening at scale across DeFi protocols in 2026.
+Somewhere right now, an AI agent with its own cryptocurrency wallet is buying and selling assets on a decentralized exchange. It has no human operator approving each trade. It perceives market conditions, reasons about strategy, executes transactions, and learns from outcomes, all autonomously. This is happening at scale across DeFi protocols in 2026.
 
-The convergence of large language models, autonomous agent frameworks, and decentralized finance has created a new class of market participant: the AI trading agent. If you have followed my articles on Building a Multi-Agent AI System or Building AI Agents with LangChain and LangGraph, you have seen the architectural building blocks. Now those blocks are being deployed in one of the highest-stakes environments imaginable.
+The convergence of large language models, autonomous agent frameworks, and decentralized finance has created a new class of market participant: the AI trading agent. The architectural building blocks of [multi-agent systems](/blog/building-a-multi-agent-ai-system) are now being deployed in one of the highest-stakes environments in software.
 
 ## What Are Autonomous Trading Agents?
 
@@ -89,7 +89,7 @@ Agents excel at detecting price discrepancies across markets. In crypto, this in
 
 Several projects now offer AI-managed portfolios where agents autonomously allocate across assets and DeFi protocols. Users deposit funds into a vault, and the agent handles rebalancing, yield harvesting, and risk management.
 
-LLM-powered agents also process natural language at scale, parsing news, social media, and earnings calls to generate trading signals. Combined with quantitative data, this gives agents a broader market view than purely numerical systems.
+LLM-powered agents also process natural language at scale, parsing news, social media, and earnings calls to generate trading signals. These [multimodal approaches to combining different data sources](/blog/multimodal-ai-combining-vision-and-language-models) give agents a broader market view than purely numerical systems.
 
 ## Opportunities for Regular Investors
 
@@ -111,19 +111,17 @@ When multiple agents operate on the same markets with similar strategies, their 
 
 ### Market Manipulation and Adversarial Dynamics
 
-Agents can be designed, or inadvertently evolve, to engage in wash trading, spoofing, or front-running. In a permissionless system with no central authority, distinguishing legitimate strategies from manipulation is genuinely difficult.
-
-In a multi-agent market, some agents are specifically designed to exploit others, detecting patterns and trading against them. This connects to the security considerations I discussed in AI Security: How Agents Like OpenClaw Can Be Exploited. The attack surface of an agent managing real money is considerable.
+Agents can be designed, or inadvertently evolve, to engage in wash trading, spoofing, or front-running. In a permissionless system with no central authority, distinguishing legitimate strategies from manipulation is hard. The attack surface of an agent managing real money is considerable, and adversarial agents can [exploit vulnerabilities](/blog/ai-security-how-agents-like-openclaw-can-be-exploited) to trade against others.
 
 ### Regulatory Gaps
 
-Most financial regulation was written for human participants. Autonomous agents in DeFi exist in a gray zone. Who is liable when an agent causes a market disruption? Do agents need KYC compliance? How do you regulate a system making thousands of opaque decisions per day? Regulators in the US, EU, and Asia are actively working on frameworks, but the technology moves faster than the rules.
+Most financial regulation was written for human participants. Autonomous agents in DeFi exist in a gray zone. Who is liable when an agent causes a market disruption? Do agents need KYC compliance? How do you regulate a system making thousands of opaque decisions per day? Regulators in the US, EU, and Asia are actively working on frameworks, but the technology moves faster than the rules. The [risks around information contamination](/blog/ai-agents-in-finance-mnpi-risks-and-cross-deal-contamination) add another layer of complexity.
 
 ## Multi-Agent Dynamics and Ethics
 
-What makes financial markets particularly interesting for AI research is that they are inherently **multi-agent environments**, as I explored in Building a Multi-Agent AI System. Every agent's action affects every other agent's perception. Cooperative agents in a vault might coordinate to optimize a shared portfolio. Competitive agents on a DEX chase the same arbitrage. Adversarial agents profit from others' mistakes.
+What makes financial markets particularly interesting for AI research is that they are inherently **multi-agent environments**. Every agent's action affects every other agent's perception. Cooperative agents in a vault might coordinate to optimize a shared portfolio. Competitive agents on a DEX chase the same arbitrage. Adversarial agents profit from others' mistakes.
 
-Beyond technical risks, ethical questions demand attention. AI agents with better models and faster execution have structural advantages over human traders, potentially deepening market inequality. When an agent causes harm, the chain of accountability is unclear. And as more capital flows to autonomous agents, systemic risk from coordinated failures grows. These are not reasons to stop building, but they are reasons to build thoughtfully, with safety measures and transparency.
+Beyond technical risks, ethical questions demand attention. AI agents with better models and faster execution have structural advantages over human traders, potentially deepening market inequality. When an agent causes harm, the chain of accountability is unclear. And as more capital flows to autonomous agents, systemic risk from coordinated failures grows. Efficient [evaluation of system performance](/blog/evaluating-rag-system-performance) becomes critical when real money is at stake. These are not reasons to stop building, but they are reasons to build thoughtfully, with safety measures and transparency.
 
 ## Key Takeaways
 

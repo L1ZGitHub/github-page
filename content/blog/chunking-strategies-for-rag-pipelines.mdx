@@ -2,7 +2,7 @@
 title: "Chunking Strategies for RAG Pipelines"
 description: "Learn practical chunking strategies for RAG pipelines, from basic splits to adaptive and hybrid methods, with code and evaluation tips."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "RAG Systems"
 tags: ["RAG", "NLP", "LLMs", "Python", "Vector Databases", "Information Retrieval"]
 difficulty: "intermediate"
@@ -16,7 +16,7 @@ Chunking looks trivial at first. Split text every N characters, send to the embe
 
 In this post I want to walk through practical chunking strategies for Retrieval-Augmented Generation (RAG) pipelines, from simple baselines to more advanced, structure-aware methods. I will focus on trade-offs and implementation details I see in production systems.
 
-If you are new to RAG itself, the articles on "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems" give a good foundation. Here I will zoom into the chunking step of the ingestion pipeline.
+If you are new to RAG itself, [Retrieval-Augmented Generation: A Complete Guide](/blog/retrieval-augmented-generation-a-complete-guide) gives a good foundation. Here I will zoom into the chunking step of the ingestion pipeline.
 
 ## What chunking is really optimizing
 
@@ -28,7 +28,7 @@ Good chunking tries to optimize three conflicting objectives:
 2. **Retrieval granularity**  - Chunks should be small enough so that retrieval is specific and does not pull in too much noise.
 3. **Coverage and recall**  - Information relevant to a question should actually live in at least one chunk that can be retrieved.
 
-Your model, vector database, and prompt strategy all interact with chunking. As I discussed in "Understanding Vector Databases: A Beginner's Guide", the index structure favors certain query lengths and vector distributions. Chunking indirectly shapes those.
+Your model, [vector database](/blog/understanding-vector-databases), and prompt strategy all interact with chunking. The index structure favors certain query lengths and vector distributions, and chunking indirectly shapes those.
 
 ## Baseline: fixed-size chunking with overlap
 
@@ -158,7 +158,7 @@ If you parse Markdown or HTML, you can propagate the nearest preceding heading i
 
 The metadata path is often better, because you can later filter or boost by section titles during retrieval.
 
-In a production-ready RAG system, as discussed in "Building Production-Ready RAG Systems", chunk-level metadata is central for routing, filtering, and debugging.
+In a production-ready RAG system, chunk-level metadata is central for routing, filtering, and debugging.
 
 ## Domain-specific chunking strategies
 
@@ -246,7 +246,7 @@ Good strategies:
 - Within an article, chunk by paragraphs with more overlap, so that cross-references stay together.
 - Preserve section numbers and titles in metadata.
 
-This is particularly important in privacy-preserving NLP settings as I discuss in "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models". Legal corpora often contain sensitive terms, and fine-grained, structure-aware chunking lets you apply redaction or access control at the right granularity.
+Legal corpora often contain sensitive terms, and fine-grained, structure-aware chunking lets you apply redaction or access control at the right granularity.
 
 ### Tables and PDFs
 
@@ -257,7 +257,7 @@ Two useful approaches:
 1. **Treat whole tables as single chunks** with serialized text ("Row: ..., Column: ...").
 2. **Create row-level chunks** for large tables with header row included in each.
 
-For PDFs in general, prioritize a strong extraction step (layout-aware OCR or tools like `unstructured`, `pdfplumber`, `pdfminer`) that preserves logical blocks. Bad extraction ruins any chunking strategy.
+For PDFs in general, prioritize a strong extraction step (layout-aware OCR or tools like `unstructured`, `pdfplumber`, `pdfminer`) that preserves logical blocks. The same principle applies to [multimodal pipelines](/blog/multimodal-ai-combining-vision-and-language-models) where images and text coexist. Bad extraction ruins any chunking strategy.
 
 ## Adaptive chunking based on content
 
@@ -309,7 +309,7 @@ This is far from perfect, but in some domains it gives a noticeable improvement 
 
 ## Hybrid multi-granularity chunking
 
-For more advanced RAG systems, especially those described in "Fine-Tuning LLMs on Custom Data: A Practical Guide" and the production RAG article, a single granularity is sometimes not enough.
+For more advanced RAG systems, a single granularity is sometimes not enough.
 
 Hybrid strategies index multiple views of the same content:
 
@@ -331,7 +331,7 @@ Implementation wise:
 
 ## Evaluating chunking strategies
 
-You cannot optimize chunking blindly. You need feedback from tasks.
+You cannot optimize chunking blindly. You need feedback from tasks. [Evaluating RAG system performance](/blog/evaluating-rag-system-performance) is a topic in its own right, but here are the essentials as they relate to chunking.
 
 ### Quantitative evaluation
 
@@ -365,7 +365,7 @@ Cleaning and normalizing documents before chunking is often as impactful as the 
 
 ## Chunking and privacy
 
-Given my work on privacy-preserving NLP, I want to stress that chunk boundaries also define privacy boundaries.
+Chunk boundaries also define privacy boundaries.
 
 - If you need to redact or mask PII, do it **before** chunking when possible.
 - If access control is chunk-level, chunk size determines the minimum unit of restricted content.

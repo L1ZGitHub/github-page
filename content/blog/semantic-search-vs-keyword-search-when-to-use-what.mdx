@@ -2,7 +2,7 @@
 title: "Semantic Search vs Keyword Search: When to Use What"
 description: "Understand the differences between keyword and semantic search, when to use each, and how to implement basic semantic search in Python."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "RAG Systems"
 tags: ["Semantic Search", "Information Retrieval", "RAG", "Python", "Vector Databases", "NLP"]
 difficulty: "beginner"
@@ -12,9 +12,7 @@ author: "Hélain Zimmermann"
 
 Good search is where users decide whether your product feels smart or frustrating. A fast interface is useless if people cannot find what they need. The tricky part is that “search” is no longer just about matching words, it is about understanding meaning.
 
-As an engineer working on retrieval-augmented generation (RAG) systems and privacy-preserving NLP, I have had to make the “keyword vs semantic search” decision many times. The right choice depends much more on your data, your constraints, and your users than on hype.
-
-In this article I will walk through how both approaches work, their trade-offs, and practical rules for deciding when to use which. I will also show how to implement a simple semantic search in Python.
+The right choice between keyword and semantic search depends on your data, your constraints, and your users. This article covers how both approaches work, their trade-offs, and practical rules for deciding when to use which, with a simple semantic search implementation in Python.
 
 
 ## What is keyword search?
@@ -130,7 +128,7 @@ This is where semantic search enters the picture.
 
 Semantic search uses vector representations of text, called embeddings, to capture meaning instead of just words. Two texts with similar meaning will be close in the embedding space, even if they share no words.
 
-This is the core building block of modern RAG systems and is discussed more deeply in “Retrieval-Augmented Generation: A Complete Guide” and “Embedding Models Compared: OpenAI vs Open-Source”.
+This is the core building block of modern RAG systems.
 
 ### How semantic search works
 
@@ -145,7 +143,7 @@ Unlike keyword search, there is no direct term matching. Everything happens in e
 
 ### A minimal semantic search example in Python
 
-Here is a simple implementation using Sentence Transformers and a naive in-memory index. In a real system you would plug into a vector database like those covered in “Understanding Vector Databases: A Beginner's Guide”.
+Here is a simple implementation using Sentence Transformers and a naive in-memory index. In a real system you would plug into a [vector database](/blog/understanding-vector-databases) for persistent, indexed storage.
 
 ```python
 from sentence_transformers import SentenceTransformer
@@ -193,8 +191,6 @@ Concrete advantages:
 - More forgiving to user mistakes
 - Better ranking quality for many natural language tasks
 
-In “Building Production-Ready RAG Systems” and “Chunking Strategies for RAG Pipelines” I go deeper into how semantic search interacts with chunking, indexing strategies, and retrieval quality.
-
 ### Weaknesses of semantic search
 
 Semantic search is not a magic replacement. It has limitations:
@@ -204,7 +200,7 @@ Semantic search is not a magic replacement. It has limitations:
 - Infrastructure complexity: vector databases, monitoring embedding drift, model versioning
 - Potential privacy and compliance issues if you send data to third-party APIs
 
-For privacy-sensitive workloads, you might want to combine semantic search with techniques from “Privacy-Preserving NLP: Protecting Sensitive Data in Language Models”, like on-premise models, anonymization, and encryption.
+For privacy-sensitive workloads, you might want to combine semantic search with on-premise models, anonymization, and encryption.
 
 
 ## When to use keyword search
@@ -251,16 +247,15 @@ For internal wikis, support centers, and developer docs, users rarely know the e
 - “how to reset my password if I forgot the email”
 - “api limit errors when sending many requests”
 
-Here semantic search can surface relevant articles even if the wording does not match. This is exactly the kind of retrieval you want for LLM-based support bots or documentation assistants, as covered in “Building AI Agents with LangChain and LangGraph”.
+Here semantic search can surface relevant articles even if the wording does not match. This is exactly the kind of retrieval you want for LLM-based support bots or documentation assistants.
 
 ### Scenario 2: RAG systems and LLM applications
 
 If you are building RAG systems, semantic search is almost mandatory. The whole point is to retrieve context that is semantically relevant to the user query or the agent’s subtask.
 
-From my experience, common patterns include:
+Common patterns include:
 
-- Semantic search over chunked documents (see “Chunking Strategies for RAG Pipelines”)
-- Hybrid retrieval that mixes semantic and keyword signals
+- Semantic search over chunked documents with [hybrid retrieval](/blog/hybrid-search-combining-dense-and-sparse-retrieval) that mixes semantic and keyword signals
 - Using semantic search first, then re-ranking with a cross-encoder or an LLM
 
 ### Scenario 3: Similarity and recommendation
@@ -268,7 +263,7 @@ From my experience, common patterns include:
 Semantic search is also useful beyond classic search:
 
 - “Show me similar articles to this one”
-- “Find users with similar profiles or preferences”
+- “Find users with similar profiles or preferences” (this also applies to [multimodal AI](/blog/multimodal-ai-combining-vision-and-language-models) where images and text share the same embedding space)
 - “Cluster support tickets by topic”
 
 All of these are variations of similarity search in embedding space.
@@ -347,9 +342,9 @@ You can still later add semantic reranking on the top N keyword results.
 
 In that case:
 
-- Pick an embedding model using insights from “Embedding Models Compared: OpenAI vs Open-Source”
-- Use a vector database as described in “Understanding Vector Databases: A Beginner's Guide”
-- Pay attention to privacy and data residency, especially if using third-party APIs, and consider techniques from “Privacy-Preserving NLP: Protecting Sensitive Data in Language Models”
+- Pick an embedding model suited to your domain and latency requirements
+- Use a vector database for scalable nearest-neighbor retrieval
+- Pay attention to privacy and data residency, especially if using third-party embedding APIs
 
 
 ## Implementation tips from practice
@@ -373,7 +368,7 @@ A few battle-tested lessons I wish I had early on.
 ### For both
 
 - Build an evaluation set: queries plus “good” documents
-- Track relevance metrics like NDCG or MRR, not just “system feels better”
+- Track relevance metrics like NDCG or MRR with a proper [evaluation framework](/blog/evaluating-rag-system-performance), not just “system feels better”
 - Provide result explanations where possible to build user trust
 
 

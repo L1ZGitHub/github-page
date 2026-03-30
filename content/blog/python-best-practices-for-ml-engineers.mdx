@@ -2,7 +2,7 @@
 title: "Python Best Practices for ML Engineers"
 description: "Practical Python best practices for ML engineers, from project structure and typing to performance, testing, and production-ready code."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Engineering"
 tags: ["Python", "Machine Learning", "MLOps", "RAG", "Best Practices", "Software Engineering"]
 difficulty: "beginner"
@@ -10,11 +10,11 @@ readTime: "10 min read"
 author: "Hélain Zimmermann"
 ---
 
-Good ML work is not only about the model. For every impressive result, there is usually a pile of glue code: data loaders, feature pipelines, training scripts, evaluation, inference services. If that code is fragile or messy, your pace slows down, experiments are hard to reproduce, and deployment becomes painful.
+Good ML work is not only about the model. For every result, there is a pile of glue code: data loaders, feature pipelines, training scripts, evaluation, inference services. If that code is fragile or messy, experiments are hard to reproduce and deployment becomes painful.
 
-As an ML engineer, Python is often your primary tool. Treating it with the same discipline that backend engineers apply to their services gives you a huge advantage, especially when you start shipping models to production, building RAG systems, or integrating with APIs.
+As an ML engineer, Python is often your primary tool. Treating it with the same discipline that backend engineers apply to their services pays off fast, especially when you start shipping models to production or building RAG systems.
 
-In this article I will walk through Python best practices I actually use in day-to-day ML and RAG work, from project structure and typing to performance and deployment.
+This article covers Python best practices I use in day-to-day ML work, from project structure and typing to performance and deployment.
 
 
 ## 1. Structure projects like software, not notebooks
@@ -58,7 +58,7 @@ Key ideas:
 - Use notebooks only for exploration, visualizations, quick prototypes
 - Promote stable notebook logic into modules in `src/` as soon as it solidifies
 
-If you have read *Building Production-Ready RAG Systems* or *Deploying ML Models with FastAPI and Docker*, you will recognize this separation between application code, experimentation, and deployment.
+This separation between application code, experimentation, and deployment scales well as your project grows.
 
 
 ## 2. Use virtual environments and pinned dependencies
@@ -88,7 +88,7 @@ fastapi==0.110.0
 uvicorn[standard]==0.27.0
 ```
 
-For research you can be slightly looser, but when something goes to production or is part of a pipeline (RAG retrieval services, vector database clients, etc.), pin versions and document how to recreate the environment.
+For research you can be slightly looser, but when something goes to production or is part of a pipeline (RAG retrieval services, [vector database](/blog/understanding-vector-databases) clients, etc.), pin versions and document how to recreate the environment.
 
 
 ## 3. Embrace typing and static analysis
@@ -161,7 +161,7 @@ except ValidationError as e:
     print("Invalid config:", e)
 ```
 
-*Embedding Models Compared: OpenAI vs Open-Source* and *Retrieval-Augmented Generation: A Complete Guide* both highlight how configuration choices matter. Strongly typed configs make those choices traceable and safe.
+Strongly typed configs make configuration choices traceable and safe.
 
 
 ## 4. Write small, composable functions and modules
@@ -247,7 +247,7 @@ def train_epoch(epoch: int) -> None:
     logger.info("Finished epoch %d", epoch)
 ```
 
-Structured logging becomes essential when you deploy with FastAPI, as discussed in *Deploying ML Models with FastAPI and Docker*.
+Structured logging becomes essential when you deploy with FastAPI or need to [evaluate system performance](/blog/evaluating-rag-system-performance) across multiple components.
 
 
 ## 6. Testing: start small but start early
@@ -298,7 +298,7 @@ def test_load_csv_requires_label(tmp_path: Path):
         assert False, "Expected ValueError"
 ```
 
-When you move from toy scripts to production RAG pipelines, tests around chunking and retrieval (see *Chunking Strategies for RAG Pipelines* and *Semantic Search vs Keyword Search: When to Use What*) are extremely valuable.
+When you move from toy scripts to production RAG pipelines, tests around chunking and retrieval become critical for catching regressions.
 
 
 ## 7. Performance: profile before optimizing
@@ -327,7 +327,7 @@ def fast_normalize(vectors: np.ndarray) -> np.ndarray:
     return vectors / norms
 ```
 
-For vector databases and embedding pipelines, as covered in *Vector Database Performance Benchmarks* and *Understanding Vector Databases: A Beginner's Guide*, batching operations is usually better than many small calls.
+For embedding pipelines, batching operations is usually better than many small calls.
 
 ### Profile with `cProfile`
 
@@ -390,7 +390,7 @@ model_config = ModelConfig()
 training_config = TrainingConfig()
 ```
 
-When working on RAG systems and multi-agent architectures, this becomes even more important because you have many moving parts: embedding models, chunk sizes, retriever settings, LLM parameters. Configs make it explicit, as discussed in *Building a Multi-Agent AI System* and *Building AI Agents with LangChain and LangGraph*.
+When working on RAG systems or [multimodal pipelines](/blog/multimodal-ai-combining-vision-and-language-models), this becomes even more important because you have many moving parts: embedding models, chunk sizes, retriever settings, LLM parameters. Typed configs make everything explicit.
 
 
 ## 9. Clean interfaces for models and pipelines
@@ -422,7 +422,7 @@ This makes it easier to swap models or plug the classifier into a FastAPI servic
 
 ### RAG style pipeline
 
-If you are working with RAG, define clear interfaces between components: retriever, ranker, generator. This mirrors patterns in *Retrieval-Augmented Generation: A Complete Guide*.
+If you are working with RAG, define clear interfaces between components: retriever, ranker, generator.
 
 ```python
 from typing import Protocol, List
@@ -495,14 +495,12 @@ async def predict(req: PredictRequest) -> PredictResponse:
     return PredictResponse(predictions=preds)
 ```
 
-This pattern is similar to what I use in production setups, like those described in *Deploying ML Models with FastAPI and Docker*. The earlier best practices around typing, small modules, and configuration make such services much easier to reason about, test, and monitor.
+The earlier best practices around typing, small modules, and configuration make such services easier to reason about, test, and [monitor in production](/blog/monitoring-ml-models-in-production).
 
 
 ## 11. Privacy and security awareness
 
-If your ML system touches user data, privacy is not optional. The discussions in *Data Privacy in the Age of Large Language Models* and *Privacy-Preserving NLP: Protecting Sensitive Data in Language Models* apply directly to how you write Python.
-
-Practical tips:
+If your ML system touches user data, privacy is not optional. Practical tips:
 
 - Centralize all data access and anonymization logic
 - Never log raw user data or secrets

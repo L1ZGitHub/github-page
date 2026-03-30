@@ -2,7 +2,7 @@
 title: "Evaluating RAG System Performance"
 description: "Learn how to rigorously evaluate Retrieval-Augmented Generation systems with practical metrics, tooling, and Python examples for production setups."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "RAG Systems"
 tags: ["RAG", "LLMs", "Evaluation", "Python", "NLP", "MLOps"]
 difficulty: "intermediate"
@@ -10,11 +10,11 @@ readTime: "12 min read"
 author: "Hélain Zimmermann"
 ---
 
-Most RAG systems I see in the wild fail not because the models are bad, but because the teams have no reliable way to tell when the system is actually working. Logs look fine, latency is acceptable, users are mostly quiet - and yet quality is all over the place.
+Most RAG systems I see in the wild fail not because the models are bad, but because the teams have no reliable way to tell when the system is actually working. Logs look fine, latency is acceptable, users are mostly quiet, and yet quality is all over the place.
 
 If you build RAG pipelines for real users, you need a measurement strategy that is as deliberate as your retrieval and generation design. Gut feeling and a few hand-checked examples are useful at the start, but they do not survive scale, iteration, or model upgrades.
 
-In my guides on Retrieval-Augmented Generation and Building Production-Ready RAG Systems I focus on architecture and design choices. Here I want to zoom in on something more painful and more critical: how to evaluate that what you built is actually good.
+This article zooms in on something more painful and more critical than architecture choices: how to evaluate that what you built is actually good.
 
 
 ## What does it mean for a RAG system to "perform well"?
@@ -28,7 +28,7 @@ At minimum, you need to think about four aspects:
 3. **User experience** - Is it fast enough, consistent and understandable?
 4. **Operational robustness** - Does quality degrade silently over time?
 
-These map nicely to different evaluation layers. If you read my articles on Semantic Search vs Keyword Search and Chunking Strategies for RAG Pipelines you have already seen how design choices at the retrieval layer impact everything that comes after. Evaluation is how we make those trade-offs explicit.
+These map to different evaluation layers. Design choices at the retrieval layer (embedding model, chunking, indexing) impact everything downstream. Evaluation is how we make those trade-offs explicit.
 
 
 ## Levels of RAG evaluation
@@ -65,7 +65,7 @@ You can use a variety of metrics:
 - **Precision@k** - Of the top k chunks, how many are actually relevant?
 - **MRR (Mean Reciprocal Rank)** - How high in the list is the first relevant chunk?
 
-If you read Vector Database Performance Benchmarks or Understanding Vector Databases, you will have seen similar metrics in a pure search context. For RAG, I recommend optimizing recall first, then improving precision with reranking or better chunking.
+If you work with [vector databases](/blog/understanding-vector-databases), you will have seen similar metrics in a pure search context. For RAG, I recommend optimizing recall first, then improving precision with reranking or better chunking.
 
 A simple retrieval evaluation loop in Python might look like this:
 
@@ -103,7 +103,7 @@ def evaluate_retriever(
     return {k: float(np.mean(v)) for k, v in scores.items()}
 ```
 
-This kind of evaluation is where you compare different embedding models, as in Embedding Models Compared: OpenAI vs Open-Source. You can quickly see how model choice, chunk size or index configuration impact recall.
+This kind of evaluation is where you compare different embedding models. You can quickly see how model choice, chunk size or index configuration impact recall.
 
 ### Evaluating generation in isolation
 
@@ -183,7 +183,7 @@ def evaluate_generator(
     return sum(scores) / len(scores)
 ```
 
-This is a simplified version of what frameworks like RAGAS or other evaluation toolkits do. The important part is that you separate retrieval and generation, so you know which part is limiting your system.
+This is a simplified version of what frameworks like RAGAS do. The important part is that you separate retrieval and generation, so you know which part is limiting your system.
 
 
 ## 2. End-to-end offline evaluation
@@ -212,7 +212,7 @@ When you have this dataset, you can run your full RAG pipeline and evaluate at m
 
 ### Using LLMs as judges for RAG
 
-Human evaluation is the gold standard, but it does not scale. For day-to-day iterations, an LLM judge is a useful approximation.
+Human evaluation is the gold standard, but it does not scale. For day-to-day iterations, an LLM judge is a useful approximation. Understanding [how evaluation frameworks go beyond simple perplexity](/blog/llm-evaluation-frameworks-beyond-perplexity) helps frame what these judges actually measure.
 
 We can evaluate three properties:
 
@@ -265,9 +265,7 @@ With this, you can run evaluation jobs as part of your CI when you change:
 - the embedding model
 - vector database indexing parameters
 - chunking strategy
-- LLM provider or prompting (see Prompt Engineering Best Practices for Production)
-
-If you already have a deployed system (for example behind FastAPI as in Deploying ML Models with FastAPI and Docker), you can periodically sample real queries, label them, and feed them into this pipeline.
+- LLM provider or prompting
 
 
 ## 3. Online and human-in-the-loop evaluation
@@ -308,7 +306,7 @@ Then you can look for patterns like:
 For higher traffic systems, A/B testing is invaluable. You can compare:
 
 - two retrievers (for example BM25 + embeddings vs pure embeddings)
-- two chunking strategies (see Chunking Strategies for RAG Pipelines)
+- two chunking strategies
 - two LLMs or prompts
 
 Typical online metrics:
@@ -323,12 +321,12 @@ Do not forget operational metrics as well:
 - cost per request
 - failure rate
 
-Sometimes the “worse” model on offline metrics wins online because it is faster and cheaper, which can matter more in a production setting.
+Sometimes the "worse" model on offline metrics wins online because it is faster and cheaper. That can matter more in a production setting than a few points on recall@5.
 
 
 ## Practical evaluation workflows
 
-Let me outline a workflow that has worked well for me across several RAG projects.
+Here is a workflow that has worked well for me across several RAG projects.
 
 ### 1. Start with a small, high quality gold dataset
 
@@ -425,10 +423,10 @@ Build a simple dashboard, or even just a notebook, that:
 - shows question, retrieved chunks, answer, reference
 - lets you quickly annotate error type: retrieval, generation, or data issue
 
-This is where a lot of the intuition you build while studying Understanding Transformer Architectures and Building a Multi-Agent AI System becomes useful. You will start to see patterns like:
+You will start to see patterns like:
 
-- “the model always hallucinates when the context is too long”
-- “retriever fails when the query uses synonyms not present in docs”
+- "the model always hallucinates when the context is too long"
+- "retriever fails when the query uses synonyms not present in docs"
 
 ### 4. Close the loop with online signals
 
@@ -443,17 +441,17 @@ In that case, you might:
 
 - keep B as default
 - improve A further for difficult queries
-- or route complex queries to A and simple ones to B using a classifier (see Building AI Agents with LangChain and LangGraph for ideas on routing architectures)
+- or route complex queries to A and simple ones to B using a classifier
 
 
 ## A note on privacy and evaluation data
 
-When you store evaluation logs and user feedback, you are likely storing sensitive information. Concepts from Data Privacy in the Age of Large Language Models and Privacy-Preserving NLP apply just as much here.
+When you store evaluation logs and user feedback, you are likely storing sensitive information.
 
 A few practical guidelines:
 
 - **Anonymize user identifiers** before storing logs
-- **Avoid storing raw content** if you do not need it, store hashed or redacted versions
+- **Avoid storing raw content** if you do not need it; store hashed or redacted versions
 - **Separate evaluation datasets from production logs**, with stricter access controls
 
 Evaluation is not an excuse to weaken your privacy posture.
@@ -461,7 +459,7 @@ Evaluation is not an excuse to weaken your privacy posture.
 
 ## When to fine-tune vs when to fix retrieval
 
-A frequent question I get: should I fine-tune the LLM on my domain data, or just improve retrieval and prompting?
+A frequent question: should I fine-tune the LLM on my domain data, or just improve retrieval and prompting?
 
 If your evaluation shows:
 
@@ -469,14 +467,14 @@ If your evaluation shows:
 - good groundedness
 - but poor answer quality or style
 
-then fine-tuning (see Fine-Tuning LLMs on Custom Data) or better prompt engineering can help.
+then fine-tuning or better prompt engineering can help.
 
 If instead you see:
 
 - low recall@k
 - groundedness issues because the right docs are missing
 
-then do not touch the LLM yet. Fix retrieval: better embeddings, better chunking, maybe hybrid search as discussed in Semantic Search vs Keyword Search.
+then do not touch the LLM yet. Fix retrieval: better embeddings, better chunking, maybe hybrid search. The same principles that apply to [combining vision and language in multimodal systems](/blog/multimodal-ai-combining-vision-and-language-models) apply here: evaluation metrics keep you from optimizing the wrong component.
 
 Evaluation metrics are what keep you from wasting weeks fine-tuning a model that was not the bottleneck.
 
@@ -490,6 +488,6 @@ Evaluation metrics are what keep you from wasting weeks fine-tuning a model that
 - Build a small, high quality, curated evaluation set before scaling to synthetic data.
 - Automate offline evaluation and run it in CI for any change to retrieval or generation.
 - Combine offline metrics with online signals: user feedback, implicit behavior, and A/B tests.
-- Inspect the worst examples manually, that is where the best insights and improvements come from.
+- Inspect the worst examples manually; that is where the best insights and improvements come from.
 - Use evaluation results to decide when to improve retrieval, when to tweak prompts, and when fine-tuning is worth it.
 - Treat evaluation data as sensitive: anonymize, restrict access, and respect user privacy throughout your pipeline.

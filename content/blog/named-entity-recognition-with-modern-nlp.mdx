@@ -2,7 +2,7 @@
 title: "Named Entity Recognition with Modern NLP"
 description: "Learn modern Named Entity Recognition, from classical CRFs to transformer-based models, practical pipelines, privacy, evaluation, and production tips."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "NLP & Privacy"
 tags: ["NLP", "Named Entity Recognition", "Transformers", "SpaCy", "PyTorch", "Privacy"]
 difficulty: "intermediate"
@@ -28,8 +28,8 @@ Labels:     B-PER  O        B-ORG    O   B-LOC I-LOC       O   B-DATE
 
 NER is often one layer in a larger system:
 
-- In RAG pipelines (see "Retrieval-Augmented Generation: A Complete Guide"), NER helps detect key entities for indexing and query expansion.
-- In privacy-preserving workloads (see "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models"), NER is a workhorse for de-identification, for example masking names, emails, or IDs.
+- In RAG pipelines, NER helps detect key entities for indexing and query expansion.
+- In [privacy-preserving workloads](/blog/privacy-preserving-nlp), NER is a workhorse for de-identification, for example masking names, emails, or IDs.
 - In analytics, it powers downstream entity resolution, knowledge graphs, and searching by people or organizations.
 
 ## From CRFs to transformers
@@ -38,16 +38,16 @@ Before transformers, NER was dominated by Conditional Random Fields (CRFs) with 
 
 Modern NER usually uses one of three patterns:
 
-1. **Pretrained transformer with a token classification head**  
+1. **Pretrained transformer with a token classification head**
    A model like `bert-base-cased` or `distilbert-base-multilingual-cased` plus a small classification layer that outputs a label for each token.
 
-2. **Task-specific models**  
+2. **Task-specific models**
    Models like `dslim/bert-base-NER` or `Davlan/bert-base-multilingual-cased-ner-hrl` that are already fine-tuned on NER datasets.
 
-3. **Library abstractions**  
+3. **Library abstractions**
    spaCy or Flair, which hide some details and provide end-to-end pipelines.
 
-If you have read "Understanding Transformer Architectures" you already know why transformers work so well here: self-attention can capture long-range dependencies, for example connecting a first mention of "International Business Machines" with later mentions of "IBM".
+Transformers work well here because self-attention captures long-range dependencies, for example connecting a first mention of "International Business Machines" with later mentions of "IBM".
 
 ## Fast path: high quality NER with almost no code
 
@@ -82,7 +82,7 @@ San Francisco GPE
 
 Key practical tips:
 
-- For high throughput systems, try `en_core_web_md` or `en_core_web_sm` and benchmark as in "Vector Database Performance Benchmarks" but for NER throughput.
+- For high throughput systems, try `en_core_web_md` or `en_core_web_sm` and benchmark NER throughput on your target hardware.
 - Use `doc.ents` together with `doc.sents` to segment and annotate longer documents efficiently.
 
 ### Using HuggingFace transformers
@@ -118,10 +118,10 @@ Real projects rarely fit into PERSON/ORG/LOC/DATE. You might need:
 
 At that point you have two main options.
 
-1. **Fine-tune a transformer on your labeled data**  
+1. **Fine-tune a transformer on your labeled data**
    Best accuracy, but requires labeled examples.
 
-2. **Rule-based or hybrid NER**  
+2. **Rule-based or hybrid NER**
    Combine heuristics, regexes, and gazetteers with a base model. Often ideal for privacy, where patterns like emails, IBANs, or phone numbers are easier to detect with rules.
 
 ### Fine-tuning a transformer for NER
@@ -200,7 +200,7 @@ trainer = Trainer(
 trainer.train()
 ```
 
-From there you can export to ONNX or TorchScript and deploy, reusing patterns from "Deploying ML Models with FastAPI and Docker".
+From there you can export to ONNX or TorchScript and deploy behind a serving layer.
 
 ### Rule-based and hybrid NER
 
@@ -231,15 +231,15 @@ for ent in doc.ents:
     print(ent.text, ent.label_)
 ```
 
-This approach aligns well with the privacy topics in "Data Privacy in the Age of Large Language Models" and complements differential privacy methods: before you even think about privacy noise, remove or mask obvious identifiers.
+This approach works well for de-identification: before you even think about [differential privacy](/blog/introduction-to-differential-privacy-for-nlp) noise budgets, remove or mask obvious identifiers with deterministic rules.
 
 ## NER in RAG pipelines
 
-If you have read "Building Production-Ready RAG Systems" and "Chunking Strategies for RAG Pipelines", you know the retrieval side is critical. NER can help at several stages.
+NER can help at several stages of a retrieval-augmented generation pipeline.
 
 ### 1. Pre-processing and redaction
 
-Before indexing documents into a vector database (see "Understanding Vector Databases: A Beginner's Guide"), NER can:
+Before indexing documents into a [vector database](/blog/understanding-vector-databases), NER can:
 
 - Mask sensitive entities: `Alice` -> `[PERSON]`
 - Normalize variants: `IBM`, `International Business Machines` -> `IBM`
@@ -270,7 +270,7 @@ Combine this with your chunking strategy so that entity spans are not cut mid-wa
 
 ### 2. Query understanding and expansion
 
-For search, especially in hybrid setups like in "Hybrid Search: Combining Dense and Sparse Retrieval", NER gives you structured hooks:
+For search, especially in hybrid dense+sparse setups, NER gives you structured hooks:
 
 - Detect entities in the user query.
 - Use them as filters on metadata (e.g. `ORG=OpenAI`).
@@ -280,7 +280,7 @@ For instance, a query like "policies for OpenAI contractors in Sweden" can be co
 
 ### 3. Entity-level evaluation
 
-In "Evaluating RAG System Performance" I discuss metrics like answer correctness and grounding. For NER-enhanced RAG, it is often useful to measure:
+When [evaluating a RAG system](/blog/evaluating-rag-system-performance), it is often useful to measure entity-specific metrics:
 
 - Entity recall in retrieved documents: do we retrieve chunks containing the key organizations or people from the query?
 - Entity leakage: do generated answers contain entities that should have been redacted? NER can be used as a post-hoc checker here.
@@ -291,13 +291,13 @@ In privacy-preserving NLP the goal is often de-identification: remove or obfusca
 
 Challenges I see frequently:
 
-- **Recall vs utility**  
+- **Recall vs utility**
   Aggressive models or thresholds catch more PII but might over-mask, making text useless.
 
-- **Long tail of identifiers**  
+- **Long tail of identifiers**
   Rare names, internal IDs, URLs, or semi-structured tokens that are not in training data.
 
-- **Context-dependent entities**  
+- **Context-dependent entities**
   "Apple" in a grocery list vs "Apple" in a shareholder report.
 
 Practical strategies:
@@ -306,7 +306,7 @@ Practical strategies:
 - Introduce rules for easy patterns: account numbers, email addresses, phone numbers.
 - Add a confidence threshold and manual review for low-confidence cases. Scale review with sampling.
 
-For stronger privacy guarantees, differential privacy and secure aggregation techniques from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" can complement NER, especially during model training.
+For stronger privacy guarantees, differential privacy and secure aggregation techniques can complement NER, especially during model training.
 
 ## Evaluation: beyond F1
 
@@ -332,30 +332,30 @@ Depending on your application:
 - For analytics or knowledge graphs, you might prefer high precision, even at the cost of missing some entities.
 - For RAG, wrong entities can send retrieval in the wrong direction, so misclassifications are more harmful than misses.
 
-Adopt evaluation ideas from "Evaluating RAG System Performance": define metrics that actually reflect your business or safety goals, not just textbook F1.
+Define metrics that actually reflect your business or safety goals, not just textbook F1.
 
 ## Deployment and engineering tips
 
-Running NER in production has its own pitfalls. From my experience and from patterns in "Python Best Practices for ML Engineers" and "CI/CD Pipelines for Machine Learning Projects", a few guidelines help:
+Running NER in production has its own pitfalls. A few guidelines help:
 
-- **Batching and streaming**  
+- **Batching and streaming**
   For large documents, process in batches of sentences or paragraphs. Avoid passing entire books into a single forward pass.
 
-- **Model size vs latency**  
-  Distilled or smaller models often offer a much better latency-accuracy tradeoff. Measure it like you would for vector databases.
+- **Model size vs latency**
+  Distilled or smaller models often offer a much better latency-accuracy tradeoff. Measure it on representative data before committing to a large model.
 
-- **Tokenization consistency**  
+- **Tokenization consistency**
   If you use NER outputs for indexing, ensure the same tokenizer and normalization steps across training, inference, and retrieval.
 
-- **Versioning**  
+- **Versioning**
   Store model version and label scheme. If you change labels (for example splitting ORG into COMPANY and NONPROFIT), version your indexes and pipelines accordingly.
 
-- **Monitoring drift**  
+- **Monitoring drift**
   Domain language changes over time. Log entity distributions and periodically review a sample. Integrate checks into your CI/CD, similar to model regression tests.
 
 ## Where LLMs fit into NER
 
-LLMs can act as zero-shot or few-shot NER engines. With good prompts (see "Prompt Engineering Best Practices for Production"), you can:
+LLMs can act as zero-shot or few-shot NER engines. With good prompts, you can:
 
 - Rapidly prototype new label sets.
 - Label small datasets to bootstrap supervised models.

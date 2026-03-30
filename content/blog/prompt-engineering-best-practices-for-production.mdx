@@ -2,7 +2,7 @@
 title: "Prompt Engineering Best Practices for Production"
 description: "Practical prompt engineering best practices for production systems including structure, evaluation, safety, RAG integration and maintainability."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Tutorials"
 tags: ["Prompt Engineering", "RAG", "LLMs", "Production ML", "FastAPI", "NLP"]
 difficulty: "beginner"
@@ -14,11 +14,11 @@ LLMs will happily produce impressive-looking nonsense at scale. In a notebook, t
 
 When I started shipping LLM-powered features to real users, I realized prompt engineering is not a playground trick. It is software engineering. Prompts are part of your system's logic and deserve the same rigor as any other component.
 
-In this post I will walk through practical, battle-tested prompt engineering practices that I use when building production systems at Ailog, especially for RAG pipelines and privacy-sensitive applications.
+In this post I will walk through practical, battle-tested prompt engineering practices that I use when building production systems, especially for RAG pipelines and privacy-sensitive applications.
 
 ## Treat prompts as part of your architecture
 
-If you have read my pieces on Retrieval-Augmented Generation or Building Production-Ready RAG Systems, you have seen that prompts sit at the heart of the architecture. They are not just strings, they encode:
+Prompts sit at the heart of any LLM-powered architecture. They are not just strings, they encode:
 
 - Task specification
 - Constraints and safety rules
@@ -68,8 +68,6 @@ This simple pattern already brings benefits:
 - You can log which template was used for each request
 - You can test each template separately
 
-This is similar in spirit to how we structure components when Deploying ML Models with FastAPI and Docker.
-
 ### Use clear sections and formatting
 
 Prompts that work in your head often fail in practice because they are ambiguous. Use structure:
@@ -101,8 +99,6 @@ Label:"""
 
 This style avoids ambiguity, and it also makes it easier to build evaluation scripts later.
 
-If you have read Understanding Transformer Architectures, think of this as shaping the input sequence distribution that the model sees, which heavily influences its behavior.
-
 ## Be explicit about task, constraints, and persona
 
 LLMs are sensitive to small wording changes. Rather than guessing, systematically specify what you need.
@@ -132,7 +128,7 @@ The better version explains:
 
 ### Set hard constraints
 
-If your system has safety or compliance needs, the prompt is your first line of defense. For privacy-sensitive flows, you can combine these with techniques from Privacy-Preserving NLP.
+If your system has safety or compliance needs, the prompt is your first line of defense.
 
 Example for a customer support assistant:
 
@@ -216,7 +212,7 @@ When you move to tool calling or function calling APIs, the idea is similar. You
 
 ### Use delimiters to avoid prompt injection
 
-If you use RAG (see Retrieval-Augmented Generation: A Complete Guide and Chunking Strategies for RAG Pipelines), user-provided content and retrieved context will sit next to your instructions. That is a classic place for prompt injection.
+If you use RAG, user-provided content and retrieved context will sit next to your instructions. That is a classic vector for prompt injection.
 
 Use clear delimiters and instructions like:
 
@@ -264,8 +260,6 @@ def load_prompt(name: str) -> str:
     return (PROMPT_DIR / f"{name}.txt").read_text(encoding="utf-8")
 ```
 
-Then your FastAPI endpoint (see Deploying ML Models with FastAPI and Docker) can use this loader.
-
 ### Write unit tests for critical prompts
 
 You can unit test prompts by checking the model's behavior on a small set of fixtures. This will not be perfect but it will catch regressions.
@@ -291,7 +285,7 @@ async def test_qa_prompt_behavior(question, expected_substring):
     assert expected_substring.lower() in response.lower()
 ```
 
-You can go further with dataset-based evaluation and metrics, but even simple tests are valuable.
+You can go further with dataset-based evaluation and metrics, but even simple tests are valuable. For a deeper look at evaluation strategies, see [LLM Evaluation Frameworks](/blog/llm-evaluation-frameworks-beyond-perplexity).
 
 ### Use A/B testing for prompt changes
 
@@ -301,15 +295,13 @@ For user-facing systems, treat major prompt changes like product experiments:
 - Randomly route a fraction of traffic to each
 - Log metrics (click-through, task success, complaint rate, etc)
 
-This is particularly useful for search and recommendation flows. If you know Semantic Search vs Keyword Search, think of it as experimenting with ranking algorithms, but at the prompt level.
-
 ## Integrate prompts with RAG and tools
 
 For RAG systems, good prompts are as important as good embeddings and chunking.
 
 ### Connect prompts to your retrieval strategy
 
-If you are using a vector database (see Understanding Vector Databases: A Beginner's Guide and Embedding Models Compared), retrieval quality and prompt design must work together.
+If you are using a [vector database](/blog/understanding-vector-databases) for retrieval, query quality and prompt design must work together.
 
 A typical flow:
 
@@ -336,7 +328,7 @@ Always ensure the prompt tells the model how to treat this metadata.
 
 ### Make tool use explicit
 
-If you are building agents (see Building AI Agents with LangChain and LangGraph), prompts govern when and how tools are used.
+If you are [building agents](/blog/building-ai-agents-with-langchain-and-langgraph), prompts govern when and how tools are called.
 
 An example of a simple tool-usage prompt without any specific framework:
 
@@ -373,7 +365,7 @@ Every extra token costs money and latency. Use prompts to control verbosity:
 Answer in 2-3 sentences.
 ```
 
-For RAG, avoid dumping entire documents if only a few passages are needed. Tune the number and size of chunks, as discussed in Chunking Strategies for RAG Pipelines.
+For RAG, avoid dumping entire documents if only a few passages are needed. Tune the number and size of chunks to balance recall and cost.
 
 ### Make prompts robust to noisy inputs
 
@@ -390,7 +382,7 @@ If the user asks multiple unrelated questions, ask them to pick one.
 If the message is unclear, ask a clarifying question instead of guessing.
 ```
 
-Also consider pre-processing with classic NLP (language detection, profanity filters) before the LLM. For privacy-sensitive flows, you may need to anonymize inputs as described in Privacy-Preserving NLP.
+Also consider pre-processing with classic NLP (language detection, profanity filters) before the LLM. For privacy-sensitive flows, you may need to anonymize inputs before they reach the model.
 
 ### Add self-checks and verification
 
@@ -432,7 +424,7 @@ For each request, log:
 - Response
 - Metadata (user id, request id, latency, etc)
 
-If you handle sensitive data, combine this with the techniques in Privacy-Preserving NLP: mask PII before logging or log only derived signals.
+If you handle sensitive data, mask PII before logging or log only derived signals.
 
 ### Build feedback loops
 
@@ -441,7 +433,7 @@ Collect:
 - Explicit feedback (thumbs up/down, ratings)
 - Implicit signals (did the user rephrase, did they abandon the flow)
 
-Tag problematic examples and use them to refine prompts and evaluation datasets. This is similar to how you would refine training data when Fine-Tuning LLMs on Custom Data.
+Tag problematic examples and use them to refine prompts and evaluation datasets. If you outgrow prompt-level fixes, [fine-tuning on your own data](/blog/fine-tuning-llms-custom-data) is the natural next step.
 
 ### Iterate with hypotheses, not random tweaks
 
@@ -449,7 +441,7 @@ When a prompt underperforms, do not randomly add more instructions. Instead:
 
 1. Form a hypothesis (e.g. "model is hallucinating because context is ambiguous")
 2. Change either retrieval, prompt, or model, not everything at once
-3. Measure impact
+3. Measure impact with a [structured evaluation pipeline](/blog/evaluating-rag-system-performance)
 
 Treat prompts as part of a system that includes data, architecture, and UX.
 

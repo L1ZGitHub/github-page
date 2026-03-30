@@ -2,7 +2,7 @@
 title: "Understanding Transformer Architectures"
 description: "Deep dive into transformer architectures, from self-attention math to practical variants for RAG, privacy NLP, and production systems."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Transformers", "Deep Learning", "NLP", "RAG", "PyTorch", "Attention"]
 difficulty: "advanced"
@@ -79,7 +79,7 @@ A few key points that matter in real systems:
 - Scaling by `sqrt(d_k)` stabilizes gradients for large dimensions
 - Masks let you control visibility, which is critical for causal generation and for privacy constraints
 
-This is the primitive that everything else builds on. For RAG systems (see "Retrieval-Augmented Generation: A Complete Guide" and "Building Production-Ready RAG Systems"), you are indirectly tuning these attention patterns through prompt construction and retrieval.
+This is the primitive that everything else builds on. In RAG systems, you are indirectly tuning these attention patterns through prompt construction and retrieval.
 
 ## Multi-head attention: attention with multiple perspectives
 
@@ -137,7 +137,7 @@ class MultiHeadAttention(nn.Module):
 In practice:
 
 - More heads improves expressivity but hurts latency and memory
-- For latency-critical endpoints (for example in "Deploying ML Models with FastAPI and Docker"), you often want to reduce heads or use head pruning
+- For latency-critical endpoints, you often want to reduce heads or use head pruning
 
 ## Positional encodings: giving order to a set
 
@@ -182,7 +182,7 @@ Why it matters in practice:
 
 - RoPE enables extrapolation to longer contexts with some fine-tuning
 - Relative encodings like in Transformer-XL or DeBERTa improve performance on tasks where distance between tokens matters
-- For long-context RAG setups (see "Chunking Strategies for RAG Pipelines"), your positional encoding choice can be the bottleneck
+- For long-context RAG setups, your positional encoding choice can be the bottleneck
 
 Most libraries hide these details, but if you debug attention issues in long documents, understanding the positional scheme helps.
 
@@ -226,9 +226,7 @@ class TransformerBlock(nn.Module):
         return x
 ```
 
-The MLP is often 4x larger than `d_model` and is a major contributor to compute. When optimizing for inference cost, decreasing `d_ff` or using low-rank adapters can be effective.
-
-If you have read "Fine-Tuning LLMs on Custom Data: A Practical Guide", you have seen low-rank adaptation (LoRA) and similar tricks that manipulate these linear layers instead of full fine-tuning.
+The MLP is often 4x larger than `d_model` and is a major contributor to compute. When optimizing for inference cost, decreasing `d_ff` or using [low-rank adapters like LoRA](/blog/fine-tuning-open-source-llms-with-lora-and-qlora) can be effective, manipulating these linear layers instead of full fine-tuning.
 
 ## Encoder, decoder, encoder-decoder
 
@@ -242,7 +240,7 @@ Examples: BERT, RoBERTa, DistilBERT.
 - Well suited for classification, regression, and retrieval
 - Core in many semantic search and embedding systems
 
-This connects directly to "Semantic Search vs Keyword Search" and "Embedding Models Compared: OpenAI vs Open-Source". Most embedding models are encoder-only transformers with pooling and normalization.
+Most [embedding models](/blog/embedding-models-compared-openai-vs-open-source) are encoder-only transformers with pooling and normalization.
 
 A minimal encoder-only architecture:
 
@@ -315,7 +313,7 @@ Common tricks:
 - Linear attention (Performer, Linear Transformer) - approximate softmax to achieve O(T) complexity
 - Sliding window attention (as in LongT5 and many long-context LLMs)
 
-In a production RAG pipeline (see "Building Production-Ready RAG Systems"), I usually try to avoid very long contexts by:
+In a production RAG pipeline, I usually try to avoid very long contexts by:
 
 - Better chunking and summarization
 - Hierarchical retrieval (document -> chunk -> passage)
@@ -367,11 +365,11 @@ class TransformerEmbedder(nn.Module):
         return emb
 ```
 
-This is essentially what most open-source embedding models do, as discussed in "Embedding Models Compared: OpenAI vs Open-Source" and "Understanding Vector Databases: A Beginner's Guide".
+This is essentially what most open-source embedding models do. The resulting vectors are then stored and queried in [vector databases](/blog/understanding-vector-databases) optimized for nearest-neighbor search.
 
 ## Privacy and attention control
 
-In "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" I discussed strategies to avoid leaking sensitive data. Transformers give you several hooks for this.
+Transformers give you several hooks to avoid leaking sensitive data.
 
 Some practical tools:
 
@@ -405,7 +403,7 @@ A few rules of thumb I use when choosing or modifying transformer architectures:
 4. **Domain-specific models**: start from a pretrained backbone and fine-tune, do not train transformers from scratch unless you have massive data and budget.
 5. **Privacy-sensitive applications**: integrate masking and anonymization earlier in the pipeline, do not rely solely on the model to "forget" data.
 
-If you are already comfortable with transformers, the next logical steps are experimenting with fine-tuning strategies (see "Fine-Tuning LLMs on Custom Data: A Practical Guide") and wiring these models into proper services with FastAPI and Docker.
+If you are already comfortable with transformers, the next step is experimenting with [fine-tuning on your own data](/blog/fine-tuning-llms-custom-data) and wiring these models into proper services.
 
 ## Key Takeaways
 

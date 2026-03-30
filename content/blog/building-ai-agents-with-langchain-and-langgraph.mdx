@@ -2,7 +2,7 @@
 title: "Building AI Agents with LangChain and LangGraph"
 description: "Learn how to build robust AI agents with LangChain and LangGraph, from simple tool calls to multi-step workflows, with practical Python examples."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Tutorials"
 tags: ["LangChain", "LangGraph", "RAG", "AI Agents", "Python", "LLMs"]
 difficulty: "intermediate"
@@ -25,7 +25,7 @@ At the simplest level, an agent is just:
 2. A set of tools it can call
 3. A loop that keeps going until some goal is reached
 
-If you have read my pieces on Retrieval-Augmented Generation or Building Production-Ready RAG Systems, you already know that the “tool” can be a retrieval call, a vector database query, or a custom microservice. LangChain wraps these into a unified interface.
+In practice, the “tool” can be a retrieval call, a [vector database](/blog/understanding-vector-databases) query, or a custom microservice. LangChain wraps these into a unified interface.
 
 LangGraph then lets you describe the loop explicitly as a state machine. Instead of trusting an opaque “agent executor”, you see every step in the graph: which nodes run, with which state, and why.
 
@@ -83,7 +83,7 @@ LangGraph treats your agent as a graph:
 - Edges: transitions between nodes, based on state
 - State: all the data that flows through the graph
 
-You describe the workflow declaratively, then LangGraph executes it. If you are familiar with my article on Chunking Strategies for RAG Pipelines, think of LangGraph as the orchestration layer that stitches all those components together.
+You describe the workflow declaratively, then LangGraph executes it. Think of LangGraph as the orchestration layer that stitches all those components together.
 
 
 ## Defining Agent State in LangGraph
@@ -105,7 +105,7 @@ You can extend this with:
 - `tool_results`: logs of tool outputs
 - `user_profile`: privacy-filtered user information
 
-For privacy-sensitive applications, I often split the state into two layers: one that can be logged, and one that must stay in a secure environment. This connects directly with the practices I discussed in Privacy-Preserving NLP: protect sensitive fields early, not as an afterthought.
+For privacy-sensitive applications, I often split the state into two layers: one that can be logged, and one that must stay in a secure environment. The principle is straightforward: protect sensitive fields early, not as an afterthought.
 
 
 ## A Simple LangGraph LLM Node
@@ -267,7 +267,7 @@ In a real application I usually rely on LangGraph’s `Branching` and `Command` 
 
 ## Integrating RAG into the Agent
 
-Most interesting agents need context. That is where your RAG stack comes in: embeddings, vector databases, and retrieval logic, as covered in Retrieval-Augmented Generation and Understanding Vector Databases.
+Most interesting agents need context. That is where your RAG stack comes in: embeddings, vector databases, and retrieval logic.
 
 Let us add a `retrieve` node that fetches relevant documents and lets the LLM use them.
 
@@ -312,12 +312,12 @@ You can now build a graph like:
 - `retrieve` node: fetches documents
 - `rag_llm` node: answers with context
 
-This pattern is exactly what we use in production RAG systems: a small DSL on top of a state graph, not an opaque one-shot agent.
+This pattern is what we use in production RAG systems: a small DSL on top of a state graph, not an opaque one-shot agent. If you need the LLM to call external APIs or databases through a standard protocol, [MCP](/blog/model-context-protocol-connecting-llms-to-external-tools) is worth looking at for the tool layer.
 
 
 ## Adding Privacy Constraints
 
-When working with user data, tools and retrievers should never see raw PII unless strictly necessary. The privacy-preserving strategies I discussed in Privacy-Preserving NLP map nicely to graph nodes:
+When working with user data, tools and retrievers should never see raw PII unless strictly necessary. Privacy-preserving strategies map nicely to graph nodes:
 
 - `sanitize_input` node that redacts or pseudonymizes sensitive fields
 - `policy_check` node that decides whether a tool call is allowed
@@ -354,7 +354,7 @@ One of the strongest arguments for LangGraph is observability. When an agent mis
 
 LangGraph’s graph structure integrates nicely with tracing tools and custom logging. You can log at node boundaries, or attach middleware that runs on every state transition.
 
-For production RAG agents this is non-negotiable. As I discussed in Building Production-Ready RAG Systems, you need evaluation loops, regression tests, and structured traces to iterate safely.
+For production RAG agents this is non-negotiable. You need [evaluation loops](/blog/evaluating-rag-system-performance), regression tests, and structured traces to iterate safely.
 
 
 ## When to Use LangChain + LangGraph
@@ -364,12 +364,12 @@ You do not need LangGraph for every chatbot. I typically reach for it when:
 - Control flow is more than “one LLM call plus retrieval”
 - I need multiple tools, branches, or retries
 - I need strict privacy boundaries and auditability
-- I want to integrate model fine-tuning or specialized models, as in Fine-Tuning LLMs on Custom Data
+- I want to integrate model fine-tuning or specialized models
 
 A rough rule of thumb:
 
 - Simple FAQ bot with single retriever: LangChain RAG chain is fine
-- Multi-tool assistant with RAG, routing, and policies: LangChain + LangGraph
+- [Multi-tool assistant](/blog/building-a-multi-agent-ai-system) with RAG, routing, and policies: LangChain + LangGraph
 
 
 ## Practical Tips
@@ -379,7 +379,7 @@ A few patterns that have worked well for me in real systems:
 1. **Keep state small and explicit**  - avoid dumping everything into one dict. Define clear fields and types.
 2. **Separate routing from reasoning**  - use small, cheap models for routing nodes, and larger models for heavy reasoning.
 3. **Make tools deterministic when possible**  - side effects and flaky tools make agents brittle.
-4. **Use embeddings consistently**  - as in Embedding Models Compared: OpenAI vs Open-Source, decide early which embedding model to standardize on, and do not mix them within the same index.
+4. **Use embeddings consistently**  - decide early which embedding model to standardize on, and do not mix them within the same index.
 5. **Start with a static graph**  - avoid self-modifying graphs or too much “agentic” structure at first. Get reliability, then add autonomy.
 
 

@@ -2,7 +2,7 @@
 title: "Agentic RAG: The Next Evolution"
 description: "Explore Agentic RAG, where LLM agents plan, search, and verify across tools. Design patterns, code, and pitfalls for production-ready systems."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "RAG Systems"
 tags: ["RAG", "AI Agents", "Python", "LLMs", "Production ML", "LangGraph"]
 difficulty: "advanced"
@@ -14,7 +14,7 @@ LLMs that only answer questions from a single retrieval call already feel old. I
 
 Agentic RAG combines Retrieval-Augmented Generation with multi-step reasoning and tool use. Instead of a single query to a vector database, you orchestrate an agent that can decide what to search, when to search again, which tools to call, how to validate answers, and when to ask for clarification.
 
-If you have read my guides on Retrieval-Augmented Generation, Building Production-Ready RAG Systems, and Building a Multi-Agent AI System, you can see Agentic RAG as the convergence of those ideas into a unified pattern.
+If you have built [production-ready RAG systems](/blog/building-production-ready-rag-systems) or [multi-agent architectures](/blog/building-a-multi-agent-ai-system), you can see Agentic RAG as the convergence of those ideas into a unified pattern.
 
 ## What is Agentic RAG, concretely?
 
@@ -33,7 +33,7 @@ Agentic RAG turns this into a loop:
 4. Monitor intermediate results and adapt the plan
 5. Produce an answer together with justification or provenance
 
-In other words, you are embedding an agentic system inside your RAG pipeline. If you are familiar with Hybrid Search and Semantic Search vs Keyword Search, Agentic RAG is the control layer that decides when each technique is used.
+In other words, you are embedding an agentic system inside your RAG pipeline. Agentic RAG is the control layer that decides when each retrieval technique (dense, sparse, hybrid) is used.
 
 ## Why classical RAG fails in the wild
 
@@ -42,7 +42,7 @@ From real deployments, a few patterns keep showing up where vanilla RAG is not e
 - **Multi-hop questions**: "How did our Q3 revenue compare to the year when we first launched product X?" requires joining information from multiple documents and sometimes external tools.
 - **Underspecified queries**: Users often ask "What are our security requirements?" with no project context. The system needs to ask a clarification question.
 - **Tool coordination**: In non-trivial systems you have several tools: vector DB, SQL, search API, internal services. Someone needs to orchestrate them.
-- **Verification and safety**: You may want a second pass that rechecks the answer, especially in privacy-sensitive NLP scenarios which I covered in Data Privacy in the Age of Large Language Models.
+- **Verification and safety**: You may want a second pass that rechecks the answer, especially in privacy-sensitive NLP scenarios.
 
 Agentic RAG addresses these by giving the LLM the ability to:
 
@@ -60,13 +60,13 @@ A few principles guide the design.
 
 ### 1. Keep retrieval as a first-class tool
 
-Do not bury retrieval logic deep inside an opaque agent. Retrieval is still your primary way of grounding the model and limiting hallucinations, as discussed in Retrieval-Augmented Generation: A Complete Guide and Chunking Strategies for RAG Pipelines.
+Do not bury retrieval logic deep inside an opaque agent. Retrieval is still your primary way of grounding the model and limiting hallucinations.
 
 Treat retrieval as just another tool the agent can call, but with:
 
 - Clear interfaces (input: text query, output: list of documents or passages)
 - Configurable backends (dense, sparse, hybrid search)
-- Metrics and monitoring hooks (see Evaluating RAG System Performance and Monitoring ML Models in Production)
+- Metrics and monitoring hooks ([evaluating RAG performance](/blog/evaluating-rag-system-performance) is a good starting point)
 
 ### 2. Separate planning from execution
 
@@ -76,7 +76,7 @@ The same model can do both planning and answering, but architecturally, keep the
 - **Executor**: actually runs tool calls, tracks state, and performs safety checks
 - **Answerer**: synthesizes a final answer from the evidence
 
-This separation makes the system easier to test and reason about and aligns with the ideas from Building a Multi-Agent AI System.
+This separation makes the system easier to test and reason about.
 
 ### 3. Keep the control loop outside the LLM
 
@@ -84,7 +84,7 @@ Even in Agentic RAG, I do not let the LLM fully control the loop. Instead, the L
 
 - Maximum number of tool calls
 - Timeouts and external cancellations
-- Security filters on tool parameters (important in privacy-preserving NLP)
+- Security filters on tool parameters
 
 ## A minimal Agentic RAG architecture
 
@@ -110,7 +110,7 @@ On each turn, the control loop is:
 Assume you have:
 
 - An LLM that can emit structured JSON specifying the next action
-- A retrieval tool over a vector database, as in Understanding Vector Databases: A Beginner's Guide and Vector Database Performance Benchmarks
+- A retrieval tool over a [vector database](/blog/understanding-vector-databases)
 
 ```python
 import json
@@ -225,14 +225,14 @@ The interesting bit is not the LLM prompt, it is the loop. You control iteration
 
 ### 1. Multi-retriever setup
 
-For serious RAG systems, a single vector index is rarely enough. Leveraging ideas from Hybrid Search, Semantic Search vs Keyword Search, and Scaling RAG Systems to Millions of Documents, I typically expose multiple retrieval tools:
+For serious RAG systems, a single vector index is rarely enough. I typically expose multiple retrieval tools:
 
 - `dense_retrieval` for semantic similarity
 - `sparse_retrieval` (BM25 or equivalent) for exact term match and rare tokens
 - `hybrid_retrieval` that combines both
 - `table_retrieval` or `sql_query` for structured data
 
-The planner chooses which to use based on the query. For compliance or privacy-sensitive data, you can expose a `pii_safe_retrieval` tool that filters or masks personal data, building on the patterns in Privacy-Preserving NLP: Protecting Sensitive Data in Language Models.
+The planner chooses which to use based on the query. For compliance or privacy-sensitive data, you can expose a `pii_safe_retrieval` tool that filters or masks personal data before it reaches the model.
 
 ### 2. Verification agents
 
@@ -240,7 +240,7 @@ A lightweight pattern is to add a JudgeAgent that checks answers for:
 
 - Consistency with retrieved evidence
 - Fabricated references or citations
-- Privacy policy violations (especially with Differential Privacy in NLP setups)
+- Privacy policy violations
 
 At minimum, have a second LLM call that gets:
 
@@ -275,7 +275,7 @@ You can then conditionally replace the answer or display a warning.
 
 ## Prompting strategies specific to Agentic RAG
 
-Prompting in Agentic RAG is less about style and more about *control*. Some tips building on Prompt Engineering Best Practices for Production:
+Prompting in Agentic RAG is less about style and more about *control*. A few tips:
 
 - Be explicit about JSON schemas and give 1-2 examples
 - Penalize unnecessary tool calls: "If the answer is already clear, respond with ANSWER directly"
@@ -296,24 +296,24 @@ Agentic RAG increases your attack surface:
 - Tool parameters might inadvertently leak sensitive data to third parties
 - Complex reasoning makes it harder to audit where a piece of information came from
 
-Combining the ideas from Data Privacy in the Age of Large Language Models and Introduction to Differential Privacy for NLP, you should:
+To mitigate these risks, you should:
 
 - Implement **input filters** that detect and redact PII before it reaches third-party APIs
 - Use **role separation** so the agent cannot call privileged tools without passing through a policy check
 - Maintain **provenance metadata** for each piece of retrieved content (source, timestamp, access rights)
 - Log all tool calls with anonymized user identifiers and keep them under your own storage controls
 
-Agentic RAG is powerful, but for regulated domains, you may need stronger guarantees like local LLM deployment, local vector databases, and sometimes even differential privacy at training time.
+For regulated domains, you may need stronger guarantees: local LLM deployment, local vector databases, and sometimes even differential privacy at training time.
 
 ## Observability and evaluation
 
-Debugging Agentic RAG is easily twice as hard as debugging basic RAG systems. You need visibility into:
+Debugging Agentic RAG is considerably harder than debugging basic RAG. You need visibility into:
 
 - Plans and actions chosen by the agent
 - All tool calls, inputs, outputs, and latencies
 - Final answers and user feedback
 
-Hook into your existing monitoring setup, for instance the patterns in Monitoring ML Models in Production and Evaluating RAG System Performance:
+Hook into your existing monitoring setup:
 
 - Log each step as a structured event: `session_id`, `step`, `action`, `tool_name`, `latency_ms`, `prompt_tokens`, `completion_tokens`
 - Build simple dashboards showing average steps per query and tool usage distribution
@@ -326,7 +326,7 @@ For offline evaluation, reuse your RAG evaluation framework but enrich it with:
 
 ## From prototype to production
 
-To take Agentic RAG from a notebook to production, I lean on the practices covered in Deploying ML Models with FastAPI and Docker, CI/CD Pipelines for Machine Learning Projects, and Python Best Practices for ML Engineers.
+Taking Agentic RAG from a notebook to production requires the same discipline as any ML service: containerization, CI/CD, and proper API design.
 
 A high-level deployment shape:
 
@@ -370,8 +370,8 @@ You can then embed this service into a larger architecture, for example, a multi
 
 Good use cases:
 
-- Complex research or due diligence tasks that naturally require multiple retrieval and reasoning steps
-- Internal knowledge bases with heterogeneous tools (documents, SQL databases, Jira, Git, etc.)
+- Complex research or due diligence tasks that naturally require multiple retrieval and reasoning steps, such as [autonomous trading analysis](/blog/ai-and-finance-how-autonomous-agents-are-transforming-trading)
+- Internal knowledge bases with heterogeneous tools (documents, SQL databases, Jira, Git, etc.), especially when combined with [persistent memory layers](/blog/2026-the-year-of-ai-memory-beyond-basic-rag)
 - Privacy-aware assistants where you want strong control and observability over each action
 
 Less suitable cases:

@@ -2,7 +2,7 @@
 title: "Chinese AI Models Are Catching Up, And Sometimes Surpassing, The West"
 description: "A beginner's guide to Kimi K2, GLM-5, Qwen, and DeepSeek: the Chinese large language models that rival GPT-4 and why they matter."
 date: "2026-02-13"
-dateModified: "2026-02-13"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Chinese AI", "Kimi K2", "GLM-5", "Qwen", "DeepSeek", "LLMs"]
 difficulty: "beginner"
@@ -12,19 +12,17 @@ author: "Hélain Zimmermann"
 
 # Chinese AI Models Are Catching Up: And Sometimes Surpassing: The West
 
-For the past three years, the story of large language models has been written primarily in English, by American companies. GPT-4 from OpenAI, Claude from Anthropic, Gemini from Google, these have been the benchmarks against which everything else is measured. But that narrative is shifting fast.
+For the past three years, the story of large language models has been written primarily in English, by American companies. GPT-4 from OpenAI, Claude from Anthropic, Gemini from Google: these have been the benchmarks against which everything else is measured. But that narrative is shifting fast.
 
-A wave of Chinese AI models has arrived that does not just compete with Western systems, in several areas, they match or exceed them. If you are not paying attention to Kimi K2, GLM-5, Qwen, and DeepSeek, you are missing half the picture.
+A wave of Chinese AI models has arrived that does not just compete with Western systems. In several areas, they match or exceed them. If you are not paying attention to Kimi K2, GLM-5, Qwen, and DeepSeek, you are missing half the picture.
 
 ## What Is a Large Language Model, Anyway?
 
-Before diving into the specifics, let's establish what we are actually talking about.
-
-A large language model (LLM) is a type of artificial intelligence trained on massive amounts of text data, books, websites, code, scientific papers, conversations. Through this training, the model learns patterns in language: grammar, facts, reasoning strategies, coding conventions, and much more. The result is a system that can generate coherent text, answer questions, write code, translate between languages, and perform many tasks that previously required human intelligence.
+A large language model (LLM) is a type of artificial intelligence trained on massive amounts of text data: books, websites, code, scientific papers, conversations. Through this training, the model learns patterns in language: grammar, facts, reasoning strategies, coding conventions, and much more. The result is a system that can generate coherent text, answer questions, write code, translate between languages, and perform many tasks that previously required human intelligence.
 
 The "large" in the name refers to the number of parameters, the internal numerical values that the model adjusts during training. Modern frontier models have hundreds of billions to over a trillion parameters. More parameters generally mean more capacity to learn nuanced patterns, though architecture and training data quality matter just as much as raw size.
 
-What makes LLMs useful is their generality. Unlike traditional software that is programmed to do one specific thing, an LLM can handle a vast range of tasks with a single model. You can ask it to debug Python code in one message and write a marketing email in the next. This flexibility is why LLMs have become the foundation for AI assistants, coding tools, search engines, and agent systems like OpenClaw.
+What makes LLMs useful is their generality. Unlike traditional software that is programmed to do one specific thing, an LLM can handle a vast range of tasks with a single model. You can ask it to debug Python code in one message and write a marketing email in the next. This flexibility is why LLMs have become the foundation for AI assistants, coding tools, search engines, and [multi-agent systems](/blog/building-a-multi-agent-ai-system).
 
 ## The Chinese AI Labs You Should Know
 
@@ -34,7 +32,7 @@ Four organizations have emerged as serious contenders in the frontier LLM space.
 
 Zhipu AI, a Beijing-based company spun out of Tsinghua University, develops the GLM (General Language Model) family. Their latest release, **GLM-5**, is notable for two reasons.
 
-First, performance. GLM-5 scores competitively with GPT-4o and Claude 3.5 Sonnet across standard benchmarks, MMLU, HumanEval, GSM8K, and others. It is particularly strong in multilingual tasks and mathematical reasoning.
+First, performance. GLM-5 scores competitively with GPT-4o and Claude 3.5 Sonnet across standard benchmarks: MMLU, HumanEval, GSM8K, and others. It is particularly strong in multilingual tasks and mathematical reasoning.
 
 Second, and more remarkable: GLM-5 was trained on **Huawei Ascend 910B chips**, not NVIDIA hardware. This is significant because U.S. export controls have restricted China's access to the most advanced NVIDIA GPUs (the A100 and H100). Zhipu's ability to produce a competitive frontier model on domestic hardware demonstrates that export controls have slowed, but not stopped, China's AI development.
 
@@ -56,10 +54,10 @@ What sets Qwen apart is its ecosystem. Alibaba has released:
 
 - **Qwen 2.5** (general-purpose LLM)
 - **Qwen 2.5 Coder** (optimized for code generation)
-- **Qwen-VL** (vision-language model for image understanding)
+- **Qwen-VL** ([vision-language model](/blog/multimodal-ai-combining-vision-and-language-models) for image understanding)
 - **Qwen-Audio** (audio understanding)
 
-This breadth means developers can build complete applications, handling text, code, images, and audio, using a single model family, all with open weights. The coding variant in particular has become popular in development tools, with benchmark performance that challenges GitHub Copilot's underlying models.
+This breadth means developers can build complete applications handling text, code, images, and audio using a single model family, all with open weights. The coding variant in particular has become popular in development tools, with benchmark performance that challenges GitHub Copilot's underlying models.
 
 ```python
 # Running Qwen 2.5 locally with transformers
@@ -92,9 +90,7 @@ DeepSeek has arguably done more to shift the global AI conversation than any oth
 
 Both models are available with open weights.
 
-## Why These Models Matter: Even If You Never Use Them Directly
-
-You might be thinking: "I use ChatGPT, it works fine, why should I care about Chinese models?" Three reasons.
+## Why These Models Matter, Even If You Never Use Them Directly
 
 ### 1. Competition Drives Prices Down
 
@@ -119,32 +115,34 @@ Diversity of models leads to diversity of applications.
 
 ### 3. The Open-Weights Factor
 
-This is perhaps the most consequential point. Most Chinese frontier models are published with open weights. Meta's Llama is the major Western exception, but OpenAI, Anthropic, and Google keep their weights proprietary.
+Most Chinese frontier models are published with open weights. Meta's Llama is the major Western exception, but OpenAI, Anthropic, and Google keep their weights proprietary.
 
-The practical consequence: if you want to run a frontier-class model on your own hardware, with full control over your data, without paying per-token API fees, your best options in 2026 are largely Chinese-developed. DeepSeek-V3, Qwen 2.5, GLM-5, these are all available for download and local deployment.
+The practical consequence: if you want to run a frontier-class model on your own hardware, with full control over your data, without paying per-token API fees, your best options in 2026 are largely Chinese-developed. DeepSeek-V3, Qwen 2.5, GLM-5: these are all available for download and local deployment.
 
-For organizations in regulated industries (healthcare, finance, defense) where data cannot leave internal infrastructure, open-weights Chinese models are not just an alternative, they are often the most practical choice.
+For organizations in regulated industries (healthcare, finance, defense) where data cannot leave internal infrastructure, open-weights Chinese models are not just an alternative. They are often the most practical choice.
 
 ## Hardware Independence: The Ascend Story
 
 One subplot that deserves attention is the hardware dimension. U.S. export controls have restricted China's access to NVIDIA's most advanced AI chips since 2022. The conventional wisdom was that this would severely hamper Chinese AI development.
 
-It has not played out that way. Huawei's **Ascend 910B** processor has become the domestic alternative, and Zhipu's decision to train GLM-5 on Ascend chips demonstrated it can produce competitive results. The training process reportedly required more engineering effort and optimization compared to using NVIDIA hardware, but the end result, a model that competes with GPT-4 class systems, speaks for itself.
+It has not played out that way. Huawei's **Ascend 910B** processor has become the domestic alternative, and Zhipu's decision to train GLM-5 on Ascend chips demonstrated it can produce competitive results. The training process reportedly required more engineering effort and optimization compared to using NVIDIA hardware, but the end result speaks for itself: a model that competes with GPT-4 class systems. This kind of architectural divergence echoes broader trends in [neuromorphic and alternative computing approaches](/blog/neuromorphic-computing-meets-neurogenesis-inspiring-plasticity-in-ai).
 
-This has implications beyond AI. It suggests that hardware restrictions slow development but do not prevent it, and that they may actually accelerate the creation of independent supply chains.
+This has implications beyond AI. It suggests that hardware restrictions slow development but do not prevent it, and that they may accelerate the creation of independent supply chains.
 
 ## A Word of Nuance
 
 It would be misleading to suggest that Chinese models have uniformly surpassed Western ones. The picture is more nuanced:
 
 - On **standard benchmarks** (MMLU, HumanEval, MATH), the gap has effectively closed. Top Chinese models are within the margin of measurement error of top Western models.
-- On **agentic tasks**, complex multi-step workflows requiring planning, tool use, and error recovery, Western models, particularly Claude and GPT-4o, still hold an edge according to most evaluations.
+- On **agentic tasks** (complex multi-step workflows requiring planning, tool use, and error recovery), Western models, particularly Claude and GPT-4o, still hold an edge according to most evaluations.
 - On **safety and alignment**, Western models benefit from more extensive RLHF (Reinforcement Learning from Human Feedback) and red-teaming processes. Chinese models have been improving rapidly in this area, but the safety ecosystem is less mature.
 - On **cost efficiency**, Chinese models currently lead. DeepSeek's training efficiency breakthrough was genuine, and the pricing reflects it.
 
+Evaluating these differences rigorously is a challenge in itself. Techniques from [RAG system evaluation](/blog/evaluating-rag-system-performance) apply broadly: benchmark selection, dataset contamination, and metric choice all influence the story the numbers tell.
+
 ## What This Means Going Forward
 
-The era of American AI exceptionalism is over. That does not mean American models are worse, they are still excellent. But "frontier AI" is no longer a club with three members. It is a crowded, competitive, global field, and the models coming out of Beijing, Hangzhou, and Shenzhen are serious.
+The era of American AI exceptionalism is over. That does not mean American models are worse; they are still excellent. But "frontier AI" is no longer a club with three members. It is a crowded, competitive, global field, and the models coming out of Beijing, Hangzhou, and Shenzhen are serious.
 
 For developers, this means more choices and lower costs. For businesses, it means less dependency on any single provider. For the broader AI ecosystem, it means faster progress driven by genuine global competition.
 

@@ -2,7 +2,7 @@
 title: "Getting Started with PyTorch for Deep Learning"
 description: "Beginner friendly guide to getting started with PyTorch, from tensors to training your first neural network, with practical Python examples."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Tutorials"
 tags: ["PyTorch", "Deep Learning", "Python", "Neural Networks", "AI & ML", "ML Engineering"]
 difficulty: "beginner"
@@ -12,9 +12,9 @@ author: "Hélain Zimmermann"
 
 Getting your first deep learning model to actually run, train, and converge can feel more like a rite of passage than a programming task. You install libraries, copy examples from docs, tune a few mysterious parameters, then watch the loss explode into NaNs.
 
-I have been there. The good news is that PyTorch makes the core ideas of deep learning much more approachable than they first appear. Once you understand a handful of concepts - tensors, computation graphs, automatic differentiation, and the training loop - the rest is mostly variations on a theme.
+I have been there. The good news is that PyTorch makes the core ideas of deep learning much more approachable than they first appear. Once you understand a handful of concepts (tensors, computation graphs, automatic differentiation, and the training loop) the rest is mostly variations on a theme.
 
-In this guide I will walk through a practical, beginner friendly path to using PyTorch. The focus is on getting you to a working model quickly, not on covering every feature. If you have read my posts on topics like "Understanding Transformer Architectures" or "Embedding Models Compared: OpenAI vs Open-Source", you will recognize the same building blocks at a smaller scale here.
+In this guide I will walk through a practical, beginner friendly path to using PyTorch. The focus is on getting you to a working model quickly, not on covering every feature.
 
 
 ## 1. Why PyTorch for Deep Learning
@@ -24,9 +24,9 @@ PyTorch is one of the dominant deep learning frameworks in research and producti
 - **Pythonic and intuitive** - Tensors feel like NumPy arrays with superpowers.
 - **Dynamic computation graph** - You build the model as regular Python code, which makes debugging easier.
 - **Huge ecosystem** - Pretrained models, tutorials, and libraries like Hugging Face Transformers.
-- **Production ready** - PyTorch works well with deployment stacks like FastAPI and Docker. I cover that in more depth in "Deploying ML Models with FastAPI and Docker".
+- **Production ready** - PyTorch works well with deployment stacks like FastAPI and Docker.
 
-If your long term goal is to work with modern architectures such as transformers, RAG systems, or multi agent systems, PyTorch is a strong foundation. Most of the systems I describe in "Building Production-Ready RAG Systems" or "Building AI Agents with LangChain and LangGraph" rely on models originally trained in PyTorch.
+If your long term goal is to work with modern architectures such as transformers, RAG systems, or multi agent systems, PyTorch is a strong foundation.
 
 
 ## 2. Setting Up Your Environment
@@ -43,7 +43,7 @@ If you have an NVIDIA GPU, you will want a CUDA enabled build. The PyTorch site 
 
 ### 2.2 A Minimal Project Structure
 
-Even for quick experiments, I encourage using a small but clean structure. It pays off as your work grows, just like the practices I discuss in "Python Best Practices for ML Engineers".
+Even for quick experiments, I encourage using a small but clean structure. It pays off as your work grows, following the same kind of [discipline that matters for ML codebases](/blog/python-best-practices-for-ml-engineers).
 
 ```text
 pytorch-intro/
@@ -60,7 +60,7 @@ pytorch-intro/
 For this article we will keep everything in a single script, but keep this structure in mind for real projects.
 
 
-## 3. Tensors - The Core Building Block
+## 3. Tensors: The Core Building Block
 
 Tensors are to PyTorch what arrays are to NumPy. They are multi dimensional arrays with additional features like GPU support and automatic differentiation.
 
@@ -127,7 +127,7 @@ print(x.grad)  # Should be 2 * x = 4.0
 
 Any tensor with `requires_grad=True` will accumulate gradients when you call `.backward()` on a scalar result.
 
-This is what allows complex models such as transformers, which I describe in "Understanding Transformer Architectures", to be trained just as easily as a tiny regression model.
+This is what allows complex models such as transformers to be trained just as easily as a tiny regression model.
 
 
 ## 5. Defining a Simple Neural Network
@@ -162,9 +162,7 @@ Key points:
 
 - `__init__` defines the layers (parameters).
 - `forward` defines how data flows through the network.
-- You do not manually wire up gradients PyTorch tracks everything.
-
-If you later work with transformers for tasks like RAG, the interface is very similar: you instantiate a model class, then call it with input tensors.
+- You do not manually wire up gradients. PyTorch tracks everything.
 
 
 ## 6. A Complete Training Loop from Scratch
@@ -197,7 +195,7 @@ train_dataset = ToyDataset(n_samples=5000)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 ```
 
-`Dataset` and `DataLoader` are the workhorses of data handling in PyTorch. The pattern is similar to how we handle data in larger pipelines, like those I describe in "Chunking Strategies for RAG Pipelines" or "Evaluating RAG System Performance".
+`Dataset` and `DataLoader` are the workhorses of data handling in PyTorch. The same pattern scales from toy examples to [real-time inference pipelines](/blog/building-real-time-ml-inference-pipelines).
 
 ### 6.2 Initialize Model, Loss, Optimizer
 
@@ -258,7 +256,7 @@ def train(model, dataloader, criterion, optimizer, device, num_epochs=10):
 train(model, train_loader, criterion, optimizer, device, num_epochs=10)
 ```
 
-This structure is nearly identical whether you are training a small MLP or a large transformer used inside a RAG system. The complexity in real world projects usually comes from data preprocessing, evaluation metrics, and infrastructure, which I cover in posts like "CI/CD Pipelines for Machine Learning Projects".
+This structure is nearly identical whether you are training a small MLP or a large transformer. The complexity in real world projects usually comes from data preprocessing, evaluation metrics, and infrastructure.
 
 
 ## 7. Evaluating and Using the Model
@@ -307,8 +305,6 @@ with torch.no_grad():
 print("Predicted class:", predicted_class)
 ```
 
-This pattern of moving from training to prediction is exactly what you will later use when serving models behind an API as I describe in "Deploying ML Models with FastAPI and Docker".
-
 
 ## 8. From Toy Models to Real Projects
 
@@ -343,11 +339,11 @@ You then define a CNN or reuse a pretrained model, and the training loop looks a
 
 For NLP tasks like text classification or question answering, modern workflows often build on pretrained transformer models. These models are usually trained in PyTorch and exposed via frameworks like Hugging Face Transformers.
 
-When you work on applications such as RAG systems, semantic search, or hybrid retrieval (which I cover in "Retrieval-Augmented Generation: A Complete Guide", "Semantic Search vs Keyword Search: When to Use What" and "Hybrid Search: Combining Dense and Sparse Retrieval"), you will often:
+When you work on applications such as RAG systems or [multimodal pipelines that combine vision and language](/blog/multimodal-ai-combining-vision-and-language-models), you will often:
 
 - Load a pretrained transformer encoder.
 - Use it to compute embeddings for texts.
-- Store those in a vector database, like I discuss in "Understanding Vector Databases: A Beginner's Guide" and "Vector Database Performance Benchmarks".
+- Store those in a [vector database](/blog/understanding-vector-databases) for retrieval.
 
 The PyTorch basics you learned here, especially tensors, models, and training loops, carry over directly.
 
@@ -379,11 +375,11 @@ If you run into out of memory errors on GPU, lower `batch_size`. It is often the
 
 ### 9.3 Log More Than Just Loss
 
-Even in small projects, track metrics like accuracy or F1. For more complex systems like RAG, evaluation is much more nuanced, as I describe in "Evaluating RAG System Performance".
+Even in small projects, track metrics like accuracy or F1. For more complex systems like RAG, evaluation is much more nuanced and worth studying separately.
 
 ### 9.4 Think About Privacy Early
 
-If you work with real user data, start thinking about privacy from the beginning. Techniques like those I describe in "Introduction to Differential Privacy for NLP" and "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" become relevant quickly once you move beyond toy datasets.
+If you work with real user data, start thinking about privacy from the beginning. Techniques like differential privacy become relevant quickly once you move beyond toy datasets.
 
 
 ## Key Takeaways

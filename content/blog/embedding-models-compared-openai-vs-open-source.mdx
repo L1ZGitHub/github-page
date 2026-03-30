@@ -2,7 +2,7 @@
 title: "Embedding Models Compared: OpenAI vs Open-Source"
 description: "Compare OpenAI and open-source embedding models for RAG, search, and clustering, with tradeoffs, benchmarks, costs, and practical code examples."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["RAG", "Embeddings", "OpenAI", "Vector Databases", "LLMs", "Python"]
 difficulty: "intermediate"
@@ -10,22 +10,22 @@ readTime: "11 min read"
 author: "Hélain Zimmermann"
 ---
 
-Large language models get all the attention, yet most production RAG systems quietly depend on a single workhorse: the embedding model. When retrieval feels “magic” or inexplicably bad, it almost always comes down to how we turn text into vectors.
+Most production [RAG](/blog/retrieval-augmented-generation-a-complete-guide) systems quietly depend on a single workhorse: the embedding model. When retrieval feels “magic” or inexplicably bad, it almost always comes down to how we turn text into vectors.
 
-Over the last year, the tradeoff between OpenAI embeddings and open-source models has shifted dramatically. You no longer have to choose between "good but closed" and "free but mediocre." The reality is more nuanced - and more interesting - especially if you care about cost, latency, privacy, and domain specificity.
+Over the last year, the tradeoff between OpenAI embeddings and open-source models has shifted. You no longer have to choose between “good but closed” and “free but mediocre.” The reality is more nuanced, especially if you care about cost, latency, privacy, and domain specificity.
 
-In this post I will walk through how I now think about this decision when building RAG and retrieval systems in practice.
+This post walks through how I think about this decision when building retrieval systems in practice.
 
 
 ## What embedding models actually do in your stack
 
-If you have read my guides on Retrieval-Augmented Generation and Building Production-Ready RAG Systems, you know embeddings sit in the critical path of:
+Embeddings sit in the critical path of:
 
 - Document ingestion (chunking + embedding)
 - Query processing (query rewriting + embedding)
 - Retrieval ranking (vector search + scoring)
 
-Concretely, we use embeddings for:
+Concretely, embeddings power:
 
 - Semantic search: "how do I reset my password" should match "account credential reset steps".
 - RAG retrieval: selecting the top-k chunks that will condition the LLM.
@@ -33,7 +33,7 @@ Concretely, we use embeddings for:
 - Classification: mapping text to label vectors or using k-NN for weak supervision.
 - Deduplication: catching near-duplicates that only differ lightly.
 
-If you take one idea from this article, let it be this: **your choice of embedding model is as important as your choice of LLM** for overall system quality.
+Bottom line: **your choice of embedding model is as important as your choice of LLM** for overall system quality.
 
 
 ## OpenAI embeddings in practice
@@ -59,7 +59,7 @@ OpenAI embeddings handle many languages reasonably well without extra work, whic
 **1. Data control and privacy**  
 If you work with sensitive data, privacy-preserving NLP constraints often push you away from external APIs.
 
-OpenAI offers options to avoid training on your data, but regulatory or contractual requirements may still forbid sending data off-prem. In my article on Privacy-Preserving NLP I go deeper into these constraints and typical threat models.
+OpenAI offers options to avoid training on your data, but regulatory or contractual requirements may still forbid sending data off-prem.
 
 **2. Cost at scale**  
 Embedding a few thousand documents is cheap. Embedding tens of millions is a different story.
@@ -83,14 +83,14 @@ The open-source ecosystem has exploded. You now have:
 - Sentence-transformer based models
 - E5-style models (for retrieval-oriented embeddings)
 - FlagEmbedding, GTE, BGE models
-- Domain-specific models (code, legal, biomedical, multilingual)
+- Domain-specific models (code, legal, biomedical, multilingual, and increasingly [multimodal](/blog/multimodal-ai-combining-vision-and-language-models))
 
 Many of these rank extremely well on benchmarks and, more importantly, can be tuned for your use case.
 
 ### Strengths
 
 **1. Full control and privacy**  
-You run the model where your data is. For strict privacy settings, this is a big win, especially when combined with the techniques discussed in Privacy-Preserving NLP.
+You run the model where your data is. For strict privacy settings, this is a big win.
 
 **2. Cost and scalability**  
 Once you invest in hardware or a managed inference platform, marginal cost per embedding can be extremely low.
@@ -105,10 +105,10 @@ This is often the killer feature:
 - You can pick a model that already targets your domain (e.g., `bge-en-icl`, `e5-mistral`, `gte-large`) 
 - You can fine-tune embeddings with in-domain labeled pairs or triplets
 
-This ties into the ideas from Fine-Tuning LLMs on Custom Data: while that post focuses on generative models, the same principle applies - you get big gains when your training distribution matches your real data.
+The same principle applies to generative fine-tuning: you get big gains when your training distribution matches your real data.
 
 **4. Flexible vector sizes and architectures**  
-You can choose 384, 768, 1024, 2048 dimensional models depending on your latency/accuracy tradeoff and how it works with your vector database (see Understanding Vector Databases for more on storage and indexing implications).
+You can choose 384, 768, 1024, 2048 dimensional models depending on your latency/accuracy tradeoff and how it interacts with your [vector database's](/blog/understanding-vector-databases) indexing and storage strategy.
 
 ### Limitations
 
@@ -135,7 +135,7 @@ The particular tradeoff depends on your constraints, but I usually start from a 
 ### 1. What is your privacy and compliance model?
 
 - If you cannot send data outside your VPC or country, open-source is nearly mandatory.
-- If you can send anonymized or partially masked data, OpenAI is still viable, combined with pre-processing steps from Privacy-Preserving NLP.
+- If you can send anonymized or partially masked data, OpenAI is still viable with appropriate pre-processing (redaction, tokenization, differential privacy).
 
 A common compromise: 
 
@@ -211,7 +211,7 @@ embeddings = [item.embedding for item in response.data]
 print(len(embeddings), len(embeddings[0]))  # n_texts, embedding_dim
 ```
 
-You can store these embeddings in any vector database discussed in Understanding Vector Databases.
+You can store these embeddings in any vector database that supports the corresponding dimensionality.
 
 ### Using a sentence-transformer locally
 
@@ -234,9 +234,7 @@ For production, you would typically wrap this in a FastAPI or gRPC service and d
 
 ## Evaluation: do not trust benchmarks blindly
 
-Benchmarks like MTEB are helpful to narrow the search space, but they are not your ground truth. In my RAG work I always evaluate embeddings on **task-specific metrics**.
-
-If you have read Chunking Strategies for RAG Pipelines, you know that evaluation must reflect the full retrieval context. Same applies here.
+Benchmarks like MTEB are helpful to narrow the search space, but they are not your ground truth. You should [evaluate embeddings on task-specific metrics](/blog/evaluating-rag-system-performance), the same way you would evaluate any other component of a retrieval pipeline.
 
 ### A minimal evaluation loop
 
@@ -296,7 +294,7 @@ for k in [1, 3, 5, 10]:
     print(f"Recall@{k}: {recall_at_k(k):.3f}")
 ```
 
-Then you repeat the same with another model (OpenAI or different OSS) and compare. This is more work than eyeballing embeddings, but it directly measures whether your RAG system will retrieve useful chunks.
+Then you repeat the same with another model (OpenAI or different OSS) and compare. More work than eyeballing embeddings, but it directly measures whether your RAG system will retrieve useful chunks.
 
 
 ## Cost and latency considerations
@@ -342,7 +340,7 @@ Split your indices by sensitivity:
 - `private_index` with open-source embeddings and on-prem vector DB.
 - `public_index` with OpenAI embeddings and a managed vector DB.
 
-At query time, you hit both indices, then merge results before passing them to your RAG pipeline. Building Production-Ready RAG Systems covers how to orchestrate such multi-index architectures.
+At query time, you hit both indices, then merge results before passing them to your RAG pipeline.
 
 ### Strategy 3: OSS baseline with OpenAI as a fallback
 

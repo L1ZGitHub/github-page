@@ -2,7 +2,7 @@
 title: "Fine-Tuning LLMs on Custom Data: A Practical Guide"
 description: "When to fine-tune vs use RAG, how to prepare your data, and a step-by-step guide to LoRA fine-tuning with Hugging Face Transformers."
 date: "2026-01-20"
-dateModified: "2026-01-20"
+dateModified: "2026-03-30"
 category: "Tutorials"
 tags: ["Fine-Tuning", "LLMs", "LoRA", "Hugging Face", "Tutorials"]
 difficulty: "intermediate"
@@ -18,7 +18,7 @@ One of the most common questions I get from clients at Ailog is: "Should we fine
 
 ### Choose RAG When:
 
-- You need the model to answer questions about specific documents
+- You need the model to answer questions about specific documents (see [understanding vector databases](/blog/understanding-vector-databases) for the retrieval side)
 - Your knowledge base changes frequently
 - You want to cite sources in your answers
 - You have limited training data (under 1000 examples)
@@ -34,7 +34,7 @@ One of the most common questions I get from clients at Ailog is: "Should we fine
 
 ### When to Combine Both
 
-In many production scenarios, the best approach is to fine-tune a model for your domain and style, then layer RAG on top for specific knowledge retrieval. This gives you the best of both worlds: a model that speaks your language and can reference your data.
+In many production scenarios, the best approach is to fine-tune a model for your domain and style, then layer RAG on top for specific knowledge retrieval. Measuring the impact of each layer requires solid [evaluation of your RAG pipeline](/blog/evaluating-rag-system-performance). This gives you a model that speaks your language and can reference your data.
 
 ## Data Preparation
 
@@ -261,7 +261,7 @@ Never skip evaluation. Here are the key metrics to track:
 ### Task-Specific Metrics
 - **Exact match / F1**: For extraction and QA tasks
 - **BLEU / ROUGE**: For generation tasks (use with caution)
-- **Human evaluation**: The gold standard, especially for open-ended generation
+- **Human evaluation**: The gold standard, especially for open-ended generation (more on this in [LLM evaluation frameworks](/blog/llm-evaluation-frameworks-beyond-perplexity))
 
 ### A/B Testing in Production
 
@@ -297,7 +297,7 @@ def evaluate_model(model, tokenizer, test_examples):
 2. **Learning rate too high**: Start with 2e-4 for LoRA. If loss is unstable, reduce by half.
 3. **Overfitting**: If validation loss starts increasing, stop training. Use more data or increase dropout.
 4. **Wrong format**: Ensure your training data matches exactly how the model will be prompted in production.
-5. **Ignoring the base model**: Always compare against the un-fine-tuned model. Sometimes prompt engineering alone is sufficient.
+5. **Ignoring the base model**: Always compare against the un-fine-tuned model. Sometimes [prompt engineering](/blog/prompt-engineering-best-practices-for-production) alone is sufficient.
 
 ## Conclusion
 

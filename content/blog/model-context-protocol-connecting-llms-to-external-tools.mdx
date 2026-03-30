@@ -2,7 +2,7 @@
 title: "Model Context Protocol: Connecting LLMs to External Tools"
 description: "Learn how Model Context Protocol connects LLMs to tools, RAG systems, and services, with Python examples and practical integration patterns."
 date: "2026-02-10"
-dateModified: "2026-02-10"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Model Context Protocol", "RAG", "LLMs", "Tooling", "Python", "AI Engineering"]
 difficulty: "intermediate"
@@ -10,18 +10,18 @@ readTime: "11 min read"
 author: "Hélain Zimmermann"
 ---
 
-Large language models are finally starting to feel less like isolated black boxes and more like real software components. The main reason is simple: we are getting better at connecting them to tools, data, and other services in a structured way.
+Large language models are starting to feel less like isolated black boxes and more like real software components. The main reason is simple: we are getting better at connecting them to tools, data, and other services in a structured way.
 
-Model Context Protocol (MCP) is one of the more promising efforts here. Instead of every vendor inventing a slightly different way to do “tools” or “function calling,” MCP tries to standardize how an LLM can talk to external systems.
+Model Context Protocol (MCP) is one of the more promising efforts here. Instead of every vendor inventing a slightly different way to do "tools" or "function calling," MCP tries to standardize how an LLM can talk to external systems.
 
-If you are already building RAG systems, integrating vector databases, or orchestrating agents as I described in the RAG and agentic articles on this blog, MCP gives you a cleaner way to expose all of that to an LLM client.
+If you are already building RAG systems, integrating [vector databases](/blog/understanding-vector-databases), or orchestrating agents, MCP gives you a cleaner way to expose all of that to an LLM client.
 
 
 ## What is Model Context Protocol, really?
 
 At its core, Model Context Protocol is a protocol for describing and calling external capabilities in a way that LLMs and clients can understand.
 
-Instead of “here is a random HTTP endpoint, good luck,” MCP gives you:
+Instead of "here is a random HTTP endpoint, good luck," MCP gives you:
 
 - A standard way to describe tools and resources
 - A standard way to call them and stream responses
@@ -42,7 +42,7 @@ MCP introduces a few central abstractions.
 
 ### Tools
 
-Tools are operations the model can call. Conceptually similar to OpenAI function calling or LangChain tools, but standardized.
+Tools are operations the model can call. Conceptually similar to OpenAI function calling or [LangChain tools](/blog/building-ai-agents-with-langchain-and-langgraph), but standardized.
 
 A tool has:
 
@@ -54,7 +54,7 @@ A tool has:
 Example tool concepts in a RAG-heavy system:
 
 - `semantic_search` - run dense retrieval against your vector DB
-- `keyword_search` - use a traditional search index (related to Semantic Search vs Keyword Search)
+- `keyword_search` - use a traditional search index
 - `run_sql` - query a data warehouse
 - `send_email`, `create_jira_ticket` - take real-world actions
 
@@ -67,7 +67,7 @@ Examples:
 - Configuration files
 - Knowledge base documents
 - User profile settings
-- Logs or monitoring data (see Monitoring ML Models in Production)
+- Logs or monitoring data
 
 A resource can usually be:
 
@@ -82,8 +82,8 @@ Some MCP implementations also expose reusable prompt templates as first-class ob
 If you have standardized system prompts for:
 
 - RAG answer style
-- Privacy-aware redaction (see Data Privacy in the Age of Large Language Models)
-- Evaluation instructions (as in LLM Evaluation Frameworks: Beyond Perplexity)
+- Privacy-aware redaction
+- Evaluation instructions
 
 You can register these as prompts the client can fetch and apply instead of pasting them manually everywhere.
 
@@ -92,11 +92,11 @@ You can register these as prompts the client can fetch and apply instead of past
 
 Before writing any code, it helps to see where MCP sits relative to your existing stack.
 
-Imagine a typical production RAG architecture as described in Building Production-Ready RAG Systems:
+Imagine a typical production RAG architecture:
 
 - Vector database for dense retrieval
 - Sometimes a keyword or BM25 index for sparse retrieval
-- Custom pre-processing and chunking logic (see Chunking Strategies for RAG Pipelines)
+- Custom pre-processing and chunking logic
 - One or more LLMs (hosted or self-hosted)
 - A web app or API layer on top
 
@@ -175,7 +175,7 @@ def list_tools() -> List[Dict[str, Any]]:
     return [asdict(tool) for tool in TOOLS.values()]
 ```
 
-This gives us a discoverable interface. Any MCP client can ask the server: “what tools do you support” and get a machine readable answer.
+This gives us a discoverable interface. Any MCP client can ask the server: "what tools do you support" and get a machine readable answer.
 
 
 ### Wiring tools to actual logic
@@ -184,9 +184,6 @@ Next, we connect those tools to real Python functions.
 
 ```python
 from typing import Callable
-
-# Pretend we have a semantic search backend already
-# In reality this could call a vector DB, as in Vector Database Performance Benchmarks
 
 def semantic_search_backend(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     # Dummy response for illustration
@@ -235,7 +232,7 @@ The MCP contract here is simple: once the model chooses a tool and provides JSON
 
 ### Simple JSON-RPC transport example
 
-To keep the example concrete, here is a minimal HTTP JSON-RPC style interface using FastAPI, reusing ideas from Deploying ML Models with FastAPI and Docker.
+To keep the example concrete, here is a minimal HTTP JSON-RPC style interface using FastAPI.
 
 ```python
 from fastapi import FastAPI, HTTPException
@@ -274,15 +271,15 @@ This is not a full MCP reference implementation, but it shows the core building 
 
 ## Using MCP for RAG and tool-augmented LLMs
 
-A lot of the value of MCP appears when you start composing it with Retrieval-Augmented Generation and agentic patterns.
+Much of the value of MCP appears when you start composing it with Retrieval-Augmented Generation and agentic patterns.
 
 ### Exposing RAG as tools and resources
 
-If you have a RAG pipeline like in Building a RAG Chatbot from Scratch with Python, you can split it into:
+If you have a RAG pipeline, you can split it into:
 
 - Retrieval tools
-  - `dense_search` using embeddings (see Embedding Models Compared: OpenAI vs Open-Source)
-  - `sparse_search` using BM25 or keyword (see Hybrid Search: Combining Dense and Sparse Retrieval)
+  - `dense_search` using embeddings
+  - `sparse_search` using BM25 or keyword matching
 - Reranking tools
   - `rerank_passages` with a cross encoder
 - Post-processing resources
@@ -295,7 +292,7 @@ The LLM client can then:
 3. Call the right tool
 4. Use the results as context for its response
 
-This mirrors the “Agentic RAG” idea from Agentic RAG: The Next Evolution, but with a standard interface that any MCP-aware client could orchestrate.
+This mirrors the [agentic RAG](/blog/agentic-rag-the-next-evolution) idea, where the model actively decides how and when to retrieve, but with a standard interface that any MCP-aware client could orchestrate.
 
 
 ### Orchestrating multiple services with MCP
@@ -303,12 +300,12 @@ This mirrors the “Agentic RAG” idea from Agentic RAG: The Next Evolution, bu
 When you start combining:
 
 - RAG tools
-- Monitoring tools (like `get_model_metrics`, see Monitoring ML Models in Production)
-- Privacy tools (like `redact_pii` from Privacy-Preserving NLP)
+- Monitoring tools (like `get_model_metrics`)
+- Privacy tools (like `redact_pii`)
 
 You end up with a growing toolbox that agents or LLMs can use.
 
-An MCP-compatible agent system could decide:
+An MCP-compatible [multi-agent system](/blog/building-a-multi-agent-ai-system) could decide:
 
 - When a query touches sensitive data
 - Call `redact_pii` before sending anything to a third party LLM
@@ -332,15 +329,13 @@ Avoid tools that do a dozen things based on a `mode` argument. It is much easier
 
 Than a single monster tool `user_operation` with a `type` field.
 
-This is similar to how we design clear modules in Python Best Practices for ML Engineers.
-
 ### Use clear, realistic descriptions
 
 Tool descriptions are consumed by the LLM. They should:
 
 - State what the tool does
 - Mention limitations
-- Mention latency or cost if relevant (for example, “expensive, use sparingly”)
+- Mention latency or cost if relevant (for example, "expensive, use sparingly")
 
 Example:
 
@@ -363,9 +358,9 @@ cleanup_logs_tool = ToolSchema(
 
 ### Think about privacy and compliance
 
-Given the focus of several articles on this blog around privacy, like Federated Learning for Privacy-Preserving AI and Introduction to Differential Privacy for NLP, it is worth being explicit:
+When exposing tools to LLMs, be explicit about data sensitivity:
 
-- Make some tools “safe by construction,” for example `search_public_docs` vs `search_sensitive_docs`
+- Make some tools "safe by construction," for example `search_public_docs` vs `search_sensitive_docs`
 - Add guardrails inside tools, not just in the LLM prompt
 - Consider using dedicated tools to anonymize or tokenize data before passing it to the LLM
 
@@ -374,7 +369,7 @@ You can also expose privacy policies as MCP resources, so the model can referenc
 
 ## Testing and evaluating MCP-powered systems
 
-Once you expose many capabilities via MCP, you need systematic evaluation.
+Once you expose many capabilities via MCP, you need systematic [evaluation](/blog/evaluating-rag-system-performance).
 
 ### Unit test tools directly
 
@@ -387,7 +382,7 @@ def test_search_docs_returns_results():
     assert len(result["results"]) <= 3
 ```
 
-This is simpler than mocking entire LLM conversations. For higher-level behavior, you can still use ideas from LLM Evaluation Frameworks: Beyond Perplexity to run scenario-based tests where the LLM is expected to pick the right tools.
+This is simpler than mocking entire LLM conversations. For higher-level behavior, you can run scenario-based tests where the LLM is expected to pick the right tools.
 
 ### Log and analyze tool usage
 
@@ -398,7 +393,7 @@ For production, you should log:
 - Error rates
 - Latencies
 
-This integrates naturally with your existing monitoring and CI/CD pipelines (see CI/CD Pipelines for Machine Learning Projects and Building Real-Time ML Inference Pipelines).
+This integrates naturally with your existing monitoring and CI/CD pipelines.
 
 It also gives you concrete feedback about which capabilities the LLM struggles to use, which tools are redundant, and where latency is hurting UX.
 
@@ -410,12 +405,12 @@ MCP is still evolving, but the direction is clear: more standardized, composable
 To future proof your system design:
 
 - Treat your tools as first-class APIs with stable contracts
-- Separate “business logic” from “LLM orchestration logic”
+- Separate "business logic" from "LLM orchestration logic"
 - Prefer schemas and explicit typing over ad hoc JSON blobs
 
-If you are already comfortable with concepts from Understanding Transformer Architectures and Building AI Agents with LangChain and LangGraph, you are well positioned. MCP is less about a new theoretical idea and more about cleaning up the messy edges between LLMs and the rest of your stack.
+If you are already comfortable with agent frameworks and tool-calling patterns, you are well positioned. MCP is less about a new theoretical idea and more about cleaning up the messy edges between LLMs and the rest of your stack.
 
-Personally, I find that once you start thinking in terms of “capabilities exposed via MCP” rather than “hard coded chains inside a given app,” your architecture diagrams become much more modular.
+Once you start thinking in terms of "capabilities exposed via MCP" rather than "hard coded chains inside a given app," your architecture diagrams become much more modular.
 
 
 ## Key Takeaways
@@ -426,5 +421,4 @@ Personally, I find that once you start thinking in terms of “capabilities expo
 - MCP fits naturally with RAG, letting you expose dense, sparse, and hybrid retrieval as explicit tools.
 - Python servers can implement MCP-like behavior using clear tool schemas, handlers, and a simple JSON-RPC or HTTP transport.
 - Good tool design emphasizes clarity, safety, privacy, and separation of concerns between logic and orchestration.
-- Existing practices from RAG architectures, privacy-preserving NLP, and production ML monitoring map cleanly onto MCP tools and resources.
 - Logging and evaluating tool usage is essential to keep MCP-powered systems reliable and cost effective at scale.

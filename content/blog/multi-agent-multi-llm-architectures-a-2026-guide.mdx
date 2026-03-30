@@ -2,7 +2,7 @@
 title: "Multi-Agent Multi-LLM Architectures: A 2026 Guide"
 description: "A practical guide to multi-agent multi-LLM architectures covering agent roles, communication patterns, MoE, RLVR, and distributed scalability"
 date: "2026-02-18"
-dateModified: "2026-02-18"
+dateModified: "2026-03-30"
 category: "AI & ML"
 tags: ["Multi-Agent Systems", "LLMs", "MoE", "RLVR", "Distributed Systems", "MLOps"]
 difficulty: "intermediate"
@@ -10,13 +10,13 @@ readTime: "8 min read"
 author: "Hélain Zimmermann"
 ---
 
-The single-model, single-agent pattern served us well for a while, but it has hit a ceiling. Real production systems in 2026 increasingly rely on multiple agents powered by different LLMs, each chosen for its strengths. One model handles reasoning, another handles code generation, a third handles retrieval and summarization. The result is an architecture that looks less like a chatbot and more like a distributed system with heterogeneous compute nodes.
+The single-model, single-agent pattern has hit a ceiling. Production systems in 2026 increasingly rely on multiple agents powered by different LLMs, each chosen for its strengths. One model handles reasoning, another handles code generation, a third handles retrieval and summarization. The result is an architecture that looks less like a chatbot and more like a distributed system with heterogeneous compute nodes.
 
-I have been building these systems at Ailog for the past year, and the patterns that work in production are quite different from what you see in demos. This guide covers the architecture decisions that matter: agent role design, communication patterns, integrating reinforcement learning techniques like RLVR and GRPO, leveraging Mixture-of-Experts models, and keeping everything observable at scale.
+This guide covers the architecture decisions that matter: agent role design, communication patterns, integrating reinforcement learning techniques like RLVR and GRPO, leveraging Mixture-of-Experts models, and keeping everything observable at scale.
 
 ## Agent roles and specialization
 
-The first design decision is how to assign roles to agents. In my earlier article on *Building a Multi-Agent AI System*, I covered the basics of when multi-agent setups make sense. Here, I want to go deeper into how you assign different LLMs to different roles.
+The first design decision is how to assign roles to agents, and specifically how to assign different LLMs to different roles.
 
 A typical production architecture looks like this:
 
@@ -36,7 +36,7 @@ A typical production architecture looks like this:
             Checks outputs for policy compliance
 ```
 
-The orchestrator routes tasks to specialized agents and assembles their outputs. Each agent runs a model selected for its strengths. DeepSeek R1, trained with RLVR (Reinforcement Learning with Verifiable Rewards), excels at structured reasoning. Codestral handles code. Mistral's Mixture-of-Experts architecture gives you strong general performance at lower inference cost for retrieval tasks.
+The orchestrator routes tasks to specialized agents and assembles their outputs. Each agent runs a model selected for its strengths. DeepSeek R1, trained with RLVR (Reinforcement Learning with Verifiable Rewards), excels at structured reasoning. Codestral handles code. Mistral's Mixture-of-Experts architecture gives you strong general performance at lower inference cost for retrieval tasks. The retrieval agent typically sits on top of a [vector database](/blog/understanding-vector-databases) for fast similarity search.
 
 ```python
 from dataclasses import dataclass
@@ -90,7 +90,7 @@ AGENT_CONFIGS = {
 }
 ```
 
-The key insight is that no single model dominates every task. Benchmarks from MLSys 2026 confirm what practitioners already knew: specialized routing consistently outperforms using the best general-purpose model for everything, both in quality and cost.
+No single model dominates every task. Benchmarks from MLSys 2026 confirm what practitioners already knew: specialized routing consistently outperforms using the best general-purpose model for everything, both in quality and cost.
 
 ## Communication patterns
 
@@ -135,7 +135,7 @@ class MessageBus:
         return await self._queues[agent_id].get()
 ```
 
-In practice, I recommend starting with hub-and-spoke, moving to pipeline for well-understood workflows, and only using mesh when you have the monitoring infrastructure to support it. Which brings us to the topic I covered in *Monitoring ML Models in Production*, applied here at the multi-agent level.
+In practice, start with hub-and-spoke, move to pipeline for well-understood workflows, and only use mesh when you have the monitoring infrastructure to support it.
 
 ## RLVR, GRPO, and why they matter for multi-agent systems
 
@@ -177,19 +177,19 @@ async def verified_reasoning_pipeline(query: str, agents: dict) -> dict:
 
 Mistral's MoE architecture is particularly well-suited for multi-agent systems. In a MoE model, only a subset of the model's parameters activate for any given input, which means you get the capacity of a very large model at a fraction of the inference cost.
 
-For multi-agent architectures, MoE models work well as generalist agents that handle the "long tail" of tasks that do not justify a dedicated specialist agent. The orchestrator can route common, well-defined tasks to specialized agents and fall back to a MoE-based generalist for everything else. This keeps costs manageable while maintaining broad capability coverage.
+For multi-agent architectures, MoE models work well as generalist agents that handle the "long tail" of tasks that do not justify a dedicated specialist agent, including [multimodal tasks that combine vision and language](/blog/multimodal-ai-combining-vision-and-language-models). The orchestrator can route common, well-defined tasks to specialized agents and fall back to a MoE-based generalist for everything else. This keeps costs manageable while maintaining broad capability coverage.
 
 MLSys 2026 benchmarks showed that architectures combining specialized dense models for core tasks with MoE models for general routing reduced total inference cost by 35-45% compared to using a single large dense model everywhere.
 
 ## Monitoring and distributed scalability
 
-Multi-agent multi-LLM systems are distributed systems, and they need to be treated as such. Every lesson from *CI/CD Pipelines for Machine Learning Projects* and *Monitoring ML Models in Production* applies here, multiplied by the number of agents.
+Multi-agent multi-LLM systems are distributed systems, and they need to be treated as such.
 
 Key monitoring requirements:
 
 - **Per-agent latency and token usage.** You need to know which agent is the bottleneck and which is burning through your API budget.
 - **Inter-agent message tracing.** Every message between agents should carry a trace ID. OpenTelemetry with custom spans per agent is the minimum viable setup.
-- **Output quality per agent.** Track not just system-level accuracy but per-agent contribution. If your reasoning agent starts producing lower-quality chains of thought, you want to catch that before it propagates.
+- **Output quality per agent.** Track not just system-level accuracy but per-agent contribution. If your retrieval agent relies on RAG, [measure its performance separately](/blog/evaluating-rag-system-performance). If your reasoning agent starts producing lower-quality chains of thought, catch that before it propagates.
 - **Cost attribution.** Different LLMs have different pricing. Track cost per agent, per task, per customer.
 
 ```python
@@ -213,7 +213,7 @@ async def traced_agent_call(agent_name: str, model: str, payload: dict):
         return result
 ```
 
-For horizontal scaling, the pattern that works best in practice is stateless agents behind a task queue. Each agent type runs as an independent service that pulls work from a shared queue (Redis Streams, Kafka, or a managed service like SQS). The orchestrator pushes tasks onto the appropriate queue and collects results. This decouples agent scaling from orchestration logic and lets you scale each agent type independently based on load.
+Looking further ahead, [neuromorphic computing approaches](/blog/neuromorphic-computing-meets-neurogenesis-inspiring-plasticity-in-ai) may offer new ways to handle adaptive agent routing at the hardware level. For now, the pattern that works best for horizontal scaling is stateless agents behind a task queue. Each agent type runs as an independent service that pulls work from a shared queue (Redis Streams, Kafka, or a managed service like SQS). The orchestrator pushes tasks onto the appropriate queue and collects results. This decouples agent scaling from orchestration logic and lets you scale each agent type independently based on load.
 
 ## Key Takeaways
 

@@ -2,7 +2,7 @@
 title: "Deploying ML Models with FastAPI and Docker"
 description: "Learn how to containerize and deploy ML models using FastAPI and Docker, with patterns for scaling, performance, and production-ready setups."
 date: "2026-02-09"
-dateModified: "2026-02-09"
+dateModified: "2026-03-30"
 category: "Engineering"
 tags: ["FastAPI", "Docker", "Machine Learning", "MLOps", "RAG", "Python"]
 difficulty: "intermediate"
@@ -14,7 +14,7 @@ Shipping a model is often harder than training one. The Jupyter notebook that de
 
 FastAPI and Docker give us a clean way out of this. FastAPI provides a modern async web framework with type hints and automatic docs. Docker gives us reproducible, portable environments. Put together, they are a solid foundation for deploying anything from a small classifier to a full Retrieval-Augmented Generation (RAG) pipeline.
 
-This post walks through a practical pattern I use regularly when deploying models, including some tricks that carry over from building production RAG systems and privacy-preserving NLP services.
+This post walks through a practical pattern for deploying models, from API design to Docker packaging to production scaling.
 
 ## Designing the API around the model
 
@@ -55,7 +55,7 @@ def health_check():
     return {"status": "ok"}
 ```
 
-This is similar to how you would design a RAG endpoint that returns answers, references, and scores, like I discussed in "Retrieval-Augmented Generation: A Complete Guide".
+The same schema-first approach applies to any ML endpoint, whether it returns class labels, embeddings, or generated text.
 
 ### Loading the model efficiently
 
@@ -119,7 +119,7 @@ Split responsibilities:
 - `inference.py` - model loading and prediction logic
 - `config.py` - environment variable parsing
 
-`config.py` keeps configuration out of the code, which is important when you handle secrets for privacy-preserving NLP systems.
+`config.py` keeps configuration out of the code, which matters as soon as you handle secrets or environment-specific values.
 
 ```python
 # app/config.py
@@ -246,7 +246,7 @@ docker build -t text-classifier:latest .
 docker run -p 8000:8000 text-classifier:latest
 ```
 
-This pattern is similar to how you would containerize a RAG API that uses a vector database, as discussed in "Building Production-Ready RAG Systems" and "Understanding Vector Databases: A Beginner's Guide".
+The same Dockerfile structure works for heavier services too, such as a RAG API backed by a [vector database](/blog/understanding-vector-databases).
 
 ### GPU-enabled images
 
@@ -270,7 +270,7 @@ And run:
 docker run --gpus all -p 8000:8000 your-image:tag
 ```
 
-Align CUDA, PyTorch, and driver versions carefully. This is one of the most common sources of deployment failures for LLM or RAG backends.
+Align CUDA, PyTorch, and driver versions carefully. Mismatches are one of the most common sources of deployment failures.
 
 ## Performance and scalability considerations
 
@@ -300,11 +300,11 @@ async def predict(req: PredictRequest):
     # actual prediction logic...
 ```
 
-For latency-sensitive services, especially in RAG setups where multiple microservices are chained, these limits help avoid cascading failures.
+For latency-sensitive services where multiple microservices are chained, these limits help avoid cascading failures.
 
 ### Model-level optimizations
 
-From experience with both RAG and traditional ML services, two patterns pay off quickly:
+Two patterns pay off quickly:
 
 - Use quantized or distilled models when possible
 - Preload tokenizers and avoid re-initializing them per request
@@ -337,7 +337,7 @@ class TransformerService:
         ]
 ```
 
-Conceptually this is the same pattern as building embedding endpoints, like in "Embedding Models Compared: OpenAI vs Open-Source", except here we return class labels and scores instead of vectors.
+The structure mirrors what you would build for an embedding endpoint, except here we return class labels and scores instead of vectors.
 
 ### System-level scaling
 
@@ -364,7 +364,7 @@ In Kubernetes, you would add an HPA (Horizontal Pod Autoscaler) on CPU or custom
 
 ## Observability and reliability
 
-Models rarely fail silently. They show drift, skew, or increased error rates. For any ML service, I treat observability as non-negotiable.
+Models rarely fail silently. They show drift, skew, or increased error rates. Observability is non-negotiable for any ML service, and doubly so for [multimodal pipelines](/blog/multimodal-ai-combining-vision-and-language-models) where failures can hide in either modality.
 
 ### Structured logging
 
@@ -386,7 +386,7 @@ def log_prediction(input_count: int, latency_ms: float):
     }))
 ```
 
-You can enhance this with anonymization techniques from "Privacy-Preserving NLP: Protecting Sensitive Data in Language Models" to avoid logging raw user text.
+Avoid logging raw user text. Redact or hash personally identifiable fields before they hit your logging backend.
 
 ### Health checks and readiness
 
@@ -424,8 +424,8 @@ In Kubernetes, you would then configure readiness and liveness probes against `/
 
 The same patterns scale to more complex systems:
 
-- A RAG service: FastAPI app that orchestrates retrieval, ranking, and generation, with each stage possibly being its own container. This aligns with the architecture I described in "Building Production-Ready RAG Systems" and "Chunking Strategies for RAG Pipelines".
-- An AI agent backend: FastAPI app that exposes a single `/agent` endpoint, internally calling multiple tools or services. This is close to the architectures in "Building AI Agents with LangChain and LangGraph".
+- A [RAG service](/blog/building-production-ready-rag-systems): FastAPI app that orchestrates retrieval, ranking, and generation, with each stage possibly being its own container.
+- An AI agent backend: FastAPI app that exposes a single `/agent` endpoint, internally calling multiple tools or services.
 
 The core ideas stay the same:
 
@@ -444,5 +444,5 @@ Once you have one robust Dockerized FastAPI service for a small model, reusing t
 - Write a Dockerfile that prioritizes reproducibility, small images, and non-root execution.
 - Optimize at three levels: request batching and limits, efficient model implementations, and system-level scaling.
 - Add structured logging, health, and readiness endpoints to make the service observable and reliable.
-- Reuse the same FastAPI + Docker patterns for RAG services, embedding APIs, and AI agents.
+- Reuse the same FastAPI + Docker patterns for RAG services, embedding APIs, and AI agents. If your service includes a retrieval component, [evaluating its end-to-end performance](/blog/evaluating-rag-system-performance) becomes part of your deployment checklist.
 - Treat privacy and security as first-class concerns, especially when logging or handling user data.

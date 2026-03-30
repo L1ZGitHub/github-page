@@ -2,7 +2,7 @@
 title: "OpenClaw as a Case Study in Autonomous Agent Attack Surfaces"
 description: "A technical threat model analysis of AI agents that can act in the real world: network exposure, API key management, extension supply chains, and memory compromise."
 date: "2026-02-15"
-dateModified: "2026-02-15"
+dateModified: "2026-03-30"
 category: "Engineering"
 tags: ["Security", "Threat Modeling", "OpenClaw", "Red Team", "Supply Chain", "AI Agents"]
 difficulty: "advanced"
@@ -10,7 +10,7 @@ readTime: "13 min read"
 author: "Hélain Zimmermann"
 ---
 
-The security model for a chatbot is straightforward. The user sends text, the model generates text, and the attack surface is limited to prompt injection and data exfiltration through the output channel. The security model for an autonomous agent, one that can browse the web, execute code, send emails, manage files, and interact with external APIs, is fundamentally different. The agent is not just processing information; it is acting on the world with real credentials, real network access, and real consequences.
+The security model for a chatbot is straightforward. The user sends text, the model generates text, and the attack surface is limited to prompt injection and data exfiltration through the output channel. The security model for an autonomous agent -- one that can browse the web, execute code, send emails, manage files, and interact with external APIs -- is fundamentally different. The agent is not just processing information; it is acting on the world with real credentials, real network access, and real consequences.
 
 OpenClaw, the open-source autonomous agent framework that gained rapid adoption in late 2025 and early 2026, provides an instructive case study. As CrowdStrike's security analysis documented, OpenClaw instances deployed in production environments presented attack surfaces that would be considered unacceptable in any traditional application. The problem is not unique to OpenClaw. It is structural to autonomous agents. But OpenClaw's popularity and its open codebase make it a concrete example worth examining in detail.
 
@@ -61,7 +61,7 @@ server:
     burst: 5
 ```
 
-The difference is stark, but the default configuration is what most users deploy with. The "it works out of the box" ethos that makes open-source projects accessible is precisely what creates security exposure at scale.
+The difference is stark, but the default configuration is what most users deploy with. The "it works out of the box" ethos that makes open-source projects accessible is what creates security exposure at scale.
 
 ### 2. Credential Management
 
@@ -166,7 +166,7 @@ This is a simplified example, but it illustrates the principle: extensions shoul
 
 ### 4. Persistent Memory Compromise
 
-Most agent frameworks, including OpenClaw, implement persistent memory: a store of facts, preferences, and instructions that the agent carries across sessions. This memory is typically stored as text in a vector database or a simple key-value store. It is loaded into the agent's context at the beginning of each session.
+Most agent frameworks, including OpenClaw, implement persistent memory: a store of facts, preferences, and instructions that the agent carries across sessions. This memory is typically stored as text in a [vector database](/blog/understanding-vector-databases) or a simple key-value store. It is loaded into the agent's context at the beginning of each session.
 
 An attacker who can write to the agent's memory can inject instructions that persist across sessions and influence all future behavior. This is sometimes called "memory poisoning" or "sleeper injection."
 
@@ -193,7 +193,7 @@ Memory integrity requires multiple defenses:
 
 This is the most well-understood attack vector, but it takes on new dimensions with autonomous agents. A chatbot that falls victim to prompt injection might generate inappropriate text. An autonomous agent that falls victim to prompt injection might execute shell commands, send emails, or make API calls on behalf of the attacker.
 
-Every data source the agent reads is a potential injection channel: emails, Slack messages, web pages, documents, database records, API responses. The agent's ability to act on instructions it receives through these channels must be constrained.
+Every data source the agent reads is a potential injection channel: emails, Slack messages, web pages, documents, database records, API responses -- including [multimodal inputs like images and screenshots](/blog/multimodal-ai-combining-vision-and-language-models). The agent's ability to act on instructions it receives through these channels must be constrained.
 
 Effective mitigation combines input sanitization with output verification:
 
@@ -235,7 +235,7 @@ For security teams assessing their own agent deployments, the following playbook
 
 **Initial Access.** Attempt authentication bypass on the management API. Test for default credentials. If the API is unauthenticated (as in OpenClaw's default configuration), submit a task designed to enumerate the agent's capabilities and credentials.
 
-**Lateral Movement.** Use credentials discovered in the agent's environment to access connected services. Check for AWS keys, database connection strings, OAuth tokens, and API keys. Agents are often connected to multiple high-value services.
+**Lateral Movement.** Use credentials discovered in the agent's environment to access connected services. Check for AWS keys, database connection strings, OAuth tokens, and API keys. Agents are often connected to multiple high-value services, including [financial trading systems](/blog/ai-and-finance-how-autonomous-agents-are-transforming-trading).
 
 **Persistence.** Inject instructions into the agent's persistent memory that will survive restarts and session boundaries. Frame injections as system-level configuration to avoid detection during casual memory inspection.
 
