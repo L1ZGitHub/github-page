@@ -1,9 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { FileText, Calendar, Eye, Clock, Check, AlertCircle, Loader2 } from "lucide-react"
-import { DndContext, DragOverlay, type DragStartEvent, type DragEndEvent } from "@dnd-kit/core"
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core"
 import AdminCalendar, { type CalendarData } from "./components/calendar"
 import DraftCard, { DraftCardOverlay, type DraftArticle } from "./components/draft-card"
 import { categoryColors, statusConfig } from "./lib/constants"
@@ -26,7 +36,7 @@ interface Article {
 
 type Status = "draft" | "scheduled" | "published"
 
-function ArticleRow({ article }: { article: Article }) {
+const ArticleRow = memo(function ArticleRow({ article }: { article: Article }) {
   const status = statusConfig[article.status]
   const catClass = categoryColors[article.category] || "bg-gray-100 text-gray-800"
 
@@ -71,7 +81,7 @@ function ArticleRow({ article }: { article: Article }) {
       </span>
     </Link>
   )
-}
+})
 
 interface ToastData {
   message: string
@@ -105,6 +115,11 @@ export default function AdminDashboard() {
   const [toast, setToast] = useState<ToastData | null>(null)
   const [busy, setBusy] = useState(false)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 8 } }),
+  )
+
   const refreshAll = useCallback(async () => {
     try {
       const t = Date.now()
@@ -126,121 +141,146 @@ export default function AdminDashboard() {
     refreshAll()
   }, [refreshAll])
 
-  const grouped: Record<Status, Article[]> = { draft: [], scheduled: [], published: [] }
-  for (const a of articles) {
-    grouped[a.status]?.push(a)
-  }
+  const grouped = useMemo(() => {
+    const g: Record<Status, Article[]> = { draft: [], scheduled: [], published: [] }
+    for (const a of articles) {
+      g[a.status]?.push(a)
+    }
+    return g
+  }, [articles])
 
-  function handleDragStart(event: DragStartEvent) {
+  const draftCards = useMemo(
+    () =>
+      grouped.draft.map((article) => ({
+        slug: article.slug,
+        title: article.title,
+        category: article.category,
+        readTime: article.readTime,
+      })),
+    [grouped.draft],
+  )
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
     const article = event.active.data.current?.article as DraftArticle | undefined
     if (article) setActiveDraft(article)
-  }
+  }, [])
 
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveDraft(null)
-    const { active, over } = event
-    if (!over) return
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      setActiveDraft(null)
+      if (busy) return
 
-    const slug = active.id as string
-    const dateStr = over.id as string
+      const { active, over } = event
+      if (!over) return
 
-    // Validate it looks like a date string (YYYY-MM-DD)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return
+      const slug = active.id as string
+      const dateStr = over.id as string
 
-    // Optimistic update — move article to scheduled immediately
-    const prevArticles = articles
-    const prevCalendar = calendarData
-    const article = articles.find((a) => a.slug === slug)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return
 
-    if (article) {
-      setArticles((prev) =>
-        prev.map((a) =>
-          a.slug === slug ? { ...a, status: "scheduled" as const, scheduledDate: dateStr } : a,
-        ),
-      )
-      setCalendarData((prev) => ({
-        ...prev,
-        [dateStr]: [
-          ...(prev[dateStr] ?? []),
-          { slug: article.slug, title: article.title, category: article.category, status: "scheduled" as const },
-        ],
-      }))
-    }
+      // Optimistic update
+      const prevArticles = articles
+      const prevCalendar = calendarData
+      const article = articles.find((a) => a.slug === slug)
 
-    setBusy(true)
-    try {
-      const res = await fetch(`${API_BASE}/articles/${slug}/schedule`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: dateStr }),
-      })
-
-      if (!res.ok) {
-        const err = await res.text()
-        throw new Error(err || `HTTP ${res.status}`)
+      if (article) {
+        setArticles((prev) =>
+          prev.map((a) =>
+            a.slug === slug ? { ...a, status: "scheduled" as const, scheduledDate: dateStr } : a,
+          ),
+        )
+        setCalendarData((prev) => ({
+          ...prev,
+          [dateStr]: [
+            ...(prev[dateStr] ?? []),
+            { slug: article.slug, title: article.title, category: article.category, status: "scheduled" as const },
+          ],
+        }))
       }
 
-      setToast({ message: `Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`, type: "success" })
-    } catch (e) {
-      // Rollback on failure
-      setArticles(prevArticles)
-      setCalendarData(prevCalendar)
-      setToast({ message: "Failed to schedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleUnschedule(slug: string) {
-    // Optimistic update — revert to draft immediately
-    const prevArticles = articles
-    const prevCalendar = calendarData
-    const article = articles.find((a) => a.slug === slug)
-
-    if (article) {
-      setArticles((prev) =>
-        prev.map((a) =>
-          a.slug === slug ? { ...a, status: "draft" as const, scheduledDate: "" } : a,
-        ),
-      )
-      if (article.scheduledDate) {
-        setCalendarData((prev) => {
-          const updated = { ...prev }
-          const dayArticles = updated[article.scheduledDate]
-          if (dayArticles) {
-            updated[article.scheduledDate] = dayArticles.filter((a) => a.slug !== slug)
-          }
-          return updated
+      setBusy(true)
+      try {
+        const res = await fetch(`${API_BASE}/articles/${slug}/schedule`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: dateStr }),
         })
+
+        if (!res.ok) {
+          const err = await res.text()
+          throw new Error(err || `HTTP ${res.status}`)
+        }
+
+        setToast({ message: `Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`, type: "success" })
+      } catch (e) {
+        setArticles(prevArticles)
+        setCalendarData(prevCalendar)
+        setToast({ message: "Failed to schedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
+      } finally {
+        setBusy(false)
       }
-    }
+    },
+    [articles, calendarData, busy],
+  )
 
-    setBusy(true)
-    try {
-      const res = await fetch(`${API_BASE}/articles/${slug}/draft`, {
-        method: "POST",
-        credentials: "include",
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const handleUnschedule = useCallback(
+    async (slug: string) => {
+      const prevArticles = articles
+      const prevCalendar = calendarData
+      const article = articles.find((a) => a.slug === slug)
 
-      setToast({ message: "Reverted to draft", type: "success" })
-    } catch (e) {
-      // Rollback on failure
-      setArticles(prevArticles)
-      setCalendarData(prevCalendar)
-      setToast({ message: "Failed to unschedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
-    } finally {
-      setBusy(false)
-    }
-  }
+      if (article) {
+        setArticles((prev) =>
+          prev.map((a) =>
+            a.slug === slug ? { ...a, status: "draft" as const, scheduledDate: "" } : a,
+          ),
+        )
+        if (article.scheduledDate) {
+          setCalendarData((prev) => {
+            const updated = { ...prev }
+            const dayArticles = updated[article.scheduledDate]
+            if (dayArticles) {
+              updated[article.scheduledDate] = dayArticles.filter((a) => a.slug !== slug)
+            }
+            return updated
+          })
+        }
+      }
+
+      setBusy(true)
+      try {
+        const res = await fetch(`${API_BASE}/articles/${slug}/draft`, {
+          method: "POST",
+          credentials: "include",
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+        setToast({ message: "Reverted to draft", type: "success" })
+      } catch (e) {
+        setArticles(prevArticles)
+        setCalendarData(prevCalendar)
+        setToast({ message: "Failed to unschedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
+      } finally {
+        setBusy(false)
+      }
+    },
+    [articles, calendarData],
+  )
+
+  const clearToast = useCallback(() => setToast(null), [])
 
   if (loading) {
     return <p className="py-16 text-center text-gray-400">Loading...</p>
   }
 
   return (
-    <DndContext onDragStart={busy ? undefined : handleDragStart} onDragEnd={busy ? undefined : handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <div className="relative">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Blog Admin</h1>
@@ -270,16 +310,8 @@ export default function AdminDashboard() {
             <p className="py-4 text-sm text-gray-400">No draft articles.</p>
           ) : (
             <div className="flex flex-wrap gap-3">
-              {grouped.draft.map((article) => (
-                <DraftCard
-                  key={article.slug}
-                  article={{
-                    slug: article.slug,
-                    title: article.title,
-                    category: article.category,
-                    readTime: article.readTime,
-                  }}
-                />
+              {draftCards.map((article) => (
+                <DraftCard key={article.slug} article={article} />
               ))}
             </div>
           )}
@@ -336,12 +368,12 @@ export default function AdminDashboard() {
       </div>
 
       {/* Drag overlay — follows the cursor */}
-      <DragOverlay>
+      <DragOverlay dropAnimation={null} style={{ pointerEvents: "none", zIndex: 1000 }}>
         {activeDraft ? <DraftCardOverlay article={activeDraft} /> : null}
       </DragOverlay>
 
       {/* Toast notification */}
-      {toast && <Toast toast={toast} onDone={() => setToast(null)} />}
+      {toast && <Toast toast={toast} onDone={clearToast} />}
     </DndContext>
   )
 }

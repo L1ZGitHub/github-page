@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { useDraggable } from "@dnd-kit/core"
 import { Clock } from "lucide-react"
 import Link from "next/link"
@@ -12,7 +13,7 @@ export interface DraftArticle {
   readTime: string
 }
 
-export default function DraftCard({ article }: { article: DraftArticle }) {
+const DraftCard = memo(function DraftCard({ article }: { article: DraftArticle }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: article.slug,
     data: { article },
@@ -25,15 +26,14 @@ export default function DraftCard({ article }: { article: DraftArticle }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`w-[280px] cursor-grab select-none rounded-lg border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
-        isDragging ? "opacity-30" : ""
+      className={`w-[280px] touch-none select-none rounded-lg border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md ${
+        isDragging ? "cursor-grabbing opacity-30" : "cursor-grab"
       }`}
     >
       <Link
         href={`/admin/${article.slug}`}
         className="block truncate text-sm font-medium text-gray-900 hover:text-blue-600"
         onClick={(e) => {
-          // Prevent navigation when dragging
           if (isDragging) e.preventDefault()
         }}
       >
@@ -50,7 +50,9 @@ export default function DraftCard({ article }: { article: DraftArticle }) {
       </div>
     </div>
   )
-}
+})
+
+export default DraftCard
 
 export function DraftCardOverlay({ article }: { article: DraftArticle }) {
   const catClass = categoryColors[article.category] || "bg-gray-100 text-gray-800"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { memo, useCallback, useState } from "react"
 import Link from "next/link"
 import { useDroppable } from "@dnd-kit/core"
 import { ChevronLeft, ChevronRight, Calendar, X } from "lucide-react"
@@ -43,7 +43,7 @@ export function dateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
-function DayCell({
+const DayCell = memo(function DayCell({
   dateStr,
   day,
   articles,
@@ -64,7 +64,7 @@ function DayCell({
     <button
       ref={setNodeRef}
       onClick={onClick}
-      className={`relative flex h-20 flex-col items-center justify-start rounded-lg pt-1.5 text-sm transition-all ${
+      className={`relative flex h-20 touch-none flex-col items-center justify-start rounded-lg pt-1.5 text-sm transition-colors ${
         isOver
           ? "border-2 border-blue-400 bg-blue-50"
           : isSelected
@@ -90,7 +90,7 @@ function DayCell({
       )}
     </button>
   )
-}
+})
 
 interface AdminCalendarProps {
   data: CalendarData
@@ -104,25 +104,27 @@ export default function AdminCalendar({ data, loading, onUnschedule }: AdminCale
   const [month, setMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
-  function prev() {
-    if (month === 0) {
-      setMonth(11)
-      setYear(year - 1)
-    } else {
-      setMonth(month - 1)
-    }
+  const prev = useCallback(() => {
+    setMonth((m) => {
+      if (m === 0) {
+        setYear((y) => y - 1)
+        return 11
+      }
+      return m - 1
+    })
     setSelectedDay(null)
-  }
+  }, [])
 
-  function next() {
-    if (month === 11) {
-      setMonth(0)
-      setYear(year + 1)
-    } else {
-      setMonth(month + 1)
-    }
+  const next = useCallback(() => {
+    setMonth((m) => {
+      if (m === 11) {
+        setYear((y) => y + 1)
+        return 0
+      }
+      return m + 1
+    })
     setSelectedDay(null)
-  }
+  }, [])
 
   const weeks = getMonthGrid(year, month)
   const monthLabel = new Date(year, month).toLocaleDateString("en-US", {
