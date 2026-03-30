@@ -1,31 +1,18 @@
-"use client"
-
-import { useEffect, useState } from "react"
-import { useParams } from "next/navigation"
 import Link from "next/link"
+import { notFound } from "next/navigation"
 import { ArrowLeft, Calendar, Clock, User, BarChart3, Tag, Link2 } from "lucide-react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import rehypeHighlight from "rehype-highlight"
+import { getPostBySlug, getAllSlugs } from "@/lib/mdx"
+import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
 import ArticleActions from "../components/article-actions"
 
-const API_BASE = "/api/blog"
+export const dynamic = "force-dynamic"
 
-interface Article {
-  slug: string
-  title: string
-  description: string
-  date: string
-  dateModified: string
-  status: "draft" | "scheduled" | "published"
-  scheduledDate: string
-  category: string
-  difficulty: string
-  readTime: string
-  author: string
-  tags: string[]
-  outgoing_links: string[]
-  body?: string
+interface Props {
+  params: Promise<{ slug: string }>
+}
+
+export async function generateStaticParams() {
+  return getAllSlugs().map((slug) => ({ slug }))
 }
 
 const statusClasses: Record<string, string> = {
@@ -34,49 +21,27 @@ const statusClasses: Record<string, string> = {
   published: "bg-green-100 text-green-800",
 }
 
-const categoryColors: Record<string, { bg: string; color: string }> = {
-  "AI & ML": { bg: "#fffbeb", color: "#d97706" },
-  "RAG Systems": { bg: "#f5f3ff", color: "#7c3aed" },
-  "NLP & Privacy": { bg: "#ecfdf5", color: "#059669" },
-  "Engineering": { bg: "#eff6ff", color: "#2563eb" },
-  "Tutorials": { bg: "#fef3c7", color: "#d97706" },
+function extractCrossReferences(html: string): string[] {
+  const regex = /href="\/blog\/([^"#]+)"/g
+  const slugs = new Set<string>()
+  let match
+  while ((match = regex.exec(html)) !== null) {
+    slugs.add(match[1])
+  }
+  return Array.from(slugs)
 }
 
-const difficultyColors: Record<string, { bg: string; color: string }> = {
-  beginner: { bg: "#ecfdf5", color: "#059669" },
-  intermediate: { bg: "#fffbeb", color: "#d97706" },
-  advanced: { bg: "#fef2f2", color: "#dc2626" },
-}
+export default async function AdminArticleDetail({ params }: Props) {
+  const { slug } = await params
 
-export default function AdminArticleDetail() {
-  const params = useParams()
-  const slug = params.slug as string
-  const [article, setArticle] = useState<Article | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-
-  function loadArticle() {
-    setLoading(true)
-    fetch(`${API_BASE}/articles/${slug}?content=true`, { credentials: "include" })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data) => setArticle(data))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+  let post
+  try {
+    post = await getPostBySlug(slug)
+  } catch {
+    notFound()
   }
 
-  useEffect(() => {
-    loadArticle()
-  }, [slug])
-
-  if (loading) return <p className="py-16 text-center text-gray-400">Loading...</p>
-  if (error) return <p className="py-16 text-center text-red-500">Error: {error}</p>
-  if (!article) return <p className="py-16 text-center text-gray-400">Article not found</p>
-
-  const catStyle = categoryColors[article.category] || { bg: "#f3f4f6", color: "#374151" }
-  const diffStyle = difficultyColors[article.difficulty] || { bg: "#f3f4f6", color: "#374151" }
+  const crossRefs = extractCrossReferences(post.content)
 
   return (
     <div>
@@ -91,80 +56,84 @@ export default function AdminArticleDetail() {
       {/* Metadata panel */}
       <div className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-6">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[article.status]}`}>
-            {article.status}
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[post.status]}`}>
+            {post.status}
           </span>
           <span
             className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-            style={{ backgroundColor: catStyle.bg, color: catStyle.color }}
+            style={getCategoryStyle(post.category)}
           >
-            {article.category}
+            {post.category}
           </span>
           <span
             className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-            style={{ backgroundColor: diffStyle.bg, color: diffStyle.color }}
+            style={getDifficultyStyle(post.difficulty)}
           >
             <span className="flex items-center gap-1">
               <BarChart3 className="size-3" />
-              {article.difficulty}
+              {post.difficulty}
             </span>
           </span>
         </div>
 
-        <h1 className="mb-4 text-2xl font-bold text-gray-900">{article.title}</h1>
-        <p className="mb-4 text-sm text-gray-600">{article.description}</p>
+        <h1 className="mb-4 text-2xl font-bold text-gray-900">{post.title}</h1>
+        <p className="mb-4 text-sm text-gray-600">{post.description}</p>
 
         <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
           <span className="flex items-center gap-1.5">
             <Calendar className="size-4" />
-            {new Date(article.date).toLocaleDateString("en-US", {
-              year: "numeric", month: "long", day: "numeric",
+            {new Date(post.date).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
             })}
           </span>
-          {article.scheduledDate && (
+          {post.scheduledDate && (
             <span className="flex items-center gap-1.5 text-blue-600">
               <Clock className="size-4" />
-              Scheduled: {new Date(article.scheduledDate).toLocaleDateString("en-US", {
-                year: "numeric", month: "long", day: "numeric",
+              Scheduled: {new Date(post.scheduledDate).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
               })}
             </span>
           )}
           <span className="flex items-center gap-1.5">
             <Clock className="size-4" />
-            {article.readTime}
+            {post.readTime}
           </span>
           <span className="flex items-center gap-1.5">
             <User className="size-4" />
-            {article.author}
+            {post.author}
           </span>
         </div>
 
-        {article.tags.length > 0 && (
+        {post.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Tag className="size-3.5 text-gray-400" />
-            {article.tags.map((tag) => (
-              <span key={tag} className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+            {post.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700"
+              >
                 {tag}
               </span>
             ))}
           </div>
         )}
 
-        <ArticleActions
-          slug={slug}
-          status={article.status as "draft" | "scheduled" | "published"}
-          scheduledDate={article.scheduledDate || undefined}
-          onAction={loadArticle}
-        />
+        {/* Article actions (client component) */}
+        <ArticleActions slug={slug} status={post.status} scheduledDate={post.scheduledDate} />
 
-        {article.outgoing_links.length > 0 && (
+        {/* Cross-references */}
+        {crossRefs.length > 0 && (
           <div className="mt-4 border-t border-gray-200 pt-4">
             <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
               <Link2 className="size-3.5" />
-              Outgoing cross-references ({article.outgoing_links.length})
+              Outgoing cross-references ({crossRefs.length})
             </p>
             <div className="flex flex-wrap gap-2">
-              {article.outgoing_links.map((ref) => (
+              {crossRefs.map((ref) => (
                 <Link
                   key={ref}
                   href={`/admin/${ref}`}
@@ -177,7 +146,7 @@ export default function AdminArticleDetail() {
           </div>
         )}
 
-        {article.status === "published" && (
+        {post.status === "published" && (
           <div className="mt-4 border-t border-gray-200 pt-4">
             <a
               href={`/blog/${slug}`}
@@ -190,17 +159,12 @@ export default function AdminArticleDetail() {
         )}
       </div>
 
-      {/* Article preview (rendered markdown) */}
-      {article.body && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 text-sm font-semibold text-gray-500">Article Preview</h2>
-          <div className="article-prose" style={{ maxWidth: "800px" }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-              {article.body}
-            </ReactMarkdown>
-          </div>
-        </div>
-      )}
+      {/* Article preview (full rendered HTML) */}
+      <div
+        className="article-prose"
+        style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 0 4rem" }}
+        dangerouslySetInnerHTML={{ __html: post.content }}
+      />
     </div>
   )
 }
