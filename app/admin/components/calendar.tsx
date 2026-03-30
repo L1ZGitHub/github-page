@@ -1,19 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
+import { useDroppable } from "@dnd-kit/core"
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react"
 
 const API_BASE = "/api/blog"
 
-interface CalendarArticle {
+export interface CalendarArticle {
   slug: string
   title: string
   category: string
   status: "draft" | "scheduled" | "published"
 }
 
-type CalendarData = Record<string, CalendarArticle[]>
+export type CalendarData = Record<string, CalendarArticle[]>
 
 const statusDot: Record<string, string> = {
   draft: "bg-yellow-400",
@@ -25,7 +26,6 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 function getMonthGrid(year: number, month: number): (number | null)[][] {
   const firstDay = new Date(year, month, 1)
-  // Monday = 0, Sunday = 6
   const startWeekday = (firstDay.getDay() + 6) % 7
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
@@ -41,25 +41,70 @@ function getMonthGrid(year: number, month: number): (number | null)[][] {
   return weeks
 }
 
-function dateKey(year: number, month: number, day: number): string {
+export function dateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
-export default function AdminCalendar() {
+function DayCell({
+  dateStr,
+  day,
+  articles,
+  isToday,
+  isSelected,
+  onClick,
+}: {
+  dateStr: string
+  day: number
+  articles: CalendarArticle[]
+  isToday: boolean
+  isSelected: boolean
+  onClick: () => void
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: dateStr })
+
+  return (
+    <button
+      ref={setNodeRef}
+      onClick={onClick}
+      className={`relative flex h-20 flex-col items-center justify-start rounded-lg pt-1.5 text-sm transition-all ${
+        isOver
+          ? "border-2 border-blue-400 bg-blue-50"
+          : isSelected
+            ? "border border-gray-300 bg-gray-100 font-semibold text-gray-900"
+            : isToday
+              ? "border border-blue-200 bg-blue-50/50 font-semibold text-blue-600"
+              : "border border-transparent text-gray-700 hover:bg-gray-50"
+      }`}
+    >
+      <span className="font-mono text-xs">{day}</span>
+      {articles.length > 0 && (
+        <div className="mt-1 flex flex-wrap justify-center gap-0.5">
+          {articles.slice(0, 4).map((a, i) => (
+            <span
+              key={i}
+              className={`size-2 rounded-full ${statusDot[a.status]}`}
+            />
+          ))}
+          {articles.length > 4 && (
+            <span className="text-[8px] text-gray-400">+{articles.length - 4}</span>
+          )}
+        </div>
+      )}
+    </button>
+  )
+}
+
+interface AdminCalendarProps {
+  data: CalendarData
+  loading: boolean
+  onRefresh: () => void
+}
+
+export default function AdminCalendar({ data, loading, onRefresh }: AdminCalendarProps) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [data, setData] = useState<CalendarData>({})
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch(`${API_BASE}/calendar`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => setData({}))
-      .finally(() => setLoading(false))
-  }, [])
 
   function prev() {
     if (month === 0) {
@@ -96,6 +141,7 @@ export default function AdminCalendar() {
         <div className="flex items-center gap-2">
           <Calendar className="size-4 text-gray-400" />
           <h2 className="text-sm font-semibold text-gray-900">Calendar</h2>
+          <span className="text-xs text-gray-400">Drop drafts to schedule</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -121,7 +167,7 @@ export default function AdminCalendar() {
       ) : (
         <>
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-px text-center">
+          <div className="grid grid-cols-7 gap-1 text-center">
             {DAY_NAMES.map((d) => (
               <div key={d} className="py-1 text-xs font-medium text-gray-400">
                 {d}
@@ -130,11 +176,11 @@ export default function AdminCalendar() {
           </div>
 
           {/* Weeks */}
-          <div className="grid grid-cols-7 gap-px">
+          <div className="grid grid-cols-7 gap-1">
             {weeks.map((week, wi) =>
               week.map((day, di) => {
                 if (day === null) {
-                  return <div key={`${wi}-${di}`} className="h-9" />
+                  return <div key={`${wi}-${di}`} className="h-20" />
                 }
 
                 const key = dateKey(year, month, day)
@@ -143,29 +189,15 @@ export default function AdminCalendar() {
                 const isSelected = key === selectedDay
 
                 return (
-                  <button
+                  <DayCell
                     key={key}
+                    dateStr={key}
+                    day={day}
+                    articles={articles}
+                    isToday={isToday}
+                    isSelected={isSelected}
                     onClick={() => setSelectedDay(isSelected ? null : key)}
-                    className={`relative flex h-9 flex-col items-center justify-center rounded text-sm transition-colors ${
-                      isSelected
-                        ? "bg-gray-200 font-semibold text-gray-900"
-                        : isToday
-                          ? "font-semibold text-blue-600"
-                          : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <span className="font-mono text-xs">{day}</span>
-                    {articles.length > 0 && (
-                      <div className="flex gap-0.5">
-                        {articles.slice(0, 3).map((a, i) => (
-                          <span
-                            key={i}
-                            className={`size-1.5 rounded-full ${statusDot[a.status]}`}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </button>
+                  />
                 )
               }),
             )}
