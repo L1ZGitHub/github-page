@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useDroppable } from "@dnd-kit/core"
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar, X } from "lucide-react"
 
 const API_BASE = "/api/blog"
 
@@ -98,9 +98,10 @@ interface AdminCalendarProps {
   data: CalendarData
   loading: boolean
   onRefresh: () => void
+  onUnschedule?: (slug: string) => void
 }
 
-export default function AdminCalendar({ data, loading, onRefresh }: AdminCalendarProps) {
+export default function AdminCalendar({ data, loading, onRefresh, onUnschedule }: AdminCalendarProps) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
@@ -219,15 +220,24 @@ export default function AdminCalendar({ data, loading, onRefresh }: AdminCalenda
               ) : (
                 <ul className="space-y-1">
                   {selectedArticles.map((a) => (
-                    <li key={a.slug}>
+                    <li key={a.slug} className="flex items-center gap-1">
                       <Link
                         href={`/admin/${a.slug}`}
-                        className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-100"
                       >
                         <span className={`size-2 shrink-0 rounded-full ${statusDot[a.status]}`} />
                         <span className="truncate">{a.title}</span>
                         <span className="ml-auto shrink-0 text-xs text-gray-400">{a.category}</span>
                       </Link>
+                      {a.status === "scheduled" && onUnschedule && (
+                        <button
+                          onClick={() => onUnschedule(a.slug)}
+                          className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                          title="Unschedule (revert to draft)"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

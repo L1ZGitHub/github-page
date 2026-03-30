@@ -165,9 +165,24 @@ export default function AdminDashboard() {
 
       setToast(`Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`)
 
-      // Refresh both data sources
-      fetchArticles()
-      fetchCalendar()
+      // Optimistic update: move article from draft to scheduled locally
+      setArticles((prev) =>
+        prev.map((a) =>
+          a.slug === slug ? { ...a, status: "scheduled" as Status, scheduledDate: dateStr } : a
+        )
+      )
+      setCalendarData((prev) => {
+        const updated = { ...prev }
+        const article = articles.find((a) => a.slug === slug)
+        if (article) {
+          if (!updated[dateStr]) updated[dateStr] = []
+          updated[dateStr] = [...updated[dateStr], { slug, title: article.title, category: article.category, status: "scheduled" }]
+        }
+        return updated
+      })
+
+      // Also refresh from API after a short delay (git push takes a moment)
+      setTimeout(() => { fetchArticles(); fetchCalendar() }, 2000)
     } catch (e) {
       console.error("Failed to schedule article:", e)
     }
@@ -176,6 +191,37 @@ export default function AdminDashboard() {
   function handleRefresh() {
     fetchArticles()
     fetchCalendar()
+  }
+
+  async function handleUnschedule(slug: string) {
+    try {
+      const res = await fetch(`${API_BASE}/articles/${slug}/draft`, {
+        method: "POST",
+        credentials: "include",
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      setToast("Reverted to draft")
+
+      // Optimistic update
+      setArticles((prev) =>
+        prev.map((a) =>
+          a.slug === slug ? { ...a, status: "draft" as Status, scheduledDate: "" } : a
+        )
+      )
+      setCalendarData((prev) => {
+        const updated: CalendarData = {}
+        for (const [date, arts] of Object.entries(prev)) {
+          const filtered = arts.filter((a) => a.slug !== slug)
+          if (filtered.length > 0) updated[date] = filtered
+        }
+        return updated
+      })
+
+      setTimeout(() => { fetchArticles(); fetchCalendar() }, 2000)
+    } catch (e) {
+      console.error("Failed to unschedule:", e)
+    }
   }
 
   if (loading) {
@@ -227,6 +273,7 @@ export default function AdminDashboard() {
           data={calendarData}
           loading={calendarLoading}
           onRefresh={handleRefresh}
+          onUnschedule={handleUnschedule}
         />
 
         {/* Scheduled articles */}
