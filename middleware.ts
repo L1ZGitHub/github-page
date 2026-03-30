@@ -12,10 +12,9 @@ export function middleware(request: NextRequest) {
   const ip = forwarded?.split(",")[0]?.trim() || realIp || ""
 
   const isTailscale = ip.startsWith("100.")
-  const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === ""
+  const isLocalhost = ip === "127.0.0.1" || ip === "::1"
 
   if (!isTailscale && !isLocalhost) {
-    // Return 404 to not reveal admin exists
     return new NextResponse(null, { status: 404 })
   }
 
