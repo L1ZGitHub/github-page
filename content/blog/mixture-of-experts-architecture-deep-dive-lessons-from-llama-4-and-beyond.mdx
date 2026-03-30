@@ -1,0 +1,221 @@
+---
+title: "Mixture-of-Experts Architecture Deep Dive: Lessons from Llama 4 and Beyond"
+description: "Explore how Mixture-of-Experts architecture works, with practical lessons from Llama 4 Scout on scaling model capacity without proportional compute costs."
+date: "2026-03-30"
+dateModified: "2026-03-30"
+status: "draft"
+category: "AI & ML"
+tags: ["LLMs", "Python", "Transformers", "Embeddings", "Fine-Tuning", "Agents"]
+difficulty: "advanced"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+## Why Mixture-of-Experts Is Having a Moment
+
+Sparse models have been theoretically attractive for years. The core idea is elegant: instead of activating the full parameter set for every token, route each token to a small subset of specialized sub-networks (the "experts"), keeping compute roughly constant while scaling capacity. GShard and Switch Transformer proved the concept at Google scale. But it took the open-source community releasing production-grade MoE models, most notably Llama 4 Scout and Maverick, for the architecture to become something practitioners can actually dissect, deploy, and learn from in detail.
+
+This post goes beyond the marketing numbers. I want to look at the architectural decisions that actually matter: how routing works under load, where training instabilities come from, what inference looks like in practice, and what Llama 4 specifically teaches us about deploying sparse models at scale.
+
+## The Core Architecture
+
+A standard transformer layer has one FFN block. A MoE transformer layer replaces that FFN with $N$ expert FFNs and a gating network (router). For each token, the router produces a probability distribution over experts and selects the top-$k$ (usually $k=1$ or $k=2$) to actually execute. The token's representation is updated using a weighted combination of those expert outputs.
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class MoELayer(nn.Module):
+    def __init__(self, d_model: int, d_ffn: int, n_experts: int, top_k: int = 2):
+        super().__init__()
+        self.n_experts = n_experts
+        self.top_k = top_k
+        self.router = nn.Linear(d_model, n_experts, bias=False)
+        self.experts = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(d_model, d_ffn),
+                nn.SiLU(),
+                nn.Linear(d_ffn, d_model)
+            )
+            for _ in range(n_experts)
+        ])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (batch, seq_len, d_model)
+        B, T, D = x.shape
+        x_flat = x.view(-1, D)  # (B*T, D)
+
+        logits = self.router(x_flat)  # (B*T, n_experts)
+        scores = F.softmax(logits, dim=-1)
+        
+        topk_scores, topk_indices = scores.topk(self.top_k, dim=-1)
+        topk_scores = topk_scores / topk_scores.sum(dim=-1, keepdim=True)  # renormalize
+
+        output = torch.zeros_like(x_flat)
+        for i, expert in enumerate(self.experts):
+            # find tokens routed to this expert
+            mask = (topk_indices == i).any(dim=-1)
+            if not mask.any():
+                continue
+            expert_input = x_flat[mask]
+            expert_output = expert(expert_input)
+            # get the weight for this expert from top-k scores
+            weight = topk_scores[mask][topk_indices[mask] == i].unsqueeze(-1)
+            output[mask] += weight * expert_output
+
+        return output.view(B, T, D)
+```
+
+This is the skeleton. The real complexity lives in three places: how you handle load imbalance, how you train without collapse, and how you parallelize across hardware.
+
+## Llama 4: What Meta Actually Shipped
+
+Llama 4 Scout uses 109B total parameters with 17B active per forward pass, routing each token to 2 of 16 experts. Maverick scales to roughly 400B total with the same 17B active budget but 128 experts. The ratio of active-to-total parameters is deliberately kept similar across both variants, which tells you Meta was optimizing for a fixed inference compute envelope, not a fixed model quality target.
+
+A few design choices stand out.
+
+**Interleaved attention layers.** Not every transformer layer in Llama 4 is a MoE layer. Meta interleaves dense attention layers with MoE FFN layers. This is pragmatic: attention is already expensive, and routing tokens across attention heads with expert parallelism adds synchronization overhead that doesn't pay off the way it does for FFNs. Keeping attention dense also helps with training stability because the gradient path through attention remains well-conditioned.
+
+**No auxiliary balancing loss.** Earlier MoE papers (Switch Transformer, ST-MoE) introduced an auxiliary loss term to penalize expert imbalance. Llama 4 uses a router Z-loss variant instead, which penalizes large logits directly without requiring a separate balancing coefficient to tune. This is a meaningful engineering simplification: one fewer hyperparameter that can go wrong.
+
+**MetaP for hyperparameter transfer.** Meta used an internal method called MetaP to set learning rates and other hyperparameters at small scale and transfer them to the full model. This matters for MoE specifically because optimal learning rates for expert parameters differ from those for shared parameters (embedding, attention), and bad defaults cause expert collapse early in training.
+
+## The Load Balancing Problem
+
+Expert imbalance is the most common failure mode in MoE training. If the router learns to always prefer a small subset of experts, you get expert collapse: most experts stop receiving gradients, become useless, and you've wasted parameters. The active-compute savings disappear because the "hot" experts have to handle all the traffic, often exceeding their capacity buffers.
+
+The standard mitigation is an auxiliary load-balancing loss:
+
+```python
+def load_balance_loss(router_probs: torch.Tensor, alpha: float = 1e-2) -> torch.Tensor:
+    """
+    router_probs: (n_tokens, n_experts) - softmax output of the router
+    Returns a scalar loss that penalizes unequal expert usage.
+    """
+    # fraction of tokens dispatched to each expert
+    tokens_per_expert = router_probs.mean(dim=0)  # (n_experts,)
+    # average router probability per expert  
+    prob_per_expert = router_probs.mean(dim=0)    # (n_experts,)
+    
+    # Switch Transformer formulation
+    n_experts = router_probs.shape[-1]
+    loss = alpha * n_experts * (tokens_per_expert * prob_per_expert).sum()
+    return loss
+```
+
+The Z-loss approach that Llama 4 uses penalizes large logits directly, which implicitly prevents the router from becoming overconfident:
+
+```python
+def router_z_loss(router_logits: torch.Tensor, alpha: float = 1e-3) -> torch.Tensor:
+    """
+    router_logits: (n_tokens, n_experts) - pre-softmax router outputs
+    Penalizes large logit magnitudes to stabilize routing.
+    """
+    z_loss = torch.logsumexp(router_logits, dim=-1).pow(2).mean()
+    return alpha * z_loss
+```
+
+The tradeoff is subtle. Auxiliary balancing loss directly targets usage uniformity, which can cause tokens to be sent to suboptimal experts. Z-loss targets logit stability, which is more permissive about specialization but also less aggressive about preventing collapse. In practice, Z-loss works better when you have enough experts (128 in Maverick) because statistical uniformity is easier to achieve naturally.
+
+## Expert Routing Strategies Beyond Top-K
+
+Token-choice routing (each token picks its top-$k$ experts) is the dominant approach, but it has a structural problem: some experts will receive more tokens than their buffer allows, causing tokens to be dropped. Expert-choice routing inverts this, where each expert selects its top-$c$ tokens from the batch. This guarantees perfect load balance by construction.
+
+The catch is that token-choice maintains the invariant that every token gets processed, which expert-choice breaks. Under expert-choice, tokens not selected by any expert are skipped or handled by a shared fallback. For autoregressive generation this is unacceptable. Expert-choice is useful in encoder-only or training contexts where you can tolerate some tokens getting less attention, but not in decoder-only inference.
+
+Llama 4 uses token-choice with capacity factors, a pragmatic middle ground. Each expert has a capacity buffer of $C = \lceil k \cdot T / N \rceil \cdot \text{capacity\_factor}$ tokens where $T$ is sequence length, $N$ is number of experts. Tokens that overflow a full expert are dropped (their contribution is zeroed). Setting capacity\_factor above 1.0 reduces drops at the cost of memory.
+
+This is worth paying attention to in production. If you're running Maverick with default capacity factors and your batch contains a domain shift (dense technical code versus casual chat), you may see silent token drops that degrade output quality with no error or warning.
+
+## Training Instabilities and What Causes Them
+
+MoE models are harder to train than dense models at equivalent active compute. The main culprits are:
+
+**Gradient variance across experts.** Experts that receive fewer tokens have higher-variance gradient estimates. Early in training, this creates a feedback loop: high-variance experts are harder to learn from, so the router avoids them, which makes their gradients even more noisy. Standard mitigation is gradient clipping (Llama 4 uses it) and careful warm-up of the router.
+
+**Representation collapse.** If experts become too similar, you've done the expensive routing for nothing. The router learns to slightly prefer one expert over others for reasons unrelated to the input, and you end up with a de-facto dense model. Orthogonality regularization on expert weights can help but adds complexity.
+
+**Communication overhead in distributed training.** In expert parallelism, tokens must be dispatched across devices to reach their assigned experts and then gathered back. This all-to-all communication is a bottleneck that dense models don't have. At the scale Meta trains Maverick, this communication overhead is non-trivial and affects the effective batch size and learning rate schedules.
+
+The [Chinese frontier models like DeepSeek V3](/blog/glm5-kimi-deepseek-panorama-2026-chinese-llms) deal with similar challenges but made different tradeoffs: DeepSeek's MoE uses finer-grained experts (more experts, smaller per-expert FFN size) which improves specialization but increases routing overhead. There's no single right answer here; the optimal point depends on hardware topology.
+
+## Inference: Where MoE Gets Complicated
+
+Training a MoE model and serving it are very different problems. During training, you typically have large batches that naturally spread across experts. During inference, you're often running with small batches or even single sequences.
+
+For small batches, most experts receive zero or one token per forward pass. The expert computation is efficient (small matrix multiply), but the dispatching logic, memory access patterns, and kernel launch overhead can dominate. You also need all expert weights in memory (or accessible via fast storage), which for Maverick means 400B parameters worth of weights even though you only compute with 17B per step.
+
+Quantization helps significantly. Llama 4 ships with BF16 weights but most deployment setups quantize expert weights to 4-bit or 8-bit. Because inactive experts are never loaded into compute units for a given token, per-expert quantization error doesn't compound the way it does in dense models.
+
+For high-throughput serving, continuous batching across requests naturally spreads token load across experts. At sufficient request volume, MoE inference efficiency approaches the theoretical active-parameter ratio. The practical break-even point (where MoE is actually cheaper per token than a comparable dense model) is generally around 20-50 concurrent requests depending on hardware.
+
+This intersects directly with [multi-agent system deployments](/blog/multi-agent-multi-llm-architectures-a-2026-guide) where a single MoE backbone can handle multiple specialized agent roles simultaneously, because different agent tasks naturally activate different expert subsets, improving load distribution across the expert pool.
+
+## What the Expert Specialization Actually Looks Like
+
+One of the more interesting empirical findings from MoE research is that experts do specialize, but not always in the ways you'd expect. Syntactic vs. semantic specialization shows up clearly: some experts concentrate on function words and punctuation, others on domain-specific vocabulary. But experts don't cleanly map onto human-legible concepts like "code expert" or "math expert."
+
+In Llama 4 Maverick's 128-expert setup, individual experts are small enough that each one handles a fairly narrow input distribution. This fine-grained specialization is part of why Maverick performs disproportionately well on tasks requiring precise domain knowledge: the relevant experts have been trained on a narrower data distribution and can fit it more precisely.
+
+You can probe expert activation patterns by logging `topk_indices` during inference:
+
+```python
+from collections import Counter
+
+def profile_expert_usage(
+    model: MoELayer,
+    tokens: torch.Tensor,
+    n_experts: int
+) -> dict:
+    """Log which experts handle which tokens during a forward pass."""
+    activation_counts = Counter()
+    
+    with torch.no_grad():
+        x_flat = tokens.view(-1, tokens.shape[-1])
+        logits = model.router(x_flat)
+        scores = torch.softmax(logits, dim=-1)
+        _, topk_indices = scores.topk(model.top_k, dim=-1)
+        
+        for token_experts in topk_indices.tolist():
+            for expert_id in token_experts:
+                activation_counts[expert_id] += 1
+    
+    total = sum(activation_counts.values())
+    return {
+        "counts": dict(activation_counts),
+        "utilization": {k: v / total for k, v in activation_counts.items()},
+        "n_unused": n_experts - len(activation_counts),
+    }
+```
+
+Running this against different input domains reveals which experts are consistently active and which are domain-selective. Persistent underutilization of certain experts after full training is a signal worth investigating, especially if you're fine-tuning a pretrained MoE for a specialized task.
+
+## Fine-Tuning MoE Models
+
+Fine-tuning MoE models with LoRA (as covered in the [LoRA and QLoRA fine-tuning guide](/blog/fine-tuning-open-source-llms-with-lora-and-qlora)) requires deciding where to inject adapters. Three options:
+
+1. **Adapter on router only**: Very parameter-efficient, but limits how much the model can specialize for your domain.
+2. **Adapter on all expert FFNs**: Full flexibility but $N \times$ the adapter parameters compared to a dense model of equivalent active size.
+3. **Adapter on a subset of experts**: Identify which experts activate most for your target domain, add adapters only to those. Practical and reasonably efficient.
+
+Option 3 is underexplored but promising. Domain profiling (as in the code above) tells you which expert subset handles your fine-tuning data. Restricting LoRA to those experts reduces adapter memory and keeps gradients focused where they matter.
+
+## Beyond Llama 4: Architectural Directions
+
+The next frontier for MoE is hierarchical routing: multiple levels of routing, where a coarse router selects an expert group and a fine-grained router selects within that group. This is computationally attractive because the coarse routing decision is cheap and can be cached across tokens in a sequence.
+
+Conditional computation at the attention level is also getting more attention. Pure FFN-MoE models leave attention dense; emerging work explores whether attention heads can also be made conditionally active without sacrificing sequence modeling quality.
+
+The interaction between MoE and [inference-time scaling](/blog/inference-time-scaling-how-modern-llms-think-their-way-to-better-answers) is interesting and underexplored. Chain-of-thought and extended reasoning passes through a MoE model activate different expert distributions than single-pass generation. Whether the reasoning tokens' expert preferences encode anything useful about reasoning quality is an open question.
+
+## Key Takeaways
+
+- MoE scales parameter count independently of active compute, but the active-to-total ratio is the primary factor controlling inference cost, not total parameter count.
+- Expert load imbalance is the dominant training failure mode; Z-loss is a cleaner alternative to auxiliary balancing loss when you have enough experts for statistical uniformity to emerge naturally.
+- Token-choice routing is required for autoregressive inference; expert-choice routing is useful in training or encoder contexts where some tokens can be skipped.
+- Llama 4's interleaved dense-attention / MoE-FFN design is a practical engineering choice: MoE benefits concentrate in FFN layers where expert parallelism overhead is most justified.
+- At small batch sizes, MoE inference efficiency is worse than comparable dense models; the break-even point for throughput advantage is typically 20-50 concurrent requests.
+- Fine-tuning MoE models with LoRA is most efficient when adapters are applied to the expert subset that activates most for your target domain, identified by profiling router decisions on representative data.
+- Expert specialization is real but rarely maps cleanly onto human-legible categories; use activation profiling rather than assumptions to understand what your model's experts have learned.
+- Communication overhead in distributed MoE training is qualitatively different from dense model training; all-to-all dispatch between experts adds latency that affects optimal batch size and learning rate schedules.
