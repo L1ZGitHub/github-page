@@ -147,6 +147,26 @@ export default function AdminDashboard() {
     // Validate it looks like a date string (YYYY-MM-DD)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return
 
+    // Optimistic update — move article to scheduled immediately
+    const prevArticles = articles
+    const prevCalendar = calendarData
+    const article = articles.find((a) => a.slug === slug)
+
+    if (article) {
+      setArticles((prev) =>
+        prev.map((a) =>
+          a.slug === slug ? { ...a, status: "scheduled" as const, scheduledDate: dateStr } : a,
+        ),
+      )
+      setCalendarData((prev) => ({
+        ...prev,
+        [dateStr]: [
+          ...(prev[dateStr] ?? []),
+          { slug: article.slug, title: article.title, category: article.category, status: "scheduled" as const },
+        ],
+      }))
+    }
+
     setBusy(true)
     try {
       const res = await fetch(`${API_BASE}/articles/${slug}/schedule`, {
@@ -162,8 +182,10 @@ export default function AdminDashboard() {
       }
 
       setToast({ message: `Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`, type: "success" })
-      await refreshAll()
     } catch (e) {
+      // Rollback on failure
+      setArticles(prevArticles)
+      setCalendarData(prevCalendar)
       setToast({ message: "Failed to schedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
     } finally {
       setBusy(false)
@@ -171,6 +193,29 @@ export default function AdminDashboard() {
   }
 
   async function handleUnschedule(slug: string) {
+    // Optimistic update — revert to draft immediately
+    const prevArticles = articles
+    const prevCalendar = calendarData
+    const article = articles.find((a) => a.slug === slug)
+
+    if (article) {
+      setArticles((prev) =>
+        prev.map((a) =>
+          a.slug === slug ? { ...a, status: "draft" as const, scheduledDate: "" } : a,
+        ),
+      )
+      if (article.scheduledDate) {
+        setCalendarData((prev) => {
+          const updated = { ...prev }
+          const dayArticles = updated[article.scheduledDate]
+          if (dayArticles) {
+            updated[article.scheduledDate] = dayArticles.filter((a) => a.slug !== slug)
+          }
+          return updated
+        })
+      }
+    }
+
     setBusy(true)
     try {
       const res = await fetch(`${API_BASE}/articles/${slug}/draft`, {
@@ -180,8 +225,10 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       setToast({ message: "Reverted to draft", type: "success" })
-      await refreshAll()
     } catch (e) {
+      // Rollback on failure
+      setArticles(prevArticles)
+      setCalendarData(prevCalendar)
       setToast({ message: "Failed to unschedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
     } finally {
       setBusy(false)

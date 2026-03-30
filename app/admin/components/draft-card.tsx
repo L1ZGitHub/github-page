@@ -13,27 +13,20 @@ export interface DraftArticle {
 }
 
 export default function DraftCard({ article }: { article: DraftArticle }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: article.slug,
     data: { article },
   })
-
-  const style = transform
-    ? {
-        transform: `translate(${transform.x}px, ${transform.y}px)`,
-      }
-    : undefined
 
   const catClass = categoryColors[article.category] || "bg-gray-100 text-gray-800"
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...listeners}
       {...attributes}
       className={`w-[280px] cursor-grab select-none rounded-lg border border-gray-200 bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
-        isDragging ? "opacity-40 shadow-lg" : ""
+        isDragging ? "opacity-30" : ""
       }`}
     >
       <Link
