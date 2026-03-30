@@ -11,12 +11,16 @@ import rehypeStringify from "rehype-stringify"
 
 const CONTENT_DIR = path.join(process.cwd(), "content", "blog")
 
+export type ArticleStatus = "draft" | "scheduled" | "published"
+
 export interface BlogPost {
   slug: string
   title: string
   description: string
   date: string
   dateModified?: string
+  status: ArticleStatus
+  scheduledDate?: string
   category: string
   tags: string[]
   difficulty: string
@@ -31,6 +35,8 @@ export interface BlogPostMeta {
   description: string
   date: string
   dateModified?: string
+  status: ArticleStatus
+  scheduledDate?: string
   category: string
   tags: string[]
   difficulty: string
@@ -59,6 +65,8 @@ export async function getPostBySlug(slug: string): Promise<BlogPost> {
     description: data.description,
     date: data.date,
     dateModified: data.dateModified || data.date,
+    status: data.status || "published",
+    scheduledDate: data.scheduledDate,
     category: data.category,
     tags: data.tags || [],
     difficulty: data.difficulty,
@@ -79,6 +87,8 @@ export function getPostMetaBySlug(slug: string): BlogPostMeta {
     description: data.description,
     date: data.date,
     dateModified: data.dateModified || data.date,
+    status: data.status || "published",
+    scheduledDate: data.scheduledDate,
     category: data.category,
     tags: data.tags || [],
     difficulty: data.difficulty,

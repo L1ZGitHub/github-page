@@ -1,11 +1,20 @@
-import { getAllSlugs, getPostMetaBySlug, type BlogPostMeta } from "./mdx"
+import { getAllSlugs, getPostMetaBySlug, type BlogPostMeta, type ArticleStatus } from "./mdx"
 
+/** All posts with status "published" — used by public pages, sitemap, RSS */
 export function getAllPosts(): BlogPostMeta[] {
+  return getAllPostsUnfiltered().filter((p) => p.status === "published")
+}
+
+/** All posts regardless of status — used by admin dashboard */
+export function getAllPostsUnfiltered(): BlogPostMeta[] {
   const slugs = getAllSlugs()
   const posts = slugs.map((slug) => getPostMetaBySlug(slug))
-
-  // Sort by date descending
   return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+}
+
+/** Posts filtered by status */
+export function getPostsByStatus(status: ArticleStatus): BlogPostMeta[] {
+  return getAllPostsUnfiltered().filter((p) => p.status === status)
 }
 
 export function getPostsByCategory(category: string): BlogPostMeta[] {
