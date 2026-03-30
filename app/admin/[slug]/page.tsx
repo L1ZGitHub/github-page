@@ -4,6 +4,9 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Calendar, Clock, User, BarChart3, Tag, Link2 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import rehypeHighlight from "rehype-highlight"
 import ArticleActions from "../components/article-actions"
 
 const API_BASE = "/api/blog"
@@ -187,14 +190,14 @@ export default function AdminArticleDetail() {
         )}
       </div>
 
-      {/* Article preview (raw markdown) */}
+      {/* Article preview (rendered markdown) */}
       {article.body && (
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 text-sm font-semibold text-gray-500">Article Preview (Markdown)</h2>
-          <div className="prose prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-800">
+          <h2 className="mb-4 text-sm font-semibold text-gray-500">Article Preview</h2>
+          <div className="article-prose" style={{ maxWidth: "800px" }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
               {article.body}
-            </pre>
+            </ReactMarkdown>
           </div>
         </div>
       )}
