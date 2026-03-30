@@ -1,0 +1,157 @@
+---
+title: "GPT-5.4 Tool Search: How Dynamic Discovery Reshapes Agent Design"
+description: "GPT-5.4 introduces Tool Search for dynamic tool discovery, cutting token usage by 47% while maintaining accuracy across large tool inventories"
+date: "2026-03-30"
+dateModified: "2026-03-30"
+status: "draft"
+category: "AI & ML"
+tags: ["GPT-5.4", "Tool Use", "Agent Design", "LLM Architecture"]
+difficulty: "intermediate"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+OpenAI shipped GPT-5.4 on March 5, 2026, and the headline number most people fixated on was the 1.05 million token context window. Fair enough. But the feature that will matter most for production agent systems is Tool Search, a mechanism that fundamentally changes how LLMs interact with large tool inventories.
+
+## The Problem with Static Tool Definitions
+
+If you have built an agent that calls more than a handful of tools, you know the pain. Every tool definition goes into the system prompt. Ten tools? Manageable. Fifty tools? Your prompt is now thousands of tokens of JSON schema before the user even says hello. Two hundred tools across multiple [MCP servers](/blog/model-context-protocol-connecting-llms-to-external-tools)? You are burning context window and money on descriptions the model will never use in most requests.
+
+The standard workaround has been to manually curate tool subsets per task, or to build a routing layer that pre-selects which tools to expose. Both approaches work, but they push complexity into your orchestration code and create a maintenance burden that scales linearly with the number of tools.
+
+```python
+# The old way: cramming all tool definitions into the prompt
+tools = [
+    get_tool_definition("search_web"),
+    get_tool_definition("read_file"),
+    get_tool_definition("write_file"),
+    get_tool_definition("query_database"),
+    get_tool_definition("send_email"),
+    # ... 195 more tool definitions
+]
+
+response = client.chat.completions.create(
+    model="gpt-5.4",
+    messages=messages,
+    tools=tools,  # thousands of tokens consumed here
+)
+```
+
+This approach has three costs: token spend on input, degraded attention over long system prompts, and the engineering overhead of maintaining tool routing logic.
+
+## How Tool Search Works
+
+Tool Search flips the model from passive consumer of tool definitions to active searcher. Instead of receiving full JSON schemas for every tool, the model gets a lightweight manifest: tool names and one-line descriptions. When it decides to call a tool, it issues a lookup for the full definition on demand.
+
+The flow looks like this:
+
+1. The agent receives a compact list of available tools (names and short descriptions only)
+2. The model reasons about which tools it needs for the current task
+3. It requests the full schema for only those tools
+4. It generates the tool call with the complete parameter information
+
+```python
+# Tool Search: the model discovers tools dynamically
+response = client.chat.completions.create(
+    model="gpt-5.4",
+    messages=messages,
+    tool_search={
+        "enabled": True,
+        "manifest": tool_manifest,  # lightweight: name + description only
+        "lookup_endpoint": "/tools/{tool_name}/schema",
+    },
+)
+```
+
+OpenAI tested this across 250 tasks from Scale's MCP Atlas benchmark with 36 MCP servers enabled. The result: 47% reduction in total token usage with the same accuracy. That is not a marginal improvement. For agents running at scale, that translates directly into cost savings and faster time to first token.
+
+## Why This Matters for Agent Architecture
+
+Tool Search is not just an optimization. It changes how you should think about agent design.
+
+**Flat tool namespaces become viable.** Previously, exposing hundreds of tools to a model was impractical. You needed hierarchical routing, sub-agents, or task-specific tool subsets. With Tool Search, a single agent can have access to a broad tool inventory without the prompt bloat. This simplifies architectures that previously required [multi-agent orchestration](/blog/multi-agent-multi-llm-architectures-a-2026-guide) just to manage tool routing.
+
+**Dynamic tool ecosystems work natively.** If your agent connects to MCP servers that add or remove tools at runtime, Tool Search handles this gracefully. The manifest updates, and the model discovers new capabilities without prompt engineering changes.
+
+**Token budgets become predictable.** With static tool definitions, your input token count varied wildly depending on how many tools were loaded. With Tool Search, the base cost is the compact manifest, plus the schemas of tools actually used. For most requests, that means fetching one to three full schemas instead of two hundred.
+
+## The Unified Architecture Play
+
+GPT-5.4 rolled reasoning, code generation, and computer use into a single model. Previous OpenAI releases had separate models for different capabilities (o-series for reasoning, standard GPT for general use). The unification means you no longer need to route between models based on task type.
+
+Combined with Tool Search, this creates a pattern where a single model instance can handle diverse workloads:
+
+```python
+# One model, dynamic tool access, multiple capability modes
+response = client.chat.completions.create(
+    model="gpt-5.4",
+    messages=[
+        {"role": "system", "content": "You are a development assistant."},
+        {"role": "user", "content": "Find the bug in auth.py, fix it, and deploy to staging."},
+    ],
+    tool_search={"enabled": True, "manifest": full_manifest},
+    reasoning={"effort": "high"},  # activates extended reasoning
+)
+```
+
+The model can reason through the problem, search for the right code editing tools, find the deployment tools, and execute a multi-step workflow without you pre-selecting which capabilities it needs.
+
+## Benchmarks in Context
+
+GPT-5.4 scores 83% on GDPval and reduces factual errors by 33% compared to GPT-5.2. The 1.05 million token context window is the largest OpenAI has offered commercially. Three variants ship: Standard (general use), Thinking (reasoning-first), and Pro (maximum capability).
+
+These numbers are solid but not the point I want to emphasize. The more interesting comparison is operational: how much does it cost to run an agent that can access 200 tools versus one that can access 10? Before Tool Search, the answer was "significantly more." Now the cost difference is minimal.
+
+For teams building production agents, particularly those using frameworks like [OpenCLAW](/blog/openclaw-explained-for-beginners) for enterprise orchestration, Tool Search removes one of the most annoying scaling bottlenecks.
+
+## Practical Implications for Your Agent Pipeline
+
+If you are building or maintaining agent systems, here is what changes:
+
+**Reduce your routing complexity.** If you built a multi-stage pipeline specifically to manage tool selection, you can likely simplify it. The model can handle tool discovery itself, which means fewer moving parts in your orchestration layer.
+
+**Audit your tool descriptions.** The compact manifest relies on short, clear descriptions. If your tool names are cryptic or your descriptions are vague, the model will make poor lookup decisions. Invest time in making your tool manifest readable.
+
+```python
+# Good: clear, specific tool descriptions
+manifest = [
+    {"name": "query_postgres", "description": "Execute read-only SQL against the production PostgreSQL database"},
+    {"name": "create_jira_ticket", "description": "Create a new Jira ticket with title, description, and priority"},
+]
+
+# Bad: vague or duplicative descriptions
+manifest = [
+    {"name": "db_tool", "description": "Database operations"},
+    {"name": "ticket_tool", "description": "Create tickets"},
+]
+```
+
+**Monitor lookup patterns.** Track which tools your agents actually look up and call. This gives you data on which tools are valuable and which are dead weight. If a tool is never looked up across thousands of requests, remove it from the manifest.
+
+**Test with realistic tool counts.** If you tested your agent with 10 tools and plan to deploy with 100, test with 100. Tool Search changes the dynamics, and you need to verify that the model's lookup behavior is accurate at your actual scale.
+
+## The Broader Trend: Intelligence in Tool Selection
+
+Tool Search is part of a broader shift where models become more autonomous in deciding how to accomplish tasks. Instead of the developer prescribing "use this tool for this step," the model evaluates its options and selects appropriately.
+
+This pattern appears across the industry. Anthropic's Claude models use similar dynamic tool selection in their agent framework. The [multi-agent architectures](/blog/the-multi-agent-systems-explosion-327-adoption-growth-in-2026) gaining traction in 2026 increasingly delegate tool selection to the agent rather than hardcoding it in the orchestration layer.
+
+The risk, naturally, is that models make poor tool choices. This is why observability matters. Log every tool lookup, every tool call, and every result. Build dashboards that show tool selection accuracy over time. The model is now making decisions that were previously yours, so you need visibility into those decisions.
+
+## What This Does Not Solve
+
+Tool Search does not fix tools that are poorly designed. If your API returns inconsistent error formats, the model will still struggle. If your tool requires twelve parameters with complex interdependencies, the model will still make mistakes.
+
+It also does not eliminate the need for guardrails. A model with access to 200 tools, including destructive ones, needs permission boundaries. Tool Search makes it easier to expose large inventories, which means the stakes of a misrouted tool call go up, not down.
+
+Finally, Tool Search is an OpenAI-specific implementation. If you are building vendor-agnostic agent infrastructure, you need to handle the case where other models do not support this pattern. Abstract your tool management layer so you can fall back to static definitions for models that require them.
+
+## Key Takeaways
+
+- Tool Search lets GPT-5.4 dynamically discover tool definitions instead of loading all schemas into the prompt, reducing token usage by 47% at equal accuracy.
+- The mechanism uses a lightweight manifest of tool names and descriptions, with on-demand lookup for full schemas when needed.
+- This enables flat tool namespaces with hundreds of tools without the prompt bloat that previously required multi-agent routing.
+- GPT-5.4 unifies reasoning, coding, and computer use into one model, making single-agent architectures more viable for diverse workloads.
+- Good tool descriptions are now critical infrastructure, since the model relies on them for accurate discovery.
+- Observability for tool lookup and selection patterns becomes essential when the model, not the developer, chooses which tools to use.
+- Tool Search does not replace the need for permission boundaries, consistent API design, or vendor-agnostic abstractions.

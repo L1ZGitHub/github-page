@@ -1,0 +1,212 @@
+---
+title: "The Million-Token Context Window: What Actually Changes"
+description: "GPT-5.4, Gemini 3.1, and Nemotron 3 all ship with 1M token contexts, but using them effectively requires rethinking retrieval and architecture"
+date: "2026-03-30"
+dateModified: "2026-03-30"
+status: "draft"
+category: "AI & ML"
+tags: ["Context Window", "Long Context", "RAG", "LLM Architecture"]
+difficulty: "intermediate"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+In March 2026, three major models ship with million-token context windows: GPT-5.4 (1.05M tokens), Gemini 3.1 Pro (1M tokens), and NVIDIA's Nemotron 3 Super (1M tokens). A year ago, 128K was considered generous. Now, a million tokens is becoming the frontier standard.
+
+A million tokens is roughly 750,000 words, or about 10 full-length novels, or an entire medium-sized codebase. The question is not "how many tokens can the model accept?" but rather "what changes when context is essentially unlimited for most practical tasks?"
+
+The answer is more nuanced than "just put everything in the prompt."
+
+## What a Million Tokens Looks Like
+
+To make this concrete:
+
+| Content | Approximate tokens |
+|---------|-------------------|
+| A typical blog post | 2,000-3,000 |
+| A research paper | 8,000-15,000 |
+| A complete novel | 80,000-120,000 |
+| A mid-size codebase (50K LoC) | 150,000-300,000 |
+| An entire product documentation set | 500,000-1,000,000 |
+| One year of Slack messages for a team | 2,000,000+ |
+
+For most individual documents, even long ones, a million tokens is more than enough. The use case is not about processing one very long document; it is about processing many documents simultaneously, or processing a document plus a large amount of supporting context.
+
+## What Changes: The Good
+
+### Full-Codebase Understanding
+
+Previously, coding assistants worked with file-level or function-level context. A million tokens lets the model see an entire small-to-medium codebase at once. This means:
+
+- Cross-file dependency analysis without retrieval
+- Understanding of coding conventions from the full codebase
+- Refactoring suggestions that account for every reference
+- Bug fixes that consider the interaction between distant components
+
+```python
+import os
+from pathlib import Path
+
+def load_codebase(root_dir, extensions=(".py", ".ts", ".tsx")):
+    """Load an entire codebase into a single context string."""
+    files = []
+    total_chars = 0
+    for ext in extensions:
+        for path in Path(root_dir).rglob(f"*{ext}"):
+            content = path.read_text(errors="ignore")
+            files.append(f"### {path.relative_to(root_dir)}\n```\n{content}\n```\n")
+            total_chars += len(content)
+
+    # Rough estimate: 1 token ≈ 4 characters
+    estimated_tokens = total_chars // 4
+    print(f"Loaded {len(files)} files, ~{estimated_tokens:,} tokens")
+    return "\n".join(files)
+
+context = load_codebase("./src/")
+# For a 50K LoC project: ~200K tokens, well within 1M limit
+```
+
+### Document Collection Analysis
+
+Analyzing a corpus of related documents (all contracts for a deal, all papers on a topic, all customer feedback for a quarter) becomes a single prompt. The model can identify patterns, contradictions, and connections across documents without the lossy compression of summarization.
+
+### Eliminating Retrieval for Small Corpora
+
+For [RAG systems](/blog/building-a-rag-chatbot-from-scratch-with-python) operating over small document collections (under 500 pages), you can skip the retrieval step entirely and just load everything into context. No embedding pipeline, no vector database, no retrieval tuning. The model sees all the content and finds the relevant information itself.
+
+This is a significant simplification for prototypes and small-scale applications. Instead of building a full RAG pipeline, you build a prompt:
+
+```python
+def simple_qa_over_docs(documents, question, client):
+    """Skip RAG entirely for small document collections."""
+    context = "\n\n".join(
+        f"## Document: {doc.title}\n{doc.content}"
+        for doc in documents
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-5.4",
+        messages=[
+            {"role": "system", "content": "Answer based on the provided documents."},
+            {"role": "user", "content": f"{context}\n\nQuestion: {question}"},
+        ],
+    )
+    return response.choices[0].message.content
+```
+
+## What Changes: The Complications
+
+### Cost Scales Linearly (or Worse)
+
+Processing a million tokens is expensive. At GPT-5.4 pricing, a single 1M token input costs roughly $2.50-5.00. At Gemini 3.1 Pro rates, it is cheaper but still significant. If your application makes hundreds of queries per day with full-context inputs, the costs add up quickly.
+
+More importantly, the computational cost of attention scales quadratically with sequence length in standard Transformers. Architectures like Nemotron 3 Super mitigate this with Mamba layers, but the fundamental trade-off remains: longer context means more compute per token.
+
+### The "Lost in the Middle" Problem Persists
+
+Research consistently shows that LLMs perform worse on information located in the middle of long contexts compared to information at the beginning or end. This "lost in the middle" effect means that simply dumping all your documents into a million-token prompt does not guarantee the model will attend to the relevant parts.
+
+The practical mitigation: even with huge context windows, organizing your input matters. Place the most relevant information at the beginning or end. Use clear section headers. Consider a lightweight retrieval step that reorders documents by relevance before loading them into context.
+
+### Retrieval Is Not Dead
+
+This might seem counterintuitive. If you can fit everything in context, why retrieve? Several reasons:
+
+**Cost efficiency.** Retrieving the 10 most relevant chunks and sending 5,000 tokens costs 200x less than sending 1,000,000 tokens. For high-volume applications, retrieval remains essential for economics.
+
+**Accuracy.** A well-tuned [hybrid retrieval system](/blog/hybrid-search-combining-dense-and-sparse-retrieval) that sends the right 5,000 tokens often produces better answers than sending 1,000,000 tokens where the relevant information is buried in noise. Quality of context matters more than quantity.
+
+**Latency.** Processing a million tokens takes significantly longer than processing 5,000. For real-time applications, retrieval-based approaches are faster.
+
+**Corpora that exceed 1M tokens.** Many real-world document collections are larger than a million tokens. Enterprise knowledge bases, legal document repositories, and large codebases still need retrieval.
+
+The right framing is not "RAG versus long context" but "RAG and long context as complementary." Use retrieval to select the most relevant content, then use the long context window to include more of it than was previously possible.
+
+```python
+def enhanced_rag_with_long_context(query, retriever, client, top_k=50):
+    """Use retrieval for relevance ranking, long context for breadth."""
+    # Retrieve more chunks than traditional RAG would use
+    chunks = retriever.search(query, top_k=top_k)
+
+    # With 1M token context, we can include 50 chunks instead of 5
+    context = "\n\n".join(
+        f"[Source: {c.metadata['source']}, Relevance: {c.score:.2f}]\n{c.text}"
+        for c in chunks
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-5.4",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Answer based on the provided sources. "
+                    "Cite specific sources when making claims."
+                ),
+            },
+            {"role": "user", "content": f"{context}\n\nQuestion: {query}"},
+        ],
+    )
+    return response.choices[0].message.content
+```
+
+This "fat RAG" pattern retrieves many more chunks than traditional RAG (50 instead of 5) and relies on the model's long-context capabilities to synthesize across all of them. It combines the precision of retrieval with the breadth of long context.
+
+## Architectural Implications
+
+### Caching Becomes Critical
+
+Processing a million tokens for every query is wasteful if the context does not change between queries. Both OpenAI and Google offer context caching (sometimes called prefix caching), where you pay the full cost once for a long context, and subsequent queries against the same context are cheaper.
+
+```python
+# Context caching pattern (conceptual)
+# Pay once to process the codebase
+cache_id = client.cache.create(
+    model="gpt-5.4",
+    messages=[{"role": "system", "content": codebase_context}],
+)
+
+# Subsequent queries reuse the cached context
+response = client.chat.completions.create(
+    model="gpt-5.4",
+    cache_id=cache_id,
+    messages=[{"role": "user", "content": "Find potential SQL injection vulnerabilities."}],
+)
+```
+
+For applications that repeatedly query against the same document collection (customer support over product docs, coding assistants over a codebase), caching transforms the economics from "expensive per query" to "expensive once, cheap thereafter."
+
+### Memory Architecture Evolves
+
+Million-token contexts create interesting possibilities for agent memory. Instead of maintaining a separate memory store and retrieving from it, an agent can keep its entire interaction history in context. For [multi-agent systems](/blog/end-to-end-multi-agent-systems-design-patterns-from-ieee-cai-2026), shared context between agents becomes feasible without a separate memory backend.
+
+The limitation is that context is ephemeral (it exists for the duration of a session) while memory should be persistent. Hybrid approaches, using long context for session-level memory and a [knowledge graph or database](/blog/knowledge-graphs-meet-llms-structured-rag-architectures) for persistent memory, are likely the practical pattern.
+
+### Evaluation Needs New Benchmarks
+
+RULER (a benchmark for long-context retrieval and reasoning) has become the standard test for million-token models. Nemotron 3 Super scores 91.75% at 1M tokens, while GPT-OSS scores 22.30% at the same length. This enormous gap shows that advertising a context window length is meaningless without demonstrating that the model can actually use that context.
+
+When evaluating models for long-context applications, do not trust the advertised context length. Test with your actual use case at your actual context length. The "lost in the middle" degradation is model-specific and task-specific.
+
+## Practical Recommendations
+
+**Start with retrieval, add context breadth gradually.** Do not redesign your entire pipeline around million-token contexts. Instead, use the longer context to include more retrieved results, providing the model with better coverage without abandoning the relevance filtering that retrieval provides.
+
+**Invest in context caching.** If your application queries the same base context repeatedly, caching reduces costs dramatically. This is especially valuable for coding assistants, document Q&A systems, and domain-specific agents.
+
+**Structure your prompts.** Even with a million tokens, the model's attention is not uniform. Use clear headers, numbered sections, and explicit references to help the model attend to relevant content. Place the query and the most relevant context near the end of the prompt.
+
+**Monitor actual context usage.** Track how much of your available context window you actually use in production. If 90% of queries use less than 50K tokens, optimizing for the million-token case might not be worth the investment.
+
+**Test for degradation.** Measure answer quality as a function of context length for your specific use case. If quality drops at 500K tokens, your effective context window is 500K regardless of what the model card says.
+
+## Key Takeaways
+
+- Three major models now ship with million-token context windows (GPT-5.4, Gemini 3.1, Nemotron 3 Super), making this the new frontier standard.
+- Full-codebase analysis, document collection processing, and elimination of retrieval for small corpora are the clearest practical benefits.
+- Cost and latency scale with context length, making "just put everything in the prompt" impractical for high-volume applications.
+- The "lost in the middle" problem means models attend unevenly to long contexts; organizing input by relevance still matters.
+- RAG and long context are complementary: use retrieval for relevance ranking, use long context to include more retrieved results ("fat RAG").
+- Context caching transforms economics for applications that repeatedly query the same base context.
+- Advertised context length is meaningless without empirical validation; test models at your actual context length with your actual tasks.
+- Monitor and measure context usage in production rather than assuming every query needs the full million tokens.

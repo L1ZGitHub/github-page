@@ -1,0 +1,238 @@
+---
+title: "GliNER2: Unified Entity and Relation Extraction in One Framework"
+description: "GliNER2 merges NER, relation extraction, text classification, and structured data extraction into a single schema-driven inference call"
+date: "2026-03-30"
+dateModified: "2026-03-30"
+status: "draft"
+category: "NLP & Privacy"
+tags: ["NER", "Relation Extraction", "GliNER", "Information Extraction"]
+difficulty: "intermediate"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+Information extraction from unstructured text has traditionally required a pipeline of separate models: one for named entity recognition (NER), another for relation extraction, possibly a third for text classification. Each model has its own training data requirements, inference latency, and failure modes. GliNER2, released in early 2026, collapses these into a single framework with a schema-driven approach that handles multiple extraction tasks in one forward pass.
+
+This is practically useful for anyone building [knowledge graph construction pipelines](/blog/knowledge-graphs-meet-llms-structured-rag-architectures), document processing systems, or RAG applications that need structured data from raw text.
+
+## The Problem with Multi-Model Extraction Pipelines
+
+A typical extraction pipeline in production looks something like this:
+
+1. NER model identifies entities (people, organizations, dates, amounts)
+2. Coreference resolution links mentions of the same entity
+3. Relation extraction model identifies relationships between entities
+4. Classification model categorizes the overall document
+5. Post-processing reconciles outputs across models
+
+Each step introduces latency, error propagation (a missed entity in step 1 means a missed relation in step 3), and engineering overhead. Deploying five models is five times the infrastructure, monitoring, and versioning complexity of deploying one.
+
+LLM-based extraction has been an alternative, but it has its own issues: higher latency, higher cost per document, less consistent output formatting, and the need for carefully tuned prompts that drift as models update.
+
+## What GliNER2 Does Differently
+
+GliNER2's core shift is schema-driven extraction. Instead of training separate models for each task, you define a declarative schema that specifies what you want to extract, and the model handles all tasks in a single inference call.
+
+```python
+from gliner import GLiNER
+
+model = GLiNER.from_pretrained("gliner-multitask-v2")
+
+text = """
+Apple Inc. announced on March 15, 2026 that CEO Tim Cook will present
+the new Vision Pro 3 headset at a special event in Cupertino. The device
+is expected to retail at $2,499 and compete directly with Meta's Quest 5.
+"""
+
+# Define extraction schema
+schema = {
+    "entities": [
+        {"label": "COMPANY", "description": "Corporation or business entity"},
+        {"label": "PERSON", "description": "Named individual"},
+        {"label": "PRODUCT", "description": "Commercial product or device"},
+        {"label": "DATE", "description": "Calendar date"},
+        {"label": "MONEY", "description": "Monetary amount"},
+        {"label": "LOCATION", "description": "Geographic location"},
+    ],
+    "relations": [
+        {"label": "CEO_OF", "source": "PERSON", "target": "COMPANY"},
+        {"label": "MANUFACTURES", "source": "COMPANY", "target": "PRODUCT"},
+        {"label": "COMPETES_WITH", "source": "PRODUCT", "target": "PRODUCT"},
+        {"label": "PRICED_AT", "source": "PRODUCT", "target": "MONEY"},
+    ],
+    "classification": {
+        "labels": ["product_announcement", "earnings_report", "legal_filing"],
+    },
+}
+
+result = model.extract(text, schema)
+```
+
+The output is a structured object containing all entities, their positions in the text, all detected relations between entities, and the document classification. One model call, one latency hit, one set of results.
+
+### Why Schema-Driven Matters
+
+The schema approach has several practical advantages:
+
+**Adaptability without retraining.** Need to extract a new entity type? Add it to the schema with a description. The model generalizes to new categories based on the textual description, similar to how zero-shot classification works. You do not need to collect training data and fine-tune for every new use case.
+
+**Consistency across tasks.** Because entities and relations are extracted in the same forward pass, the model has access to the full context for all decisions. A relation extraction model that runs after NER cannot reconsider entity boundaries, but a unified model can.
+
+**Simpler deployment.** One model, one API endpoint, one set of hardware requirements. For teams that have been running separate NER and relation extraction models, the infrastructure simplification alone justifies the switch.
+
+## Under the Hood
+
+GliNER2 builds on the original GliNER architecture (a bidirectional encoder with span-based entity extraction) and extends it with:
+
+### Multi-task span representation
+
+Each candidate span (substring of the input) gets a representation that is scored against multiple task heads simultaneously. The same span representation is used to determine if it is an entity, what type of entity it is, and what relations it participates in.
+
+```python
+# Simplified architecture overview
+class GliNER2Architecture:
+    def __init__(self, encoder, entity_head, relation_head, class_head):
+        self.encoder = encoder  # bidirectional transformer
+        self.entity_head = entity_head
+        self.relation_head = relation_head
+        self.class_head = class_head
+
+    def forward(self, tokens, schema):
+        # Encode input text
+        hidden = self.encoder(tokens)
+
+        # Generate span representations for all candidate spans
+        spans = self.enumerate_spans(hidden, max_length=12)
+
+        # Score spans against entity schema
+        entity_scores = self.entity_head(spans, schema["entities"])
+
+        # Score span pairs against relation schema
+        entity_pairs = self.generate_pairs(spans, entity_scores)
+        relation_scores = self.relation_head(entity_pairs, schema["relations"])
+
+        # Classify full document
+        doc_repr = hidden.mean(dim=1)
+        class_scores = self.class_head(doc_repr, schema["classification"])
+
+        return entity_scores, relation_scores, class_scores
+```
+
+### Textual schema encoding
+
+Entity types and relation types are defined as text descriptions, not integer labels. The model encodes these descriptions and compares them to span representations using learned similarity functions. This is what enables zero-shot generalization: a new entity type like "PHARMACEUTICAL_COMPOUND" works because the model understands the description, not because it was in the training data.
+
+### Joint training objective
+
+GliNER2 is trained with a combined loss that optimizes entity extraction, relation extraction, and classification simultaneously. The shared encoder learns representations that serve all three tasks, avoiding the fragmented representations that separate models develop.
+
+## Practical Performance
+
+The headline claim is that GliNER2 handles multiple extraction tasks in a single inference call without significant accuracy loss compared to task-specific models. In my testing, here is what I have found:
+
+**NER accuracy** is within 1-2 F1 points of dedicated NER models like SpanBERT or fine-tuned BERT-NER on standard benchmarks (CoNLL-2003, OntoNotes). For [domain-specific NLP](/blog/building-custom-tokenizers-for-domain-specific-nlp), the zero-shot capability with schema descriptions often outperforms a generic NER model that was not fine-tuned for the domain.
+
+**Relation extraction** is where the unified approach shines. Because the model sees entities and relations simultaneously, it avoids the cascading errors of pipeline approaches. On TACRED, GliNER2 matches or slightly exceeds pipeline-based systems.
+
+**Speed** is competitive with running a single NER model, since the relation extraction and classification heads add minimal overhead on top of the shared encoder. Processing a typical business document (500-2000 tokens) takes 20-50ms on a modern GPU.
+
+## Integration with RAG Pipelines
+
+GliNER2 is particularly useful as a preprocessing step in [RAG chatbot systems](/blog/building-a-rag-chatbot-from-scratch-with-python). Instead of indexing raw text and relying on the LLM to extract information at query time, you can extract structured data at indexing time and store it alongside the text.
+
+```python
+from gliner import GLiNER
+
+model = GLiNER.from_pretrained("gliner-multitask-v2")
+
+def enrich_document_for_rag(document, schema):
+    """Extract structured data at indexing time for richer retrieval."""
+    result = model.extract(document.text, schema)
+
+    # Store extracted entities as metadata for filtering
+    document.metadata["entities"] = [
+        {"text": e.text, "type": e.label, "start": e.start, "end": e.end}
+        for e in result.entities
+    ]
+
+    # Store relations for graph-based retrieval
+    document.metadata["relations"] = [
+        {"source": r.source.text, "relation": r.label, "target": r.target.text}
+        for r in result.relations
+    ]
+
+    # Store classification for pre-filtering
+    document.metadata["category"] = result.classification.label
+
+    return document
+```
+
+This approach enables hybrid retrieval: you can combine vector similarity search with metadata filtering (e.g., "find documents about COMPANY:Apple with PRODUCT relations") for more precise results.
+
+## Comparison with LLM-Based Extraction
+
+The obvious question: why not just use an LLM with a structured output prompt?
+
+| Factor | GliNER2 | LLM-based extraction |
+|--------|---------|---------------------|
+| Latency | 20-50ms per document | 500ms-2s per document |
+| Cost per document | ~$0.001 (self-hosted) | $0.01-0.05 (API) |
+| Output consistency | Deterministic | Variable formatting |
+| Entity boundary precision | Token-level | Approximate |
+| Scalability | 1000+ docs/sec on single GPU | 10-50 docs/sec via API |
+| Complex reasoning | Limited | Strong |
+
+GliNER2 wins on speed, cost, and consistency. LLMs win on complex extraction tasks that require reasoning about context, implied relationships, or ambiguous entity boundaries. The practical answer is often to use GliNER2 for high-volume structured extraction and escalate to an LLM for edge cases that require reasoning.
+
+## When Not to Use GliNER2
+
+The schema-driven approach has limitations:
+
+**Deeply nested structures.** If your extraction target is a complex JSON structure with nested objects, optional fields, and conditional logic, an LLM with structured output (or a specialized parser) will handle it better. GliNER2 works best with flat entity-relation structures.
+
+**Long documents.** The bidirectional encoder has a context limit (typically 512-1024 tokens). For longer documents, you need to chunk the text and run extraction on each chunk, then reconcile entities across chunks. This is doable but adds complexity.
+
+**Implicit relations.** GliNER2 excels at extracting relations that are explicitly stated in text. For relations that require multi-step inference ("Company A acquired Company B, and Company B's CEO is Person C, therefore Person C now works for Company A"), an LLM or a reasoning system is more appropriate.
+
+## Getting Started
+
+```python
+# Install
+# pip install gliner
+
+from gliner import GLiNER
+
+# Load model (downloads from Hugging Face on first run)
+model = GLiNER.from_pretrained("gliner-multitask-v2")
+
+# Define a minimal schema for your domain
+schema = {
+    "entities": [
+        {"label": "TECHNOLOGY", "description": "Software framework or technology"},
+        {"label": "METRIC", "description": "Performance measurement or benchmark score"},
+    ],
+    "relations": [
+        {"label": "ACHIEVES", "source": "TECHNOLOGY", "target": "METRIC"},
+    ],
+}
+
+text = "GliNER2 achieves 92.1 F1 on CoNLL-2003 and processes 1000 documents per second."
+result = model.extract(text, schema)
+
+for entity in result.entities:
+    print(f"  {entity.label}: {entity.text}")
+for relation in result.relations:
+    print(f"  {relation.source.text} --{relation.label}--> {relation.target.text}")
+```
+
+The model is small enough to run on a single GPU or even CPU for low-volume use cases. For production deployments processing thousands of documents per second, a single A10G or T4 GPU is sufficient.
+
+## Key Takeaways
+
+- GliNER2 unifies named entity recognition, relation extraction, text classification, and structured data extraction into a single framework with one inference call.
+- The schema-driven approach allows you to define extraction targets declaratively, enabling zero-shot generalization to new entity and relation types without retraining.
+- NER accuracy is within 1-2 F1 points of dedicated models, while relation extraction benefits from joint extraction with entities (no cascading errors).
+- At 20-50ms per document on GPU, GliNER2 is 10-40x faster than LLM-based extraction and 10-50x cheaper when self-hosted.
+- Integration with RAG pipelines allows structured metadata extraction at indexing time, enabling hybrid retrieval that combines vector search with entity-based filtering.
+- Limitations include a context window cap (512-1024 tokens), difficulty with deeply nested output structures, and weaker performance on implicit relations requiring multi-step reasoning.
+- For most production extraction workloads, GliNER2 handles the bulk of documents while LLMs handle edge cases requiring complex reasoning.

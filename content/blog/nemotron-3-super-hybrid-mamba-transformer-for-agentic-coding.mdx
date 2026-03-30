@@ -1,0 +1,169 @@
+---
+title: "Nemotron 3 Super: The Hybrid Mamba-Transformer Built for Agentic Coding"
+description: "NVIDIA's Nemotron 3 Super combines Mamba and Transformer layers in a 120B MoE model scoring 60.47% on SWE-Bench Verified"
+date: "2026-03-30"
+dateModified: "2026-03-30"
+status: "draft"
+category: "AI & ML"
+tags: ["Nemotron", "Mamba", "Code Generation", "NVIDIA"]
+difficulty: "advanced"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+NVIDIA released Nemotron 3 Super on March 11, 2026, and the technical choices are worth paying attention to. This is not another dense Transformer with more parameters. It is a 120B parameter hybrid Mamba-Transformer Mixture-of-Experts model with only 12B active parameters per token, a 1M token context window, and a specific focus on agentic coding workflows.
+
+The headline benchmark: 60.47% on SWE-Bench Verified using the OpenHands scaffolding, which makes it the top open-weight model for real software engineering tasks. That number alone makes this worth discussing.
+
+## The Architecture: Three Ideas Combined
+
+Nemotron 3 Super is interesting because it combines three architectural innovations that are usually studied in isolation: state-space models (Mamba), attention-based Transformers, and Mixture-of-Experts routing.
+
+### Mamba Layers for Efficiency
+
+Mamba is a state-space model that processes sequences in linear time relative to sequence length, compared to the quadratic complexity of self-attention. NVIDIA uses Mamba layers for the "memory" component of the architecture, where the model needs to maintain state over long contexts without the computational cost of attending to every previous token.
+
+The benefit is concrete: Mamba layers deliver 4x higher memory and compute efficiency compared to equivalent Transformer layers. For a model with a 1M token context window, this matters enormously. Without Mamba, attending to a million tokens would be prohibitively expensive.
+
+### Transformer Layers for Reasoning
+
+Pure Mamba models have a known limitation: they can struggle with tasks that require precise retrieval from arbitrary positions in the context. The classic example is "what was the value of variable X defined 500,000 tokens ago?" Attention mechanisms handle this naturally because they can attend directly to any position.
+
+Nemotron 3 Super interleaves Mamba and Transformer layers. The Mamba layers handle efficient sequence compression, while the Transformer layers handle precise reasoning and retrieval. This hybrid approach gets the efficiency of state-space models without sacrificing the reasoning capabilities that make Transformers effective for code.
+
+### MoE for Cost-Effective Scaling
+
+With 120B total parameters but only 12B active per token, Nemotron 3 Super uses MoE routing to keep inference costs manageable. The routing decides which expert subnetworks to activate for each token, based on the input.
+
+The combination yields throughput 2.2x higher than GPT-OSS 120B, a fully dense model of comparable total parameter count.
+
+## Why SWE-Bench Matters
+
+SWE-Bench Verified tests whether a model can solve real GitHub issues from popular open-source projects. Unlike synthetic coding benchmarks, these are actual bugs and feature requests that real developers filed and resolved. The model must read the issue, understand the codebase, identify the relevant files, and generate a working patch.
+
+Nemotron 3 Super's results:
+
+| Benchmark | Nemotron 3 Super | GPT-OSS 120B |
+|-----------|-----------------|--------------|
+| SWE-Bench Verified (OpenHands) | 60.47% | 41.90% |
+| SWE-Bench Multilingual | 45.78% | 30.80% |
+| RULER at 1M tokens | 91.75% | 22.30% |
+
+The RULER score at 1M tokens is particularly striking. This benchmark tests the model's ability to retrieve and reason over information at various positions within a million-token context. The 91.75% score validates the hybrid Mamba-Transformer architecture for long-context tasks. GPT-OSS's 22.30% at the same context length shows the scaling challenge for pure Transformer architectures.
+
+For agentic coding, the long-context capability is crucial. A software development agent can load an entire codebase into context, navigate between files, understand cross-file dependencies, and generate patches that account for the full project structure. Without long-context support, agents must segment the codebase and lose the global view.
+
+## The Agentic Coding Pattern
+
+Nemotron 3 Super is designed for a specific usage pattern: an autonomous agent that receives a task, loads relevant code into context, reasons about the solution, and generates changes.
+
+```python
+# Agentic coding with Nemotron 3 Super via NVIDIA NIM
+import openai
+
+client = openai.OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key="your-nvidia-api-key",
+)
+
+# Load the full codebase context
+codebase_context = load_repository_files("./src/")
+
+response = client.chat.completions.create(
+    model="nvidia/nemotron-3-super-120b-a12b",
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "You are a software engineer. Analyze the codebase, "
+                "identify the bug described in the issue, and generate "
+                "a minimal patch that fixes it."
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Codebase:\n{codebase_context}\n\nIssue: {issue_description}",
+        },
+    ],
+    max_tokens=4096,
+)
+```
+
+This pattern differs from retrieval-augmented code generation, where you first search for relevant files and feed only those to the model. With a 1M token context and efficient Mamba layers, you can skip the retrieval step for small-to-medium codebases and let the model see everything at once.
+
+The trade-off is cost. Even with MoE routing and 12B active parameters, processing a million tokens is not free. For large monorepos, you still need retrieval. But for repositories under 100K lines of code, the "load everything" approach is now viable.
+
+## How It Compares to Other Code Models
+
+The coding model landscape in early 2026 has several strong contenders:
+
+**DeepSeek V3** remains the efficiency benchmark, with its remarkably low training cost and strong coding performance. But DeepSeek has not released a model specifically optimized for the agentic coding pattern with million-token context. For teams building [autonomous coding agents](/blog/end-to-end-multi-agent-systems-design-patterns-from-ieee-cai-2026), context length is a differentiator.
+
+**Kimi K2.5** from Moonshot AI leads on some coding benchmarks but is primarily available through API access, limiting self-hosting options. As covered in the [Chinese LLM panorama](/blog/glm5-kimi-deepseek-panorama-2026-chinese-llms), Chinese models often have access constraints for non-Chinese organizations.
+
+**GPT-5.4** has strong coding capabilities in its unified architecture, but it is a closed model. For organizations that need to self-host their coding agent (for IP protection, air-gapped environments, or cost control at scale), Nemotron 3 Super provides an open-weight alternative.
+
+## The NVIDIA Open Model License
+
+Nemotron 3 Super ships under the NVIDIA Open Model License, which permits commercial use with some conditions. It is not Apache 2.0, so read the terms carefully. The key provisions:
+
+- Commercial use is permitted
+- Redistribution of model weights is permitted
+- Derived works are permitted
+- NVIDIA retains certain patent rights
+
+This puts it in a middle ground between fully permissive licenses (like Mistral's Apache 2.0 releases) and [restrictive licenses that limit practical open-source use](/blog/agents-plus-open-weights-linux-of-agents-or-security-nightmare). For most enterprise use cases, the license terms are workable, but have your legal team review them before production deployment.
+
+## Deployment and Infrastructure
+
+### NVIDIA NIM
+
+The simplest deployment path is through NVIDIA NIM (NVIDIA Inference Microservices), which provides containerized, optimized inference for Nemotron models. NIM handles quantization, batching, and hardware-specific optimization automatically.
+
+```bash
+# Deploy Nemotron 3 Super via NIM
+docker pull nvcr.io/nim/nvidia/nemotron-3-super-120b-a12b:latest
+
+docker run --gpus all -p 8000:8000 \
+    -e NVIDIA_API_KEY="your-key" \
+    nvcr.io/nim/nvidia/nemotron-3-super-120b-a12b:latest
+```
+
+### Self-Hosted with vLLM
+
+For more control, vLLM supports Nemotron 3 Super with tensor parallelism across multiple GPUs. The MoE architecture with 12B active parameters means you need enough VRAM to hold the full 120B parameters (roughly 240GB in FP16) but compute per token scales with the active parameters.
+
+A practical deployment uses 4x A100 80GB or 2x H100 80GB with tensor parallelism:
+
+```python
+from vllm import LLM
+
+llm = LLM(
+    model="nvidia/nemotron-3-super-120b-a12b",
+    tensor_parallel_size=4,
+    max_model_len=131072,  # 128K tokens, adjust as needed
+    gpu_memory_utilization=0.9,
+)
+```
+
+### Context Length vs. Throughput
+
+The 1M token context is available, but using it fully comes at a cost. Most deployments will want to configure a lower maximum context length (64K-256K) for better throughput and reserve the full million tokens for specific use cases that genuinely need it, like full-codebase analysis.
+
+## Implications for the Hardware Stack
+
+It is no coincidence that NVIDIA designed a model architecture that runs optimally on NVIDIA hardware. The Mamba layers benefit from custom CUDA kernels that NVIDIA can optimize specifically for their GPUs. The Transformer layers use FlashAttention, another NVIDIA-optimized component.
+
+This creates a moat: while the model weights are open, the performance advantage of running on NVIDIA hardware (versus, say, [Huawei Ascend chips](/blog/chinese-ai-sovereign-hardware-glm5-huawei-ascend)) is significant. The model is theoretically portable, but practically, you get the best throughput-per-dollar on NVIDIA GPUs with NVIDIA's optimized runtime.
+
+This is a smart strategic move. By releasing a high-performance open model that runs best on their hardware, NVIDIA increases the value proposition of their GPU ecosystem for AI workloads.
+
+## Key Takeaways
+
+- Nemotron 3 Super is a 120B parameter hybrid Mamba-Transformer MoE model with 12B active parameters, designed for agentic coding with a 1M token context window.
+- It scores 60.47% on SWE-Bench Verified, the highest among open-weight models, and 91.75% on RULER at 1M tokens, validating the hybrid architecture for long-context tasks.
+- The Mamba layers provide 4x memory and compute efficiency for long sequences, while Transformer layers handle precise reasoning and retrieval.
+- For codebases under 100K lines, the "load everything into context" approach is now viable, skipping the retrieval step entirely.
+- The model ships under NVIDIA's Open Model License (commercial use permitted but not Apache 2.0) and runs best on NVIDIA hardware via NIM.
+- The hybrid Mamba-Transformer approach addresses a real limitation of both architectures: pure Transformers are too expensive at 1M tokens, and pure Mamba struggles with precise retrieval.
+- NVIDIA's open model strategy strengthens their hardware ecosystem by creating high-performance models optimized for their GPUs.
