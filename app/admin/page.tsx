@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { FileText, Calendar, Eye, Clock, Check } from "lucide-react"
+import { FileText, Calendar, Eye, Clock, Check, AlertCircle, Loader2 } from "lucide-react"
 import { DndContext, DragOverlay, type DragStartEvent, type DragEndEvent } from "@dnd-kit/core"
 import AdminCalendar, { type CalendarData } from "./components/calendar"
 import DraftCard, { DraftCardOverlay, type DraftArticle } from "./components/draft-card"
+import { categoryColors, statusConfig } from "./lib/constants"
 
 const API_BASE = "/api/blog"
 
@@ -24,20 +25,6 @@ interface Article {
 }
 
 type Status = "draft" | "scheduled" | "published"
-
-const statusConfig: Record<Status, { label: string; classes: string }> = {
-  draft: { label: "Draft", classes: "bg-yellow-100 text-yellow-800" },
-  scheduled: { label: "Scheduled", classes: "bg-blue-100 text-blue-800" },
-  published: { label: "Published", classes: "bg-green-100 text-green-800" },
-}
-
-const categoryColors: Record<string, string> = {
-  "AI & ML": "bg-amber-100 text-amber-800",
-  "RAG Systems": "bg-violet-100 text-violet-800",
-  "NLP & Privacy": "bg-emerald-100 text-emerald-800",
-  "Engineering": "bg-blue-100 text-blue-800",
-  "Tutorials": "bg-orange-100 text-orange-800",
-}
 
 function ArticleRow({ article }: { article: Article }) {
   const status = statusConfig[article.status]
@@ -86,16 +73,25 @@ function ArticleRow({ article }: { article: Article }) {
   )
 }
 
-function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+interface ToastData {
+  message: string
+  type: "success" | "error"
+}
+
+function Toast({ toast, onDone }: { toast: ToastData; onDone: () => void }) {
   useEffect(() => {
     const t = setTimeout(onDone, 2500)
     return () => clearTimeout(t)
   }, [onDone])
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg">
-      <Check className="size-4" />
-      {message}
+    <div
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white shadow-lg ${
+        toast.type === "error" ? "bg-red-600" : "bg-green-600"
+      }`}
+    >
+      {toast.type === "error" ? <AlertCircle className="size-4" /> : <Check className="size-4" />}
+      {toast.message}
     </div>
   )
 }
@@ -106,18 +102,20 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [calendarLoading, setCalendarLoading] = useState(true)
   const [activeDraft, setActiveDraft] = useState<DraftArticle | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastData | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const refreshAll = useCallback(async () => {
     try {
+      const t = Date.now()
       const [artRes, calRes] = await Promise.all([
-        fetch(`${API_BASE}/articles`, { credentials: "include" }),
-        fetch(`${API_BASE}/calendar`, { credentials: "include" }),
+        fetch(`${API_BASE}/articles?t=${t}`, { credentials: "include", cache: "no-store" }),
+        fetch(`${API_BASE}/calendar?t=${t}`, { credentials: "include", cache: "no-store" }),
       ])
       if (artRes.ok) setArticles(await artRes.json())
       if (calRes.ok) setCalendarData(await calRes.json())
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error("[admin] refresh failed:", e)
     } finally {
       setLoading(false)
       setCalendarLoading(false)
@@ -149,6 +147,7 @@ export default function AdminDashboard() {
     // Validate it looks like a date string (YYYY-MM-DD)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return
 
+    setBusy(true)
     try {
       const res = await fetch(`${API_BASE}/articles/${slug}/schedule`, {
         method: "POST",
@@ -162,14 +161,17 @@ export default function AdminDashboard() {
         throw new Error(err || `HTTP ${res.status}`)
       }
 
-      setToast(`Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`)
+      setToast({ message: `Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`, type: "success" })
       await refreshAll()
     } catch (e) {
-      console.error("Failed to schedule article:", e)
+      setToast({ message: "Failed to schedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
+    } finally {
+      setBusy(false)
     }
   }
 
   async function handleUnschedule(slug: string) {
+    setBusy(true)
     try {
       const res = await fetch(`${API_BASE}/articles/${slug}/draft`, {
         method: "POST",
@@ -177,10 +179,12 @@ export default function AdminDashboard() {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      setToast("Reverted to draft")
+      setToast({ message: "Reverted to draft", type: "success" })
       await refreshAll()
     } catch (e) {
-      console.error("Failed to unschedule:", e)
+      setToast({ message: "Failed to unschedule: " + (e instanceof Error ? e.message : "Unknown error"), type: "error" })
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -189,10 +193,16 @@ export default function AdminDashboard() {
   }
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div>
+    <DndContext onDragStart={busy ? undefined : handleDragStart} onDragEnd={busy ? undefined : handleDragEnd}>
+      <div className="relative">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Blog Admin</h1>
+          {busy && (
+            <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-gray-400">
+              <Loader2 className="size-3 animate-spin" />
+              Saving...
+            </span>
+          )}
           <p className="mt-1 text-sm text-gray-500">
             {articles.length} articles total —{" "}
             {grouped.draft.length} drafts, {grouped.scheduled.length} scheduled, {grouped.published.length} published
@@ -232,7 +242,6 @@ export default function AdminDashboard() {
         <AdminCalendar
           data={calendarData}
           loading={calendarLoading}
-          onRefresh={refreshAll}
           onUnschedule={handleUnschedule}
         />
 
@@ -284,8 +293,8 @@ export default function AdminDashboard() {
         {activeDraft ? <DraftCardOverlay article={activeDraft} /> : null}
       </DragOverlay>
 
-      {/* Success toast */}
-      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      {/* Toast notification */}
+      {toast && <Toast toast={toast} onDone={() => setToast(null)} />}
     </DndContext>
   )
 }

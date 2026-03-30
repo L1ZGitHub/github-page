@@ -14,6 +14,8 @@ export default function AdminLayout({
 }>) {
   return (
     <>
+      {/* Hide site header/footer on admin pages.
+          Route groups would be cleaner but require moving all public pages into (public)/. */}
       <style>{`
         header, footer { display: none !important; }
         main { padding-top: 0 !important; }

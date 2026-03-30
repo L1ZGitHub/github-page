@@ -5,8 +5,6 @@ import Link from "next/link"
 import { useDroppable } from "@dnd-kit/core"
 import { ChevronLeft, ChevronRight, Calendar, X } from "lucide-react"
 
-const API_BASE = "/api/blog"
-
 export interface CalendarArticle {
   slug: string
   title: string
@@ -97,11 +95,10 @@ function DayCell({
 interface AdminCalendarProps {
   data: CalendarData
   loading: boolean
-  onRefresh: () => void
   onUnschedule?: (slug: string) => void
 }
 
-export default function AdminCalendar({ data, loading, onRefresh, onUnschedule }: AdminCalendarProps) {
+export default function AdminCalendar({ data, loading, onUnschedule }: AdminCalendarProps) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())

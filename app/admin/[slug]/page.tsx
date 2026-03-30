@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, Calendar, Clock, User, BarChart3, Tag, Link2 } from "lucide-react"
-import { getPostBySlug, getAllSlugs } from "@/lib/mdx"
+import { getPostBySlug } from "@/lib/mdx"
 import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
 import ArticleActions from "../components/article-actions"
 
@@ -9,10 +9,6 @@ export const dynamic = "force-dynamic"
 
 interface Props {
   params: Promise<{ slug: string }>
-}
-
-export async function generateStaticParams() {
-  return getAllSlugs().map((slug) => ({ slug }))
 }
 
 const statusClasses: Record<string, string> = {
