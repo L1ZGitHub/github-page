@@ -108,26 +108,25 @@ export default function AdminDashboard() {
   const [activeDraft, setActiveDraft] = useState<DraftArticle | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
-  const fetchArticles = useCallback(() => {
-    fetch(`${API_BASE}/articles`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setArticles(data))
-      .catch(() => setArticles([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const fetchCalendar = useCallback(() => {
-    fetch(`${API_BASE}/calendar`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setCalendarData(d))
-      .catch(() => setCalendarData({}))
-      .finally(() => setCalendarLoading(false))
+  const refreshAll = useCallback(async () => {
+    try {
+      const [artRes, calRes] = await Promise.all([
+        fetch(`${API_BASE}/articles`, { credentials: "include" }),
+        fetch(`${API_BASE}/calendar`, { credentials: "include" }),
+      ])
+      if (artRes.ok) setArticles(await artRes.json())
+      if (calRes.ok) setCalendarData(await calRes.json())
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+      setCalendarLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    fetchArticles()
-    fetchCalendar()
-  }, [fetchArticles, fetchCalendar])
+    refreshAll()
+  }, [refreshAll])
 
   const grouped: Record<Status, Article[]> = { draft: [], scheduled: [], published: [] }
   for (const a of articles) {
@@ -164,33 +163,10 @@ export default function AdminDashboard() {
       }
 
       setToast(`Scheduled for ${new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`)
-
-      // Optimistic update: move article from draft to scheduled locally
-      setArticles((prev) =>
-        prev.map((a) =>
-          a.slug === slug ? { ...a, status: "scheduled" as Status, scheduledDate: dateStr } : a
-        )
-      )
-      setCalendarData((prev) => {
-        const updated = { ...prev }
-        const article = articles.find((a) => a.slug === slug)
-        if (article) {
-          if (!updated[dateStr]) updated[dateStr] = []
-          updated[dateStr] = [...updated[dateStr], { slug, title: article.title, category: article.category, status: "scheduled" }]
-        }
-        return updated
-      })
-
-      // Also refresh from API after a short delay (git push takes a moment)
-      setTimeout(() => { fetchArticles(); fetchCalendar() }, 2000)
+      await refreshAll()
     } catch (e) {
       console.error("Failed to schedule article:", e)
     }
-  }
-
-  function handleRefresh() {
-    fetchArticles()
-    fetchCalendar()
   }
 
   async function handleUnschedule(slug: string) {
@@ -202,23 +178,7 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       setToast("Reverted to draft")
-
-      // Optimistic update
-      setArticles((prev) =>
-        prev.map((a) =>
-          a.slug === slug ? { ...a, status: "draft" as Status, scheduledDate: "" } : a
-        )
-      )
-      setCalendarData((prev) => {
-        const updated: CalendarData = {}
-        for (const [date, arts] of Object.entries(prev)) {
-          const filtered = arts.filter((a) => a.slug !== slug)
-          if (filtered.length > 0) updated[date] = filtered
-        }
-        return updated
-      })
-
-      setTimeout(() => { fetchArticles(); fetchCalendar() }, 2000)
+      await refreshAll()
     } catch (e) {
       console.error("Failed to unschedule:", e)
     }
@@ -272,7 +232,7 @@ export default function AdminDashboard() {
         <AdminCalendar
           data={calendarData}
           loading={calendarLoading}
-          onRefresh={handleRefresh}
+          onRefresh={refreshAll}
           onUnschedule={handleUnschedule}
         />
 
