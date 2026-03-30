@@ -1,20 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Calendar, Check, Clock, FileText } from "lucide-react"
-import type { ArticleStatus } from "@/lib/mdx"
 
 const API_BASE = "/api/blog"
+
+type ArticleStatus = "draft" | "scheduled" | "published"
 
 interface ArticleActionsProps {
   slug: string
   status: ArticleStatus
   scheduledDate?: string
+  onAction?: () => void
 }
 
-export default function ArticleActions({ slug, status, scheduledDate }: ArticleActionsProps) {
-  const router = useRouter()
+export default function ArticleActions({ slug, status, scheduledDate, onAction }: ArticleActionsProps) {
   const [date, setDate] = useState(scheduledDate ?? "")
   const [loading, setLoading] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -40,7 +40,7 @@ export default function ArticleActions({ slug, status, scheduledDate }: ArticleA
       }
 
       setMessage({ type: "success", text: `Article ${action === "schedule" ? "scheduled" : action === "publish" ? "published" : "reverted to draft"} successfully.` })
-      router.refresh()
+      onAction?.()
     } catch (e) {
       setMessage({ type: "error", text: e instanceof Error ? e.message : "Unknown error" })
     } finally {

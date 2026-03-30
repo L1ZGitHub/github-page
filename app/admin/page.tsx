@@ -1,51 +1,77 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { FileText, Calendar, Eye, Clock } from "lucide-react"
-import { getAllPostsUnfiltered } from "@/lib/blog"
-import { getCategoryColors } from "@/lib/category-colors"
-import type { BlogPostMeta, ArticleStatus } from "@/lib/mdx"
 import AdminCalendar from "./components/calendar"
 
-const statusConfig: Record<ArticleStatus, { label: string; classes: string }> = {
+const API_BASE = "/api/blog"
+
+interface Article {
+  slug: string
+  title: string
+  description: string
+  date: string
+  dateModified: string
+  status: "draft" | "scheduled" | "published"
+  scheduledDate: string
+  category: string
+  difficulty: string
+  readTime: string
+  outgoing_links: string[]
+}
+
+type Status = "draft" | "scheduled" | "published"
+
+const statusConfig: Record<Status, { label: string; classes: string }> = {
   draft: { label: "Draft", classes: "bg-yellow-100 text-yellow-800" },
   scheduled: { label: "Scheduled", classes: "bg-blue-100 text-blue-800" },
   published: { label: "Published", classes: "bg-green-100 text-green-800" },
 }
 
-const tabConfig: { status: ArticleStatus; icon: typeof FileText }[] = [
+const categoryColors: Record<string, string> = {
+  "AI & ML": "bg-amber-100 text-amber-800",
+  "RAG Systems": "bg-violet-100 text-violet-800",
+  "NLP & Privacy": "bg-emerald-100 text-emerald-800",
+  "Engineering": "bg-blue-100 text-blue-800",
+  "Tutorials": "bg-orange-100 text-orange-800",
+}
+
+const tabConfig: { status: Status; icon: typeof FileText }[] = [
   { status: "draft", icon: FileText },
   { status: "scheduled", icon: Calendar },
   { status: "published", icon: Eye },
 ]
 
-function ArticleRow({ post }: { post: BlogPostMeta }) {
-  const status = statusConfig[post.status]
-  const category = getCategoryColors(post.category)
+function ArticleRow({ article }: { article: Article }) {
+  const status = statusConfig[article.status]
+  const catClass = categoryColors[article.category] || "bg-gray-100 text-gray-800"
 
   return (
     <Link
-      href={`/admin/${post.slug}`}
+      href={`/admin/${article.slug}`}
       className="group flex items-center gap-3 rounded-lg border border-gray-100 px-4 py-3 transition-colors hover:border-gray-200 hover:bg-gray-50"
     >
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-gray-900 group-hover:text-gray-700">
-          {post.title}
+          {article.title}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${category.classes}`}>
-            {post.category}
+          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${catClass}`}>
+            {article.category}
           </span>
           <span className="flex items-center gap-1">
             <Calendar className="size-3" />
-            {new Date(post.date).toLocaleDateString("en-US", {
+            {new Date(article.date).toLocaleDateString("en-US", {
               year: "numeric",
               month: "short",
               day: "numeric",
             })}
           </span>
-          {post.scheduledDate && (
+          {article.scheduledDate && (
             <span className="flex items-center gap-1 text-blue-600">
               <Clock className="size-3" />
-              Scheduled: {new Date(post.scheduledDate).toLocaleDateString("en-US", {
+              Scheduled: {new Date(article.scheduledDate).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
               })}
@@ -53,7 +79,7 @@ function ArticleRow({ post }: { post: BlogPostMeta }) {
           )}
           <span className="flex items-center gap-1">
             <Clock className="size-3" />
-            {post.readTime}
+            {article.readTime}
           </span>
         </div>
       </div>
@@ -65,33 +91,38 @@ function ArticleRow({ post }: { post: BlogPostMeta }) {
 }
 
 export default function AdminDashboard() {
-  const allPosts = getAllPostsUnfiltered()
+  const [articles, setArticles] = useState<Article[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const grouped: Record<ArticleStatus, BlogPostMeta[]> = {
-    draft: [],
-    scheduled: [],
-    published: [],
+  useEffect(() => {
+    fetch(`${API_BASE}/articles`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setArticles(data))
+      .catch(() => setArticles([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const grouped: Record<Status, Article[]> = { draft: [], scheduled: [], published: [] }
+  for (const a of articles) {
+    grouped[a.status]?.push(a)
   }
 
-  for (const post of allPosts) {
-    grouped[post.status].push(post)
+  if (loading) {
+    return <p className="py-16 text-center text-gray-400">Loading...</p>
   }
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Blog Admin</h1>
         <p className="mt-1 text-sm text-gray-500">
-          {allPosts.length} articles total —{" "}
+          {articles.length} articles total —{" "}
           {grouped.draft.length} drafts, {grouped.scheduled.length} scheduled, {grouped.published.length} published
         </p>
       </div>
 
-      {/* Calendar */}
       <AdminCalendar />
 
-      {/* Sections */}
       <div className="space-y-10">
         {tabConfig.map(({ status, icon: Icon }) => {
           const posts = grouped[status]
@@ -111,8 +142,8 @@ export default function AdminDashboard() {
                 <p className="py-4 text-sm text-gray-400">No {status} articles.</p>
               ) : (
                 <div className="space-y-2">
-                  {posts.map((post) => (
-                    <ArticleRow key={post.slug} post={post} />
+                  {posts.map((article) => (
+                    <ArticleRow key={article.slug} article={article} />
                   ))}
                 </div>
               )}

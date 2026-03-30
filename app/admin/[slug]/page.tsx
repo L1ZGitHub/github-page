@@ -1,50 +1,82 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import Link from "next/link"
-import { notFound } from "next/navigation"
 import { ArrowLeft, Calendar, Clock, User, BarChart3, Tag, Link2 } from "lucide-react"
-import { getPostBySlug, getAllSlugs } from "@/lib/mdx"
-import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
-import type { ArticleStatus } from "@/lib/mdx"
 import ArticleActions from "../components/article-actions"
 
-interface Props {
-  params: Promise<{ slug: string }>
+const API_BASE = "/api/blog"
+
+interface Article {
+  slug: string
+  title: string
+  description: string
+  date: string
+  dateModified: string
+  status: "draft" | "scheduled" | "published"
+  scheduledDate: string
+  category: string
+  difficulty: string
+  readTime: string
+  author: string
+  tags: string[]
+  outgoing_links: string[]
+  body?: string
 }
 
-const statusClasses: Record<ArticleStatus, string> = {
+const statusClasses: Record<string, string> = {
   draft: "bg-yellow-100 text-yellow-800",
   scheduled: "bg-blue-100 text-blue-800",
   published: "bg-green-100 text-green-800",
 }
 
-export async function generateStaticParams() {
-  return getAllSlugs().map((slug) => ({ slug }))
+const categoryColors: Record<string, { bg: string; color: string }> = {
+  "AI & ML": { bg: "#fffbeb", color: "#d97706" },
+  "RAG Systems": { bg: "#f5f3ff", color: "#7c3aed" },
+  "NLP & Privacy": { bg: "#ecfdf5", color: "#059669" },
+  "Engineering": { bg: "#eff6ff", color: "#2563eb" },
+  "Tutorials": { bg: "#fef3c7", color: "#d97706" },
 }
 
-function extractCrossReferences(html: string): string[] {
-  const regex = /href="\/blog\/([^"#]+)"/g
-  const slugs = new Set<string>()
-  let match
-  while ((match = regex.exec(html)) !== null) {
-    slugs.add(match[1])
-  }
-  return Array.from(slugs)
+const difficultyColors: Record<string, { bg: string; color: string }> = {
+  beginner: { bg: "#ecfdf5", color: "#059669" },
+  intermediate: { bg: "#fffbeb", color: "#d97706" },
+  advanced: { bg: "#fef2f2", color: "#dc2626" },
 }
 
-export default async function AdminArticleDetail({ params }: Props) {
-  const { slug } = await params
+export default function AdminArticleDetail() {
+  const params = useParams()
+  const slug = params.slug as string
+  const [article, setArticle] = useState<Article | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  let post
-  try {
-    post = await getPostBySlug(slug)
-  } catch {
-    notFound()
+  function loadArticle() {
+    setLoading(true)
+    fetch(`${API_BASE}/articles/${slug}?content=true`, { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((data) => setArticle(data))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
   }
 
-  const crossRefs = extractCrossReferences(post.content)
+  useEffect(() => {
+    loadArticle()
+  }, [slug])
+
+  if (loading) return <p className="py-16 text-center text-gray-400">Loading...</p>
+  if (error) return <p className="py-16 text-center text-red-500">Error: {error}</p>
+  if (!article) return <p className="py-16 text-center text-gray-400">Article not found</p>
+
+  const catStyle = categoryColors[article.category] || { bg: "#f3f4f6", color: "#374151" }
+  const diffStyle = difficultyColors[article.difficulty] || { bg: "#f3f4f6", color: "#374151" }
 
   return (
     <div>
-      {/* Back link */}
       <Link
         href="/admin"
         className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-900"
@@ -56,87 +88,80 @@ export default async function AdminArticleDetail({ params }: Props) {
       {/* Metadata panel */}
       <div className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-6">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[post.status]}`}
-          >
-            {post.status}
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[article.status]}`}>
+            {article.status}
           </span>
           <span
             className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-            style={getCategoryStyle(post.category)}
+            style={{ backgroundColor: catStyle.bg, color: catStyle.color }}
           >
-            {post.category}
+            {article.category}
           </span>
           <span
             className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-            style={getDifficultyStyle(post.difficulty)}
+            style={{ backgroundColor: diffStyle.bg, color: diffStyle.color }}
           >
             <span className="flex items-center gap-1">
               <BarChart3 className="size-3" />
-              {post.difficulty}
+              {article.difficulty}
             </span>
           </span>
         </div>
 
-        <h1 className="mb-4 text-2xl font-bold text-gray-900">{post.title}</h1>
-        <p className="mb-4 text-sm text-gray-600">{post.description}</p>
+        <h1 className="mb-4 text-2xl font-bold text-gray-900">{article.title}</h1>
+        <p className="mb-4 text-sm text-gray-600">{article.description}</p>
 
         <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
           <span className="flex items-center gap-1.5">
             <Calendar className="size-4" />
-            {new Date(post.date).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
+            {new Date(article.date).toLocaleDateString("en-US", {
+              year: "numeric", month: "long", day: "numeric",
             })}
           </span>
-          {post.scheduledDate && (
+          {article.scheduledDate && (
             <span className="flex items-center gap-1.5 text-blue-600">
               <Clock className="size-4" />
-              Scheduled: {new Date(post.scheduledDate).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
+              Scheduled: {new Date(article.scheduledDate).toLocaleDateString("en-US", {
+                year: "numeric", month: "long", day: "numeric",
               })}
             </span>
           )}
           <span className="flex items-center gap-1.5">
             <Clock className="size-4" />
-            {post.readTime}
+            {article.readTime}
           </span>
           <span className="flex items-center gap-1.5">
             <User className="size-4" />
-            {post.author}
+            {article.author}
           </span>
         </div>
 
-        {/* Tags */}
-        {post.tags.length > 0 && (
+        {article.tags.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Tag className="size-3.5 text-gray-400" />
-            {post.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700"
-              >
+            {article.tags.map((tag) => (
+              <span key={tag} className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700">
                 {tag}
               </span>
             ))}
           </div>
         )}
 
-        {/* Article actions */}
-        <ArticleActions slug={slug} status={post.status} scheduledDate={post.scheduledDate} />
+        <ArticleActions
+          slug={slug}
+          status={article.status as "draft" | "scheduled" | "published"}
+          scheduledDate={article.scheduledDate || undefined}
+          onAction={loadArticle}
+        />
 
-        {/* Cross-references */}
-        {crossRefs.length > 0 && (
+        {article.outgoing_links.length > 0 && (
           <div className="mt-4 border-t border-gray-200 pt-4">
             <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-gray-500">
               <Link2 className="size-3.5" />
-              Outgoing cross-references ({crossRefs.length})
+              Outgoing cross-references ({article.outgoing_links.length})
             </p>
             <div className="flex flex-wrap gap-2">
-              {crossRefs.map((ref) => (
+              {article.outgoing_links.map((ref) => (
                 <Link
                   key={ref}
                   href={`/admin/${ref}`}
@@ -148,14 +173,31 @@ export default async function AdminArticleDetail({ params }: Props) {
             </div>
           </div>
         )}
+
+        {article.status === "published" && (
+          <div className="mt-4 border-t border-gray-200 pt-4">
+            <a
+              href={`/blog/${slug}`}
+              target="_blank"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              View published article →
+            </a>
+          </div>
+        )}
       </div>
 
-      {/* Article preview */}
-      <div
-        className="article-prose"
-        style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 0 4rem" }}
-        dangerouslySetInnerHTML={{ __html: post.content }}
-      />
+      {/* Article preview (raw markdown) */}
+      {article.body && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-4 text-sm font-semibold text-gray-500">Article Preview (Markdown)</h2>
+          <div className="prose prose-sm max-w-none">
+            <pre className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-800">
+              {article.body}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
