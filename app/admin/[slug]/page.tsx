@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, Clock, User, BarChart3, Tag, Link2 } from "lucide-
 import { getPostBySlug, getAllSlugs } from "@/lib/mdx"
 import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
 import type { ArticleStatus } from "@/lib/mdx"
+import ArticleActions from "../components/article-actions"
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -123,6 +124,9 @@ export default async function AdminArticleDetail({ params }: Props) {
             ))}
           </div>
         )}
+
+        {/* Article actions */}
+        <ArticleActions slug={slug} status={post.status} scheduledDate={post.scheduledDate} />
 
         {/* Cross-references */}
         {crossRefs.length > 0 && (

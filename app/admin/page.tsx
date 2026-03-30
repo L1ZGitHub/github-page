@@ -3,6 +3,7 @@ import { FileText, Calendar, Eye, Clock } from "lucide-react"
 import { getAllPostsUnfiltered } from "@/lib/blog"
 import { getCategoryColors } from "@/lib/category-colors"
 import type { BlogPostMeta, ArticleStatus } from "@/lib/mdx"
+import AdminCalendar from "./components/calendar"
 
 const statusConfig: Record<ArticleStatus, { label: string; classes: string }> = {
   draft: { label: "Draft", classes: "bg-yellow-100 text-yellow-800" },
@@ -86,6 +87,9 @@ export default function AdminDashboard() {
           {grouped.draft.length} drafts, {grouped.scheduled.length} scheduled, {grouped.published.length} published
         </p>
       </div>
+
+      {/* Calendar */}
+      <AdminCalendar />
 
       {/* Sections */}
       <div className="space-y-10">
