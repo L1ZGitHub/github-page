@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { FileText, Calendar, Eye, Clock, Check, AlertCircle, Loader2, Mail, ChevronDown, ChevronUp } from "lucide-react"
+import { FileText, Calendar, Eye, Clock, Check, AlertCircle, Loader2, Mail } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -103,77 +103,6 @@ function Toast({ toast, onDone }: { toast: ToastData; onDone: () => void }) {
       {toast.type === "error" ? <AlertCircle className="size-4" /> : <Check className="size-4" />}
       {toast.message}
     </div>
-  )
-}
-
-interface ContactEntry {
-  name: string
-  email: string
-  subject: string
-  message: string
-  timestamp: string
-}
-
-function ContactMessages() {
-  const [messages, setMessages] = useState<ContactEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(false)
-
-  useEffect(() => {
-    fetch(`${API_BASE}/contact`, { credentials: "include", cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: ContactEntry[]) => setMessages(data.reverse()))
-      .catch(() => setMessages([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  return (
-    <section className="mt-10 border-t border-gray-200 pt-8">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="mb-3 flex w-full items-center gap-2 text-left"
-      >
-        <Mail className="size-4 text-gray-400" />
-        <h2 className="text-lg font-semibold text-gray-900">Contact Messages</h2>
-        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">
-          {loading ? "…" : messages.length}
-        </span>
-        {expanded ? <ChevronUp className="ml-auto size-4 text-gray-400" /> : <ChevronDown className="ml-auto size-4 text-gray-400" />}
-      </button>
-
-      {expanded && (
-        loading ? (
-          <p className="py-4 text-sm text-gray-400">Loading...</p>
-        ) : messages.length === 0 ? (
-          <p className="py-4 text-sm text-gray-400">No contact messages yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {messages.map((msg, i) => (
-              <div key={i} className="rounded-lg border border-gray-100 bg-white px-4 py-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{msg.name}</p>
-                    <p className="text-xs text-gray-500">{msg.email}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-gray-400">
-                    {new Date(msg.timestamp).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-                {msg.subject && (
-                  <p className="mt-1.5 text-sm font-medium text-gray-700">{msg.subject}</p>
-                )}
-                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-600">{msg.message}</p>
-              </div>
-            ))}
-          </div>
-        )
-      )}
-    </section>
   )
 }
 
@@ -470,8 +399,16 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        {/* Contact messages */}
-        <ContactMessages />
+        {/* Contact messages link */}
+        <div className="mt-10 border-t border-gray-200 pt-6">
+          <Link
+            href="/admin/contact"
+            className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
+          >
+            <Mail className="size-4" />
+            Contact Messages
+          </Link>
+        </div>
       </div>
 
       {/* Drag overlay — follows the cursor */}
