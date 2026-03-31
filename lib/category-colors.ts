@@ -1,12 +1,15 @@
 /**
- * Category color mappings matching the old site exactly.
+ * Category color mappings for blog badges.
  *
- * Old-site CSS classes:
- *   .category-ai-ml      { background: var(--amber-50);   color: var(--amber-600); }
- *   .category-rag        { background: var(--violet-50);  color: var(--violet-600); }
- *   .category-nlp-privacy{ background: var(--emerald-50); color: var(--emerald-600); }
- *   .category-engineering { background: var(--blue-50);   color: var(--blue-600); }
- *   .category-tutorials  { background: var(--amber-100);  color: var(--amber-600); }
+ * 8 categories:
+ *   AI & ML        → amber
+ *   AI Agents      → cyan
+ *   RAG Systems    → violet
+ *   AI Security    → emerald
+ *   Engineering    → blue
+ *   Getting Started → orange
+ *   Industry       → rose
+ *   Strategy       → slate
  */
 
 export interface CategoryColors {
@@ -22,12 +25,17 @@ const categoryColorMap: Record<string, CategoryColors> = {
     text: "text-amber-600",
     classes: "bg-amber-50 text-amber-600",
   },
+  "AI Agents": {
+    bg: "bg-cyan-50",
+    text: "text-cyan-600",
+    classes: "bg-cyan-50 text-cyan-600",
+  },
   "RAG Systems": {
     bg: "bg-violet-50",
     text: "text-violet-600",
     classes: "bg-violet-50 text-violet-600",
   },
-  "NLP & Privacy": {
+  "AI Security": {
     bg: "bg-emerald-50",
     text: "text-emerald-600",
     classes: "bg-emerald-50 text-emerald-600",
@@ -37,10 +45,20 @@ const categoryColorMap: Record<string, CategoryColors> = {
     text: "text-blue-600",
     classes: "bg-blue-50 text-blue-600",
   },
-  Tutorials: {
-    bg: "bg-amber-100",
-    text: "text-amber-600",
-    classes: "bg-amber-100 text-amber-600",
+  "Getting Started": {
+    bg: "bg-orange-50",
+    text: "text-orange-600",
+    classes: "bg-orange-50 text-orange-600",
+  },
+  Industry: {
+    bg: "bg-rose-50",
+    text: "text-rose-600",
+    classes: "bg-rose-50 text-rose-600",
+  },
+  Strategy: {
+    bg: "bg-slate-100",
+    text: "text-slate-600",
+    classes: "bg-slate-100 text-slate-600",
   },
 }
 
@@ -65,10 +83,13 @@ export function getCategoryColors(category: string): CategoryColors {
 export function getCategoryStyle(category: string): React.CSSProperties {
   const map: Record<string, React.CSSProperties> = {
     "AI & ML": { background: "#fffbeb", color: "#d97706" },
+    "AI Agents": { background: "#ecfeff", color: "#0891b2" },
     "RAG Systems": { background: "#f5f3ff", color: "#7c3aed" },
-    "NLP & Privacy": { background: "#ecfdf5", color: "#059669" },
+    "AI Security": { background: "#ecfdf5", color: "#059669" },
     Engineering: { background: "#eff6ff", color: "#2563eb" },
-    Tutorials: { background: "#fef3c7", color: "#d97706" },
+    "Getting Started": { background: "#fff7ed", color: "#ea580c" },
+    Industry: { background: "#fff1f2", color: "#e11d48" },
+    Strategy: { background: "#f8fafc", color: "#475569" },
   }
   return map[category] || { background: "#fffbeb", color: "#d97706" }
 }

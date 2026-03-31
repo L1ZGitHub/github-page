@@ -23,9 +23,11 @@ export function SchemaOrg() {
     knowsAbout: [
       "Artificial Intelligence",
       "Machine Learning",
+      "AI Agents",
       "RAG Systems",
+      "AI Security",
       "Natural Language Processing",
-      "Privacy-Preserving AI",
+      "Applied Mathematics",
     ],
     sameAs: [
       "https://www.linkedin.com/in/helain-zimmermann/",
