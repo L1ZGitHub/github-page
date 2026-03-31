@@ -46,12 +46,21 @@ export function Contact() {
     }
 
     try {
-      await fetch(process.env.NEXT_PUBLIC_APPS_SCRIPT_URL!, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
+      // Send to both Apps Script and backup API in parallel
+      const payload = JSON.stringify(data)
+      await Promise.allSettled([
+        fetch(process.env.NEXT_PUBLIC_APPS_SCRIPT_URL!, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        }),
+        fetch("/api/blog/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        }),
+      ])
       lastSubmitRef.current = now
       setStatus("success")
       form.reset()
