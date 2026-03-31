@@ -114,6 +114,7 @@ export default function AdminDashboard() {
   const [activeDraft, setActiveDraft] = useState<DraftArticle | null>(null)
   const [toast, setToast] = useState<ToastData | null>(null)
   const [busy, setBusy] = useState(false)
+  const [activeCategory, setActiveCategory] = useState("All")
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -141,13 +142,21 @@ export default function AdminDashboard() {
     refreshAll()
   }, [refreshAll])
 
+  const categories = useMemo(() => {
+    const cats = new Set(articles.map((a) => a.category))
+    return ["All", ...Array.from(cats).sort()]
+  }, [articles])
+
   const grouped = useMemo(() => {
+    const filtered = activeCategory === "All"
+      ? articles
+      : articles.filter((a) => a.category === activeCategory)
     const g: Record<Status, Article[]> = { draft: [], scheduled: [], published: [] }
-    for (const a of articles) {
+    for (const a of filtered) {
       g[a.status]?.push(a)
     }
     return g
-  }, [articles])
+  }, [articles, activeCategory])
 
   const draftCards = useMemo(
     () =>
@@ -294,6 +303,30 @@ export default function AdminDashboard() {
             {articles.length} articles total —{" "}
             {grouped.draft.length} drafts, {grouped.scheduled.length} scheduled, {grouped.published.length} published
           </p>
+        </div>
+
+        {/* Category filter pills */}
+        <div className="mb-6 flex flex-wrap gap-2">
+          {categories.map((cat) => {
+            const isActive = cat === activeCategory
+            const colorClass =
+              cat === "All"
+                ? isActive
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : isActive
+                  ? (categoryColors[cat] || "bg-gray-100 text-gray-800") + " ring-2 ring-offset-1 ring-gray-400"
+                  : (categoryColors[cat] || "bg-gray-100 text-gray-800") + " opacity-60 hover:opacity-100"
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${colorClass}`}
+              >
+                {cat}
+              </button>
+            )
+          })}
         </div>
 
         {/* Drafts — draggable cards */}
