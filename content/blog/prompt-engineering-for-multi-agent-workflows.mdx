@@ -1,0 +1,369 @@
+---
+title: "Prompt Engineering for Multi-Agent Workflows"
+description: "Techniques for writing effective prompts that coordinate multiple AI agents working together on complex tasks"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "Getting Started"
+tags: ["Prompt Engineering", "Multi-Agent", "Workflows", "Tutorial"]
+difficulty: "beginner"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+Prompting a single LLM is straightforward: you give it context, instructions, and examples. Prompting agents that need to coordinate with each other is a fundamentally different problem. Each agent needs to understand its own role, the boundaries of its responsibility, how to communicate with other agents, and when to hand off work. Get the prompts wrong, and agents either duplicate effort, contradict each other, or enter infinite loops of mutual delegation.
+
+I have built multi-agent systems at Ailog where the prompt design took longer than the orchestration code. That is not a failure of planning; it reflects the reality that in agent systems, the prompts are the architecture. The code routes messages and manages state, but the prompts define behavior.
+
+This article covers the prompt patterns I use for multi-agent workflows, with concrete templates and code examples.
+
+## The Core Difference: Prompts as Contracts
+
+In single-agent prompting, you optimize for a single model producing a good output. In multi-agent prompting, you optimize for multiple models producing outputs that compose correctly. Each agent's prompt is a contract that specifies:
+
+1. **Role identity:** What this agent is and is not responsible for.
+2. **Input format:** What data this agent expects to receive.
+3. **Output format:** The exact structure other agents (or the orchestrator) expect in return.
+4. **Boundary conditions:** When to act, when to delegate, when to stop.
+5. **Error protocols:** What to do when something goes wrong.
+
+If any agent's prompt is ambiguous on any of these five points, the system breaks down. I have seen agents that were supposed to be "validators" start generating new content because their prompt said "improve the output if needed." I have seen router agents get stuck in loops because their prompt did not define a termination condition.
+
+## System Prompt Design for Agent Roles
+
+Every agent in a multi-agent system needs a system prompt that establishes its identity and constraints. Here is the template I start with:
+
+```python
+AGENT_SYSTEM_PROMPT_TEMPLATE = """You are {agent_name}, a specialized agent in a multi-agent system.
+
+## Your Role
+{role_description}
+
+## Your Capabilities
+You CAN:
+{capabilities}
+
+You CANNOT:
+{limitations}
+
+## Input Format
+You will receive messages in the following format:
+{input_format}
+
+## Output Format
+You MUST respond in the following format:
+{output_format}
+
+## Handoff Protocol
+When you encounter a situation outside your capabilities:
+{handoff_instructions}
+
+## Error Handling
+If you receive invalid input or cannot complete your task:
+{error_instructions}
+"""
+```
+
+The explicit "You CAN / You CANNOT" sections are important. Without them, agents tend to expand their scope. A research agent might start writing final reports. A code reviewer might start fixing bugs instead of flagging them. Being explicit about boundaries prevents this drift.
+
+### Example: Router Agent
+
+The router agent is the entry point in many multi-agent architectures. It analyzes the user's request and delegates to the appropriate specialist agent. The prompt for a router needs to be precise about the routing logic:
+
+```python
+ROUTER_SYSTEM_PROMPT = """You are RouterAgent, the coordinator in a multi-agent system.
+
+## Your Role
+Analyze incoming user requests and route them to the correct specialist agent.
+You do NOT answer questions directly. You ONLY route.
+
+## Available Agents
+- ResearchAgent: Handles factual questions, data lookup, and information retrieval.
+  Route here when the user asks for facts, definitions, or data.
+- WriterAgent: Handles content creation, summarization, and rewriting.
+  Route here when the user asks to write, summarize, or edit text.
+- CodeAgent: Handles code generation, debugging, and code review.
+  Route here when the user asks about code or provides code.
+- CriticAgent: Reviews outputs from other agents for quality and accuracy.
+  Route here ONLY when you receive an output that needs validation.
+
+## Output Format
+Respond with ONLY a JSON object:
+{
+    "route_to": "<agent_name>",
+    "reasoning": "<one sentence explaining why>",
+    "original_request": "<the user's request, unchanged>",
+    "context": "<any additional context the target agent needs>"
+}
+
+## Rules
+- If a request spans multiple agents, route to the PRIMARY agent first.
+  The orchestrator will handle sequential routing.
+- If no agent fits, respond with route_to: "NONE" and explain why.
+- NEVER attempt to answer the user's question yourself.
+- NEVER modify the user's request.
+"""
+```
+
+The key design choices here: the router has an explicit list of agents with routing criteria, it outputs structured JSON (not free text), and it is explicitly told not to answer questions itself. That last point matters more than you might think. Without it, capable models like GPT-4 or Claude will often "help" by answering directly.
+
+### Example: Critic Agent
+
+The critic agent reviews outputs from other agents. This is one of the most valuable patterns in multi-agent systems, but also one of the hardest to prompt correctly. A poorly prompted critic either rubber-stamps everything or nitpicks endlessly.
+
+```python
+CRITIC_SYSTEM_PROMPT = """You are CriticAgent, a quality reviewer in a multi-agent system.
+
+## Your Role
+Review outputs from other agents for accuracy, completeness, and quality.
+You provide structured feedback, not revised content.
+
+## Review Criteria
+For each output you review, evaluate:
+1. ACCURACY: Are all factual claims correct? Are there unsupported assertions?
+2. COMPLETENESS: Does the output fully address the original request?
+3. QUALITY: Is the output well-structured and clear?
+4. SAFETY: Does the output contain anything harmful, biased, or inappropriate?
+
+## Output Format
+Respond with ONLY a JSON object:
+{
+    "verdict": "PASS" | "REVISE" | "REJECT",
+    "accuracy_score": <1-5>,
+    "completeness_score": <1-5>,
+    "quality_score": <1-5>,
+    "issues": [
+        {
+            "type": "accuracy" | "completeness" | "quality" | "safety",
+            "severity": "minor" | "major" | "critical",
+            "description": "<specific description of the issue>",
+            "suggestion": "<how to fix it>"
+        }
+    ],
+    "summary": "<one paragraph overall assessment>"
+}
+
+## Rules
+- PASS: All scores >= 4, no major or critical issues.
+- REVISE: Any score is 3, or there are major (but not critical) issues.
+- REJECT: Any score <= 2, or there are critical issues.
+- Be specific in your feedback. "This could be better" is useless.
+  "The claim about X in paragraph 3 is unsupported" is useful.
+- You NEVER rewrite the content. You only review it.
+- Maximum 2 revision cycles. If output is still not acceptable after 2 revisions,
+  PASS with noted caveats rather than entering an infinite loop.
+"""
+```
+
+The maximum revision cycle limit is critical. Without it, a perfectionist critic and a compliant writer can loop indefinitely, each producing marginally different outputs.
+
+## Structured Output for Inter-Agent Communication
+
+Agents need to communicate in formats that are parseable by both the orchestrator code and other agents. Free-text communication between agents is fragile. I use structured JSON for all inter-agent messages.
+
+```python
+from dataclasses import dataclass, asdict
+from typing import Optional
+import json
+
+@dataclass
+class AgentMessage:
+    sender: str
+    recipient: str
+    message_type: str  # "request", "response", "handoff", "error"
+    content: dict
+    conversation_id: str
+    turn_number: int
+    metadata: Optional[dict] = None
+
+    def to_prompt_context(self) -> str:
+        """Format this message for inclusion in an agent's prompt."""
+        return json.dumps(asdict(self), indent=2)
+
+
+def format_agent_context(messages: list[AgentMessage], for_agent: str) -> str:
+    """
+    Build the conversation context for a specific agent,
+    showing only messages relevant to that agent.
+    """
+    relevant = [m for m in messages if m.recipient == for_agent or m.sender == for_agent]
+
+    context_parts = ["## Conversation History"]
+    for msg in relevant:
+        direction = "FROM" if msg.sender != for_agent else "YOUR RESPONSE"
+        context_parts.append(
+            f"\n[Turn {msg.turn_number}] {direction} {msg.sender}:\n"
+            f"{json.dumps(msg.content, indent=2)}"
+        )
+
+    return "\n".join(context_parts)
+```
+
+This structure gives every agent a clear view of the conversation history relevant to its task, without overwhelming it with messages between other agents.
+
+## Prompt Templates for Common Patterns
+
+### The Synthesizer Pattern
+
+When multiple agents produce partial results that need to be combined into a final output, a synthesizer agent does the merging:
+
+```python
+SYNTHESIZER_PROMPT = """You are SynthesizerAgent.
+
+## Your Role
+Combine outputs from multiple specialist agents into a single,
+coherent response for the user.
+
+## Inputs
+You will receive outputs from the following agents:
+{agent_outputs}
+
+## Rules
+- Preserve all factual content from the specialist outputs.
+- Resolve contradictions by noting both perspectives, not by choosing one.
+- Maintain consistent tone and style throughout the combined output.
+- If any agent flagged uncertainty, preserve that uncertainty in the final output.
+
+## Output Format
+Produce a natural, readable response that the user can consume directly.
+Do not mention the individual agents or the multi-agent process.
+"""
+
+def build_synthesizer_prompt(agent_results: dict[str, str]) -> str:
+    outputs = []
+    for agent_name, result in agent_results.items():
+        outputs.append(f"### {agent_name} Output:\n{result}")
+
+    return SYNTHESIZER_PROMPT.format(
+        agent_outputs="\n\n".join(outputs)
+    )
+```
+
+### The Verification Chain Pattern
+
+For high-stakes outputs, I chain a generator agent with a verifier agent. The verifier checks specific factual claims:
+
+```python
+VERIFIER_PROMPT = """You are VerifierAgent.
+
+## Your Role
+Extract factual claims from the provided text and verify each one
+against the source material.
+
+## Input
+Text to verify:
+{text_to_verify}
+
+Source material:
+{source_material}
+
+## Output Format
+{
+    "claims": [
+        {
+            "claim": "<the factual claim>",
+            "status": "SUPPORTED" | "UNSUPPORTED" | "CONTRADICTED",
+            "evidence": "<quote from source material, or null>"
+        }
+    ],
+    "overall_accuracy": <percentage of supported claims>,
+    "recommendation": "PUBLISH" | "REVISE" | "REJECT"
+}
+"""
+```
+
+This pattern pairs well with [production RAG systems](/blog/building-production-ready-rag-systems) where you want to verify that generated answers are grounded in retrieved documents.
+
+## Few-Shot Examples for Complex Coordination
+
+Some coordination patterns are too complex to describe in instructions alone. Few-shot examples in the system prompt show the agent exactly what correct behavior looks like.
+
+```python
+def build_router_prompt_with_examples() -> str:
+    examples = """
+## Examples
+
+User request: "Summarize the key findings from the Q3 earnings report and write a draft email to the board about them."
+Your response:
+{
+    "route_to": "ResearchAgent",
+    "reasoning": "The request requires first extracting information, then writing. Research must happen before writing.",
+    "original_request": "Summarize the key findings from the Q3 earnings report and write a draft email to the board about them.",
+    "context": "Two-step task. After ResearchAgent extracts findings, route to WriterAgent for the email draft."
+}
+
+User request: "What's the weather like today?"
+Your response:
+{
+    "route_to": "NONE",
+    "reasoning": "No available agent handles real-time weather data.",
+    "original_request": "What's the weather like today?",
+    "context": null
+}
+"""
+    return ROUTER_SYSTEM_PROMPT + examples
+```
+
+The second example (the "NONE" route) is particularly important. Without a negative example, the router will always try to force-fit requests into one of the available agents.
+
+## Error Handling in Prompts
+
+Errors in multi-agent systems cascade. If one agent fails and the next agent does not know how to handle the failure, the entire workflow breaks. I embed error handling directly into the prompts:
+
+```python
+ERROR_AWARE_AGENT_PROMPT = """
+## Error Handling
+
+If you receive input that is malformed or missing required fields:
+Respond with:
+{
+    "status": "ERROR",
+    "error_type": "INVALID_INPUT",
+    "description": "<what is wrong with the input>",
+    "required_fields": ["<list of fields you need>"]
+}
+
+If you cannot complete your task due to insufficient information:
+Respond with:
+{
+    "status": "ERROR",
+    "error_type": "INSUFFICIENT_CONTEXT",
+    "description": "<what additional information you need>",
+    "suggested_action": "<what the orchestrator should do>"
+}
+
+IMPORTANT: Always return a valid JSON response, even in error cases.
+Never return free text when an error occurs.
+"""
+```
+
+The orchestrator code can then parse these structured errors and take appropriate action (retry, route to a different agent, or escalate to a human).
+
+## Putting It Together
+
+These prompt patterns compose into a full workflow: the router prompt decides which specialist handles a request, each specialist operates within its scoped system prompt, the critic validates outputs with structured feedback, and the synthesizer merges results when needed. The orchestration code itself is relatively thin; it parses JSON responses, manages the turn cycle, and routes messages between agents. The prompts do the heavy lifting. For more sophisticated coordination patterns, see the design patterns covered in [multi-agent system architectures](/blog/multi-agent-multi-llm-architectures-a-2026-guide) and [building multi-agent systems with LangGraph](/blog/building-ai-agents-with-langchain-and-langgraph).
+
+## Prompt Debugging Tips
+
+When a multi-agent workflow produces unexpected results, the problem is almost always in the prompts. Here is how I debug:
+
+**Log every prompt and response.** You cannot debug what you cannot see. Log the full system prompt, user message, and model response for every agent call. This is the multi-agent equivalent of print debugging.
+
+**Test agents in isolation.** Before testing the full workflow, test each agent individually with representative inputs. If the critic agent produces bad reviews in isolation, it will produce bad reviews in the system too.
+
+**Check output format compliance.** Most failures come from agents not following the output format specification. If you asked for JSON and got free text (or JSON with different keys), the downstream agent will fail.
+
+**Reduce temperature.** For coordination agents (routers, critics, verifiers), use temperature 0. Creative variation in routing decisions is not what you want.
+
+**Watch for prompt injection between agents.** If Agent A's output becomes Agent B's input, a crafted output from Agent A could manipulate Agent B. This is a real concern in systems where any agent processes untrusted data, as discussed in [prompt engineering best practices](/blog/prompt-engineering-best-practices-for-production).
+
+## Key Takeaways
+
+- In multi-agent systems, prompts are the architecture; they define agent behavior, boundaries, and coordination more than the orchestration code does.
+- Every agent prompt must specify five things: role identity, input format, output format, boundary conditions, and error protocols.
+- Use explicit "You CAN / You CANNOT" sections to prevent agents from expanding beyond their intended scope.
+- Structured JSON output for all inter-agent communication is non-negotiable; free-text communication between agents is fragile and unparseable.
+- Critic agents need a maximum revision cycle limit (I use 2) to prevent infinite loops between generators and reviewers.
+- Include negative examples in router prompts (requests that should not be routed to any agent) to prevent force-fitting.
+- Embed structured error handling directly in prompts so that failures produce parseable JSON, not free text that breaks downstream agents.
+- Log every prompt and response for every agent call; multi-agent debugging without full observability is nearly impossible.

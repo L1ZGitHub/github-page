@@ -1,0 +1,149 @@
+---
+title: "The Agentic AI Foundation: Open Governance for Agent Protocols"
+description: "How the Linux Foundation initiative with OpenAI, Anthropic, Google, Microsoft, AWS, and Block is shaping the future of AI agent standards"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "AI Agents"
+tags: ["Agentic AI Foundation", "Open Source", "Standards", "Governance"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+In December 2025, something unusual happened in AI: six companies that compete fiercely in every other dimension sat down and agreed to share governance of the protocols their agents use to communicate. OpenAI, Anthropic, Google, Microsoft, AWS, and Block co-founded the Agentic AI Foundation under the Linux Foundation, anchoring it around three initial projects: Anthropic's Model Context Protocol (MCP), Block's Goose framework, and the AGENTS.md specification.
+
+This matters more than most industry announcements because the alternative, a fragmented ecosystem where every vendor's agents speak a slightly different language, would cripple the entire agentic AI movement before it reaches maturity. The foundation's formation is an explicit bet that interoperability creates more value than lock-in.
+
+## Why Standards Bodies Form
+
+Standards do not emerge from goodwill. They emerge when the cost of fragmentation exceeds the competitive advantage of proprietary control. We have seen this pattern repeatedly in technology.
+
+USB standardized peripheral connections after a decade of every manufacturer shipping incompatible ports. HTTP standardized web communication after proprietary protocols threatened to split the internet into vendor-specific networks. Kubernetes standardized container orchestration after Docker, Mesos, and Swarm competed for dominance. In each case, the industry reached a point where the ecosystem needed interoperability more than any single company needed control.
+
+AI agents hit that inflection point in 2025. By mid-year, Anthropic had released MCP and seen explosive adoption (now past 97 million installs). Google released A2A for agent-to-agent communication. OpenAI had its own function calling standards. Microsoft had its Semantic Kernel abstractions. Every major cloud provider was shipping agent frameworks with subtly incompatible interfaces.
+
+The problem was obvious: if you built a tool for Claude using MCP, it would not work with GPT. If you built an agent using Google's A2A, it could not discover agents built on OpenAI's infrastructure. The [multi-agent systems explosion](/blog/the-multi-agent-systems-explosion-327-adoption-growth-in-2026) was producing agents that could not talk to each other.
+
+## What the Foundation Actually Governs
+
+The Agentic AI Foundation is not a research lab or a product company. It is a governance body for open-source protocols related to AI agent interoperability. Its initial portfolio includes three projects.
+
+### Model Context Protocol (MCP)
+
+MCP, originally developed by Anthropic, standardizes how agents connect to tools and data sources. It defines how an agent discovers available tools, calls them with structured inputs, and receives structured outputs. MCP has the largest installed base of any agent protocol and is already supported by dozens of AI IDEs, frameworks, and platforms.
+
+The foundation's governance means MCP's evolution is no longer solely Anthropic's decision. Changes to the protocol go through a community process with input from all co-founders and the broader developer community. This addresses a legitimate concern many developers had: building on a protocol controlled by a single company, even an open-source one, carries platform risk.
+
+I covered MCP's technical architecture in detail in [a dedicated article](/blog/model-context-protocol-connecting-llms-to-external-tools), but the governance shift is the news here. The protocol's technical direction will now be shaped by the same companies building competing LLMs, which creates interesting dynamics.
+
+### AGENTS.md
+
+AGENTS.md is a specification for a markdown file that developers place in their repositories to describe how AI agents should interact with the codebase. Think of it as a README specifically for AI: it tells coding agents where to find documentation, what conventions the project follows, how to run tests, and what to avoid.
+
+This might seem minor compared to MCP, but it addresses a real pain point. AI coding agents spend significant tokens (and make significant mistakes) figuring out project conventions through trial and error. A standardized way to communicate these conventions saves time and reduces errors.
+
+The spec is intentionally simple:
+
+```markdown
+# AGENTS.md
+
+## Build & Test
+- Run tests: `pytest tests/ -v`
+- Run linting: `ruff check .`
+- Single test: `pytest tests/test_specific.py::test_name`
+
+## Code Style
+- Python 3.11+, type hints required
+- Use dataclasses over dicts for structured data
+- Async by default for I/O operations
+
+## Architecture
+- `/src/agents/` - Agent implementations
+- `/src/tools/` - MCP tool definitions
+- `/src/state/` - State management
+- `/tests/` - Mirror of src structure
+
+## Important Conventions
+- Never commit API keys or credentials
+- All database queries go through the ORM layer
+- Agent outputs must be validated against Pydantic schemas
+```
+
+### Goose
+
+Goose is Block's open-source framework for building AI agents. Unlike MCP (which is a protocol) or AGENTS.md (which is a specification), Goose is an implementation: an actual framework you can use to build and run agents. Its inclusion in the foundation signals that the foundation's scope extends beyond pure protocols to include reference implementations.
+
+Goose is opinionated about agent architecture, favoring a model where agents run locally and connect to tools via MCP. It provides built-in support for multi-step task execution, tool discovery, and context management. Having a reference implementation under the same governance umbrella as the protocols it uses creates a tighter feedback loop between protocol design and practical usage.
+
+## The Politics of Cooperation
+
+The most interesting aspect of the Agentic AI Foundation is not the technology; it is the politics. Six companies that are spending billions to outcompete each other on model performance have agreed to cooperate on the infrastructure layer. Why?
+
+The cynical read is that each company believes its models will win on capability, and open agent protocols help its models reach more users by reducing switching costs. If every tool works with every model via MCP, then the model that performs best on a given task wins, which each company believes will be theirs.
+
+The strategic read is more nuanced. The agent ecosystem is at a critical juncture. If proprietary protocols fragment the market, the resulting friction slows adoption of agents overall. Every co-founder benefits from a larger agent ecosystem, even if they capture a smaller percentage of it. A 30% share of a trillion-dollar market is worth more than a 60% share of a hundred-billion-dollar market.
+
+The historical read points to Kubernetes as the closest parallel. In 2015, Google donated Kubernetes to the Cloud Native Computing Foundation despite having developed it internally. AWS, Microsoft, and other competitors joined the governance structure. Kubernetes became the industry standard, cloud adoption accelerated, and every co-founding company benefited. Google did not "win" Kubernetes (if anything, AWS benefited most), but the ecosystem it created lifted all participants.
+
+The agent protocol ecosystem is following the same trajectory. By the time one company might theoretically benefit from locking in developers, the ecosystem will have grown large enough that the lock-in strategy becomes untenable. This is the standards game theory that the Linux Foundation understands better than anyone.
+
+## What This Means for Developers
+
+If you are building agent systems today, the foundation's existence changes your risk calculus in several concrete ways.
+
+**Protocol stability improves.** Before the foundation, MCP could change at Anthropic's discretion. Now, protocol changes go through a governance process with multiple stakeholders. This does not mean the protocol evolves slower (the foundation can move quickly), but it does mean breaking changes require broader consensus.
+
+**Interoperability becomes a design goal.** With all major LLM providers at the table, expect [protocols to work across vendors](/blog/multi-agent-multi-llm-architectures-a-2026-guide). An MCP server you build today should work with any compliant client, regardless of which LLM it uses. This was already mostly true in practice, but the foundation makes it an explicit commitment.
+
+**The "build vs. wait" question gets easier.** A common concern has been whether to invest in MCP tooling now or wait for the standard to stabilize. The foundation's formation signals that MCP is the standard, not a contender. Investing in MCP tool development is now a safer bet.
+
+**New protocols will emerge from the foundation.** The initial three projects (MCP, AGENTS.md, Goose) are the starting point, not the end state. I expect the foundation to take on additional projects: agent discovery protocols, security standards for cross-organizational agent communication, telemetry and observability specifications, and possibly a unified agent testing framework.
+
+## What the Foundation Does Not Solve
+
+Open governance is necessary but not sufficient for a healthy agent ecosystem. Several hard problems remain.
+
+**Security across organizational boundaries.** When agents from different companies communicate, trust establishment is difficult. The current protocols offer basic authentication, but the agent security model is still immature. How do you audit an agent from another organization? How do you enforce data handling policies across agent boundaries? These are governance problems as much as technical ones.
+
+**Liability and accountability.** If an agent built with Goose, running an MCP tool, and communicating via A2A produces harmful output, who is responsible? The model provider? The tool developer? The agent framework? The organization that deployed the system? The foundation can create technical standards, but liability questions require legal frameworks that do not yet exist.
+
+**Performance optimization.** Standards inherently involve tradeoffs between generality and performance. The JSON-RPC transport used by MCP is simple and universal, but it is not optimal for high-throughput scenarios. As [agent workloads scale](/blog/nemotron-3-super-hybrid-mamba-transformer-for-agentic-coding), the community will need to balance the convenience of standardized protocols with the performance requirements of production systems.
+
+**Competing standards outside the foundation.** The foundation covers the major Western AI companies, but the Chinese AI ecosystem (with its own thriving agent development) operates largely independently. Whether the [Chinese LLM ecosystem](/blog/glm5-kimi-deepseek-panorama-2026-chinese-llms) adopts the same protocols or develops parallel standards will determine whether we get one global agent ecosystem or two.
+
+## Historical Parallels and Predictions
+
+Looking at how previous standards battles played out offers some predictions for the Agentic AI Foundation.
+
+**The HTTP model (most likely outcome):** A core protocol achieves near-universal adoption, extensions and variations exist for specific use cases, but the base layer is stable and universal. MCP becomes the HTTP of agents: the protocol everything speaks. A2A, agent discovery, and other protocols layer on top. The foundation manages backward compatibility and gradual evolution.
+
+**The USB model (optimistic outcome):** The standard unifies a fragmented landscape and actually simplifies development. Building agent tools becomes as straightforward as building USB peripherals: follow the spec, and it works everywhere. Developer experience improves dramatically. Ecosystem growth accelerates.
+
+**The XML/SOAP model (pessimistic outcome):** Standards become overly complex to accommodate every stakeholder's requirements. The specification grows unwieldy. Developers route around the standard with simpler, pragmatic alternatives. This is the biggest risk I see: too many cooks trying to satisfy too many use cases.
+
+The foundation's governance structure, which gives weight to both large companies and individual contributors, is designed to avoid the XML/SOAP outcome. But it requires active vigilance against feature creep and complexity inflation.
+
+## What to Watch
+
+Several signals will indicate whether the foundation is succeeding:
+
+- **Release cadence**: are protocol updates shipping regularly, or is governance creating bureaucratic slowdowns?
+- **Cross-vendor interop testing**: are the co-founders actually testing their implementations against each other, or just shipping independently?
+- **New member additions**: are agent-native companies (LangChain, CrewAI, AutoGen teams) joining, or is the foundation dominated by the hyperscalers?
+- **Chinese ecosystem engagement**: do Baidu, Alibaba, Tencent, and ByteDance adopt or fork the standards?
+- **Developer satisfaction**: are developers building with these standards finding them helpful, or routing around them?
+
+The formation of the Agentic AI Foundation is one of the more consequential events in AI infrastructure this year. Not because it introduces new technology, but because it establishes the governance model that will shape how agents interact for the foreseeable future. For those of us building [multi-agent systems](/blog/building-a-multi-agent-ai-system), this means we can invest in the current protocols with higher confidence that our work will remain relevant.
+
+The standards are young. The governance is new. The ecosystem is evolving rapidly. But the trajectory, toward open, interoperable agent protocols governed by the community that builds on them, is the right one.
+
+## Key Takeaways
+
+- The Agentic AI Foundation, formed in December 2025 under the Linux Foundation, brings MCP, AGENTS.md, and Goose under shared governance by OpenAI, Anthropic, Google, Microsoft, AWS, and Block.
+- The foundation exists because protocol fragmentation would slow agent adoption more than any company benefits from proprietary lock-in; this mirrors the Kubernetes trajectory.
+- MCP (tool integration), AGENTS.md (codebase conventions for AI), and Goose (reference agent framework) form the initial project portfolio, with more protocols expected.
+- For developers, the foundation reduces protocol risk: investing in MCP tooling is now a safer bet, and cross-vendor interoperability becomes an explicit design goal.
+- Open governance does not solve security across organizational boundaries, liability questions, performance optimization for high-throughput workloads, or alignment with the Chinese AI ecosystem.
+- The most likely outcome follows the HTTP model: a stable core protocol with extensions for specific use cases, gradually evolving under community governance.
+- Watch for release cadence, cross-vendor interop testing, new member additions, and developer satisfaction as leading indicators of the foundation's health.

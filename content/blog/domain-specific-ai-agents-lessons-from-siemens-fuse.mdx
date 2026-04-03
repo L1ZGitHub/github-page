@@ -1,0 +1,260 @@
+---
+title: "Domain-Specific AI Agents: Lessons from Siemens Fuse"
+description: "What Siemens' EDA AI Agent system teaches us about building purpose-built autonomous agents for specialized industries"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "AI Agents"
+tags: ["Domain Agents", "Siemens", "EDA", "Industrial AI"]
+difficulty: "intermediate"
+readTime: "8 min read"
+author: "Hélain Zimmermann"
+---
+
+On March 16, 2026, Siemens announced Fuse, a purpose-built AI agent system for electronic design automation (EDA). Fuse is not a chatbot bolted onto existing software. It is an autonomous agent scoped to semiconductor design, 3D IC integration, and PCB system workflows, capable of operating across the full lifecycle from design through verification to manufacturing.
+
+The announcement itself is significant, but the lessons it teaches about building domain-specific agents are what I want to focus on. After a year of watching general-purpose agent frameworks struggle in specialized domains, Siemens' approach offers a template that any team building vertical AI agents should study.
+
+## Why General-Purpose Agents Fail in Specialized Domains
+
+The appeal of general-purpose agent frameworks is obvious: build once, deploy everywhere. Take an LLM, connect it to some tools via [MCP or similar protocols](/blog/model-context-protocol-connecting-llms-to-external-tools), write a system prompt, and let it figure things out. This works surprisingly well for tasks where the LLM's training data covers the domain: writing code, analyzing documents, answering questions about well-documented topics.
+
+It fails in specialized domains for three interconnected reasons.
+
+**Vocabulary mismatch.** General-purpose LLMs do not understand domain-specific terminology with the precision that professionals require. In EDA, terms like "signal integrity," "power delivery network," "design rule check," and "electromagnetic compatibility" have precise technical meanings that differ from their colloquial usage. A general-purpose agent might use these terms approximately correctly while producing outputs that are subtly wrong in ways that only domain experts would catch.
+
+Building [custom tokenizers](/blog/building-custom-tokenizers-for-domain-specific-nlp) can partially address this, but the problem runs deeper than tokenization. The model's latent representations of domain concepts need to be precise, not just its surface-level vocabulary.
+
+**Workflow complexity.** Semiconductor design involves hundreds of sequential and parallel steps with strict dependency ordering. A general-purpose agent cannot reason about these dependencies without extensive domain knowledge baked into its planning capabilities. It does not know that you must complete layout versus schematic (LVS) checks before tapeout, or that changing a component in one part of a PCB can cascade into signal integrity violations elsewhere.
+
+**Risk tolerance.** In consumer software, an agent that gets something 90% right is useful. In semiconductor design, a 10% error rate means fabricating chips that do not work, at a cost of millions of dollars and months of delays. The margin for error in industrial domains is fundamentally different from the margin for error in content generation or code assistance.
+
+## How Siemens Scoped Fuse
+
+Siemens' approach to Fuse illustrates several design principles for domain-specific agents.
+
+### Deep Tool Integration, Not Superficial Wrapping
+
+Fuse does not sit on top of Siemens' EDA tools and issue commands through a generic interface. It integrates deeply with the tool chain's internal data structures, simulation engines, and verification systems. This means the agent can reason about design objects at the native level of abstraction: nets, components, constraints, design rules.
+
+Compare this to a naive approach where a general-purpose agent calls EDA tools through command-line interfaces or APIs. The naive approach loses structural information at every interface boundary. The agent sees text output from tools rather than the rich data structures the tools operate on internally.
+
+```python
+# Naive approach: agent interacts with EDA tools through CLI
+class NaiveEDAAgent:
+    async def run_drc(self, design_file: str) -> str:
+        """Run design rule check and return text output."""
+        result = await subprocess.run(
+            ["drc_tool", "--check", design_file],
+            capture_output=True
+        )
+        return result.stdout.decode()  # Agent sees raw text
+
+# Domain-specific approach: agent works with native data structures
+class DomainEDAAgent:
+    async def run_drc(self, design: "DesignObject") -> "DRCReport":
+        """Run design rule check with full structural context."""
+        report = await self.drc_engine.check(design)
+        return DRCReport(
+            violations=report.violations,
+            affected_nets=report.affected_nets,
+            affected_components=report.affected_components,
+            severity_map=report.severity_map,
+            suggested_fixes=self._generate_fixes(
+                design, report.violations
+            ),
+        )
+
+    def _generate_fixes(
+        self, design: "DesignObject", violations: list
+    ) -> list["Fix"]:
+        """Generate domain-aware fix suggestions."""
+        fixes = []
+        for violation in violations:
+            if violation.type == "spacing":
+                # Agent understands design rules and can suggest
+                # specific component movements
+                fix = self._calculate_spacing_fix(
+                    design, violation.component_a, violation.component_b
+                )
+                fixes.append(fix)
+            elif violation.type == "signal_integrity":
+                # Agent understands impedance matching and can suggest
+                # trace width adjustments
+                fix = self._calculate_impedance_fix(
+                    design, violation.net, violation.target_impedance
+                )
+                fixes.append(fix)
+        return fixes
+```
+
+The difference is not just code organization. It is the difference between an agent that says "your DRC found 47 violations" and an agent that says "your DRC found 47 violations, 12 of which are spacing violations on the DDR4 memory bus that can be resolved by moving U7 3.2mm east, which also resolves the impedance mismatch on NET_DDR_DQ[0:7]."
+
+### Bounded Autonomy
+
+Fuse operates autonomously within well-defined boundaries. It can explore design alternatives, run simulations, and iterate on solutions without human intervention. But it cannot change design constraints, override safety-critical specifications, or commit to manufacturing without human approval.
+
+This is a crucial design pattern. Domain-specific agents should have a clear autonomy boundary: a set of actions they can take independently and a set of actions that require human confirmation. The boundary should be defined by domain risk, not technical capability.
+
+```python
+from enum import Enum
+
+class AutonomyLevel(Enum):
+    FULL = "full"           # Agent acts without approval
+    NOTIFY = "notify"       # Agent acts and notifies human
+    APPROVE = "approve"     # Agent proposes, human approves
+    PROHIBITED = "prohibited"  # Agent cannot perform this action
+
+# Domain-specific autonomy policy for EDA agents
+EDA_AUTONOMY_POLICY = {
+    "run_simulation": AutonomyLevel.FULL,
+    "adjust_component_placement": AutonomyLevel.FULL,
+    "modify_trace_routing": AutonomyLevel.FULL,
+    "change_component_values": AutonomyLevel.NOTIFY,
+    "modify_design_constraints": AutonomyLevel.APPROVE,
+    "substitute_components": AutonomyLevel.APPROVE,
+    "submit_for_fabrication": AutonomyLevel.APPROVE,
+    "modify_safety_critical_nets": AutonomyLevel.PROHIBITED,
+}
+
+class BoundedAgent:
+    def __init__(self, policy: dict[str, AutonomyLevel]):
+        self.policy = policy
+
+    async def execute_action(self, action: str, params: dict) -> dict:
+        level = self.policy.get(action, AutonomyLevel.PROHIBITED)
+
+        if level == AutonomyLevel.PROHIBITED:
+            return {"status": "blocked", "reason": "Action prohibited by policy"}
+
+        if level == AutonomyLevel.APPROVE:
+            approval = await self._request_human_approval(action, params)
+            if not approval.granted:
+                return {"status": "blocked", "reason": "Human rejected action"}
+
+        result = await self._perform_action(action, params)
+
+        if level == AutonomyLevel.NOTIFY:
+            await self._notify_human(action, params, result)
+
+        return result
+```
+
+### Multi-Tool Orchestration
+
+EDA workflows require coordinating multiple specialized tools: schematic capture, layout, simulation, verification, timing analysis, power analysis. Fuse orchestrates these tools as an integrated workflow rather than treating each tool invocation as an independent action.
+
+This orchestration is where the domain knowledge really matters. The agent needs to know which tools to run in which order, what parameters each tool needs, and how to interpret cross-tool results. A timing violation might require changes in the layout tool, which then requires re-running the signal integrity simulation, which might reveal new issues.
+
+The [multi-agent orchestration patterns](/blog/building-a-multi-agent-ai-system) used in general-purpose systems apply here, but with domain-specific routing logic. Instead of a general-purpose orchestrator deciding which sub-agent to call, a domain-specific orchestrator follows workflow rules derived from decades of engineering practice.
+
+## Lessons for Building Domain-Specific Agents in Any Industry
+
+The principles behind Fuse apply well beyond semiconductor design. Here is how to apply them to any specialized domain.
+
+### Lesson 1: Start with the Workflow, Not the Model
+
+Most teams start with an LLM and ask "what can we do with this?" Domain-specific agent development should start with the existing workflow and ask "where does autonomous decision-making add value?"
+
+Map the current workflow in detail. Identify steps that are repetitive, time-consuming, and well-defined enough for autonomous execution. These are your agent's initial capabilities. Steps that require creative judgment, stakeholder negotiation, or risk assessment stay with humans.
+
+### Lesson 2: Invest in Domain-Specific Tool Interfaces
+
+The quality of your agent's tool interfaces determines its ceiling. Generic API wrappers lose structural information. Purpose-built interfaces that expose domain-native data structures give the agent richer context for decision-making.
+
+This investment is expensive upfront but pays for itself quickly. Teams that skip this step end up writing increasingly complex prompts to compensate for impoverished tool interfaces, a losing strategy as prompt complexity correlates with inconsistency.
+
+### Lesson 3: Define Autonomy Boundaries Before Building
+
+Autonomy boundaries should be a design document, not an afterthought. Sit down with domain experts and classify every action the agent might take. For each action, ask: "If the agent gets this wrong, what is the worst-case outcome?" The answer determines the autonomy level.
+
+This exercise also reveals which actions are too risky for any level of autonomy today but might become automatable as the agent improves and trust is established.
+
+### Lesson 4: Build Domain-Specific Evaluation
+
+General LLM benchmarks (MMLU, HumanEval, etc.) tell you nothing about whether your agent will perform well in a specialized domain. You need domain-specific evaluation suites that test the agent against realistic scenarios with known correct answers.
+
+```python
+@dataclass
+class DomainEvalCase:
+    id: str
+    description: str
+    input_state: dict
+    expected_actions: list[str]
+    expected_outcome: dict
+    tolerance: dict  # acceptable deviations from expected outcome
+
+class DomainEvalSuite:
+    def __init__(self, cases: list[DomainEvalCase]):
+        self.cases = cases
+
+    async def run(self, agent: "DomainAgent") -> "EvalReport":
+        results = []
+        for case in self.cases:
+            outcome = await agent.execute(case.input_state)
+            score = self._evaluate(case, outcome)
+            results.append({"case_id": case.id, "score": score, "outcome": outcome})
+        return EvalReport(results=results)
+
+    def _evaluate(self, case: DomainEvalCase, outcome: dict) -> float:
+        """Score outcome against expected results with domain tolerances."""
+        score = 0.0
+        total_checks = len(case.expected_outcome)
+        for key, expected in case.expected_outcome.items():
+            actual = outcome.get(key)
+            tolerance = case.tolerance.get(key, 0)
+            if isinstance(expected, (int, float)):
+                if abs(actual - expected) <= tolerance:
+                    score += 1.0
+            elif actual == expected:
+                score += 1.0
+        return score / total_checks if total_checks > 0 else 0.0
+```
+
+For Siemens, evaluation means running Fuse against known-good designs and verifying that the agent's recommendations do not introduce violations. For a financial agent, it means backtesting against historical data. For a medical agent, it means comparison against expert diagnoses on validated case sets.
+
+### Lesson 5: Plan for Human-Agent Collaboration, Not Replacement
+
+Fuse does not replace semiconductor engineers. It amplifies them. The agent handles the tedious iteration loops (run simulation, analyze results, adjust parameters, repeat) while engineers focus on architectural decisions, tradeoff analysis, and creative problem-solving.
+
+This collaboration model is the correct framing for domain-specific agents in every industry. [Multimodal agents](/blog/multimodal-ai-agents-when-ai-sees-hears-and-acts) that can process visual inputs (schematics, X-rays, satellite imagery) alongside text and data are particularly powerful in this collaborative mode, because they can work with the same artifacts that human experts use.
+
+## The Broader Trend: Vertical Agent Specialization
+
+Siemens Fuse is part of a broader trend I have been tracking throughout 2026. After a period where the industry focused on horizontal, general-purpose agent frameworks, the market is shifting toward vertical specialization.
+
+We see this across industries:
+
+- **Finance**: agents specialized for trading, compliance, and risk analysis, each with domain-specific tool integrations and autonomy boundaries. The work on [FinAgent-style multimodal agents for trading](/blog/finagent-and-beyond-multimodal-foundation-agents-for-trading) reflects this trend.
+- **Legal**: agents that understand contract structures, regulatory requirements, and case law, not general-purpose summarizers applied to legal documents.
+- **Healthcare**: agents that integrate with clinical workflows, understand medical terminology at a professional level, and respect patient safety constraints.
+- **Manufacturing**: agents that interface with PLM systems, understand materials science, and can reason about production constraints.
+
+The common thread is that domain-specific agents derive their value from deep integration with domain workflows, not from the underlying LLM's general capabilities. The LLM provides the reasoning engine, but the domain-specific tooling, knowledge, and constraints are what make the agent useful.
+
+## Building Your Own Domain-Specific Agent
+
+If you are considering building a domain-specific agent, here is a practical starting framework:
+
+**Phase 1: Domain mapping (2 to 4 weeks).** Document the workflow you want to augment. Identify every tool, data source, decision point, and stakeholder. Classify actions by autonomy level. Define success metrics that domain experts agree on.
+
+**Phase 2: Tool interface development (4 to 8 weeks).** Build rich, domain-native interfaces to the tools your agent will use. Invest in structured output formats that preserve domain semantics. Test these interfaces independently of any agent logic.
+
+**Phase 3: Agent development (4 to 6 weeks).** Build the agent logic using an appropriate framework. Start with the simplest workflow (often a single tool, single step) and expand. Use the [OpenClaw architecture](/blog/anatomy-of-an-openclaw-agent) or similar patterns as a starting point, adapted to your domain's constraints.
+
+**Phase 4: Evaluation and iteration (ongoing).** Build your domain-specific evaluation suite. Run the agent against realistic scenarios. Iterate on tool interfaces, prompts, and workflow logic based on evaluation results. Expand autonomy boundaries gradually as the agent proves reliable.
+
+**Phase 5: Production deployment (2 to 4 weeks).** Deploy with comprehensive monitoring, human oversight for high-risk actions, and clear rollback procedures. Start with a small user group and expand as confidence grows.
+
+The total timeline for a production domain-specific agent is typically 3 to 6 months, significantly longer than deploying a general-purpose chatbot but significantly more valuable. The investment scales with domain complexity and risk tolerance.
+
+## Key Takeaways
+
+- General-purpose agents fail in specialized domains due to vocabulary mismatch, workflow complexity, and inadequate risk tolerance; domain-specific agents address all three.
+- Siemens Fuse demonstrates the value of deep tool integration over superficial API wrapping: agents that work with native domain data structures produce dramatically better results.
+- Bounded autonomy, where agents act freely within well-defined boundaries and defer to humans for high-risk decisions, is the correct deployment model for domain-specific agents.
+- Start with the workflow, not the model. Map existing processes, identify where autonomous decision-making adds value, and define autonomy boundaries before writing any agent code.
+- Domain-specific evaluation suites are non-negotiable. General LLM benchmarks tell you nothing about performance in specialized contexts.
+- The vertical agent specialization trend is accelerating across finance, legal, healthcare, manufacturing, and other industries. Deep domain integration creates more value than general-purpose flexibility.
+- Plan for human-agent collaboration rather than replacement. The most effective domain agents amplify expert capabilities rather than trying to replicate them.
+- A realistic timeline for a production domain-specific agent is 3 to 6 months, including domain mapping, tool interface development, agent logic, evaluation, and deployment.

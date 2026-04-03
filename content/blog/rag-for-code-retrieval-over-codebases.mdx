@@ -1,0 +1,522 @@
+---
+title: "RAG for Code: Building Retrieval Systems Over Codebases"
+description: "How to adapt RAG techniques for code search with syntax-aware chunking, code embeddings, and AST-based retrieval"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "RAG Systems"
+tags: ["RAG", "Code Search", "Embeddings", "Developer Tools"]
+difficulty: "advanced"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Code is not prose. It has rigid syntax, hierarchical structure, cross-file dependencies, and meaning that depends heavily on context that may live in a completely different directory. Applying standard document RAG techniques to codebases produces mediocre results: functions get split mid-body, class definitions lose their methods, and import relationships disappear entirely.
+
+I have spent the past year building code retrieval systems at Ailog, and the approaches that work for code diverge significantly from what works for documents. The chunking is different, the embeddings are different, the retrieval strategies are different, and the evaluation is different. This article covers what I have learned about each stage.
+
+## Why Code Breaks Standard RAG
+
+Standard RAG pipelines assume text is mostly sequential and self-contained within a chunk. Code violates both assumptions.
+
+**Syntactic structure matters.** A function split across two chunks is worse than useless; it is misleading. A class definition without its methods is incomplete. A decorator separated from the function it decorates loses its meaning. Line-based or character-based chunking treats code as a sequence of characters when it is actually a tree.
+
+**Cross-file dependencies are the norm.** In any non-trivial codebase, understanding a function requires knowing its imports, the types of its arguments (defined elsewhere), and the functions it calls (also defined elsewhere). A chunk that contains `process_order(order: Order)` is incomplete without the `Order` class definition.
+
+**Multiple languages coexist.** Real projects mix Python, TypeScript, SQL, YAML, Dockerfiles, shell scripts, and more. A single embedding model and chunking strategy will not handle all of them equally well.
+
+**Natural language queries map ambiguously to code.** When a developer asks "how do we handle authentication?", the answer might span middleware, configuration files, token validation logic, and database queries. This is fundamentally different from "what is our refund policy?" where the answer likely exists in a single document section.
+
+## AST-Based Chunking
+
+The single most impactful change when building code RAG is switching from text-based chunking to Abstract Syntax Tree (AST) based chunking. Instead of splitting on character counts or line numbers, you parse the code into its syntactic structure and create chunks at meaningful boundaries.
+
+```python
+import ast
+from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass
+class CodeChunk:
+    content: str
+    chunk_type: str  # "function", "class", "method", "module_level"
+    name: str
+    file_path: str
+    start_line: int
+    end_line: int
+    language: str
+    parent_class: Optional[str] = None
+    imports: list[str] = field(default_factory=list)
+    docstring: Optional[str] = None
+    signature: Optional[str] = None
+
+    def to_search_text(self) -> str:
+        """Create a text representation optimized for embedding."""
+        parts = []
+        if self.docstring:
+            parts.append(self.docstring)
+        if self.signature:
+            parts.append(self.signature)
+        parts.append(self.content)
+        if self.parent_class:
+            parts.append(f"Method of class {self.parent_class}")
+        return "\n".join(parts)
+
+
+class PythonASTChunker:
+    def __init__(self, max_chunk_tokens: int = 512):
+        self.max_chunk_tokens = max_chunk_tokens
+
+    def chunk_file(self, source_code: str, file_path: str) -> list[CodeChunk]:
+        try:
+            tree = ast.parse(source_code)
+        except SyntaxError:
+            # Fall back to line-based chunking for unparseable files
+            return self._fallback_chunk(source_code, file_path)
+
+        chunks = []
+        lines = source_code.splitlines()
+
+        # Extract imports at the module level
+        module_imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                module_imports.append(ast.get_source_segment(source_code, node))
+
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                chunk = self._extract_function(node, lines, file_path, module_imports)
+                chunks.append(chunk)
+
+            elif isinstance(node, ast.ClassDef):
+                # Create a chunk for the class definition (without method bodies)
+                class_chunk = self._extract_class_header(node, lines, file_path, module_imports)
+                chunks.append(class_chunk)
+
+                # Create separate chunks for each method
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                        method_chunk = self._extract_function(
+                            item, lines, file_path, module_imports,
+                            parent_class=node.name
+                        )
+                        chunks.append(method_chunk)
+
+        # Capture module-level code (constants, assignments, etc.)
+        module_level = self._extract_module_level(tree, lines, file_path, module_imports)
+        if module_level:
+            chunks.append(module_level)
+
+        return chunks
+
+    def _extract_function(
+        self, node, lines, file_path, imports, parent_class=None
+    ) -> CodeChunk:
+        start = node.lineno - 1
+        end = node.end_lineno
+        content = "\n".join(lines[start:end])
+        docstring = ast.get_docstring(node)
+
+        # Build signature
+        args = []
+        for arg in node.args.args:
+            annotation = ""
+            if arg.annotation:
+                annotation = f": {ast.unparse(arg.annotation)}"
+            args.append(f"{arg.arg}{annotation}")
+        signature = f"def {node.name}({', '.join(args)})"
+
+        if node.returns:
+            signature += f" -> {ast.unparse(node.returns)}"
+
+        return CodeChunk(
+            content=content,
+            chunk_type="method" if parent_class else "function",
+            name=node.name,
+            file_path=file_path,
+            start_line=node.lineno,
+            end_line=node.end_lineno,
+            language="python",
+            parent_class=parent_class,
+            imports=[i for i in imports if i],
+            docstring=docstring,
+            signature=signature,
+        )
+
+    def _extract_class_header(self, node, lines, file_path, imports) -> CodeChunk:
+        # Get the class definition up to the first method
+        start = node.lineno - 1
+        first_method_line = None
+        for item in node.body:
+            if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                first_method_line = item.lineno - 1
+                break
+
+        end = first_method_line if first_method_line else node.end_lineno
+        content = "\n".join(lines[start:end])
+
+        bases = [ast.unparse(b) for b in node.bases]
+        signature = f"class {node.name}"
+        if bases:
+            signature += f"({', '.join(bases)})"
+
+        return CodeChunk(
+            content=content,
+            chunk_type="class",
+            name=node.name,
+            file_path=file_path,
+            start_line=node.lineno,
+            end_line=end,
+            language="python",
+            imports=[i for i in imports if i],
+            docstring=ast.get_docstring(node),
+            signature=signature,
+        )
+
+    def _extract_module_level(self, tree, lines, file_path, imports):
+        # Collect lines that are not part of any function or class
+        occupied = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if hasattr(node, 'lineno') and hasattr(node, 'end_lineno'):
+                    for i in range(node.lineno - 1, node.end_lineno):
+                        occupied.add(i)
+
+        module_lines = []
+        for i, line in enumerate(lines):
+            if i not in occupied and line.strip():
+                module_lines.append(line)
+
+        if not module_lines:
+            return None
+
+        content = "\n".join(module_lines)
+        return CodeChunk(
+            content=content,
+            chunk_type="module_level",
+            name="module",
+            file_path=file_path,
+            start_line=1,
+            end_line=len(lines),
+            language="python",
+            imports=[i for i in imports if i],
+        )
+
+    def _fallback_chunk(self, source_code, file_path):
+        # Simple line-based fallback for unparseable files
+        return [CodeChunk(
+            content=source_code,
+            chunk_type="raw",
+            name="unparsed",
+            file_path=file_path,
+            start_line=1,
+            end_line=source_code.count("\n") + 1,
+            language="unknown",
+        )]
+```
+
+This chunker produces semantically meaningful units: complete functions, class headers, and methods. Each chunk carries structural metadata (parent class, signature, docstring) that enriches the embedding and enables structured retrieval.
+
+### Handling Large Functions
+
+Some functions exceed your token budget. For these, I use a secondary splitting strategy that breaks within the function but preserves the signature and docstring as a prefix in each sub-chunk:
+
+```python
+def split_large_function(chunk: CodeChunk, max_tokens: int = 512) -> list[CodeChunk]:
+    """Split oversized function chunks while preserving context."""
+    import tiktoken
+    enc = tiktoken.encoding_for_model("gpt-4")
+
+    token_count = len(enc.encode(chunk.content))
+    if token_count <= max_tokens:
+        return [chunk]
+
+    # Preserve signature and docstring as prefix
+    prefix_parts = []
+    if chunk.signature:
+        prefix_parts.append(chunk.signature + ":")
+    if chunk.docstring:
+        prefix_parts.append(f'    """{chunk.docstring}"""')
+    prefix = "\n".join(prefix_parts)
+    prefix_tokens = len(enc.encode(prefix))
+
+    # Split the body by logical blocks (blank lines or comment boundaries)
+    body_lines = chunk.content.splitlines()
+    available_tokens = max_tokens - prefix_tokens - 20  # margin
+
+    sub_chunks = []
+    current_lines = []
+    current_tokens = 0
+
+    for line in body_lines:
+        line_tokens = len(enc.encode(line))
+        if current_tokens + line_tokens > available_tokens and current_lines:
+            sub_content = prefix + "\n    # ... (continued)\n" + "\n".join(current_lines)
+            sub_chunks.append(CodeChunk(
+                content=sub_content,
+                chunk_type=chunk.chunk_type,
+                name=chunk.name,
+                file_path=chunk.file_path,
+                start_line=chunk.start_line,
+                end_line=chunk.end_line,
+                language=chunk.language,
+                parent_class=chunk.parent_class,
+                imports=chunk.imports,
+                docstring=chunk.docstring,
+                signature=chunk.signature,
+            ))
+            current_lines = [line]
+            current_tokens = line_tokens
+        else:
+            current_lines.append(line)
+            current_tokens += line_tokens
+
+    if current_lines:
+        sub_content = prefix + "\n    # ... (continued)\n" + "\n".join(current_lines)
+        sub_chunks.append(CodeChunk(
+            content=sub_content,
+            chunk_type=chunk.chunk_type,
+            name=chunk.name,
+            file_path=chunk.file_path,
+            start_line=chunk.start_line,
+            end_line=chunk.end_line,
+            language=chunk.language,
+            parent_class=chunk.parent_class,
+            imports=chunk.imports,
+            docstring=chunk.docstring,
+            signature=chunk.signature,
+        ))
+
+    return sub_chunks
+```
+
+## Code-Specific Embedding Models
+
+General-purpose text embeddings (OpenAI's `text-embedding-3-small`, Cohere's `embed-v3`) perform reasonably on code, but code-specific models outperform them on code search tasks. The main options as of early 2026:
+
+**StarEncoder and CodeBERT derivatives.** Trained specifically on code, these models understand syntax and semantics better than general text models. StarEncoder handles multiple languages and produces embeddings that cluster by functionality rather than surface-level text similarity.
+
+**Voyage Code 3.** One of the strongest commercial options. Trained on code and documentation pairs, it excels at mapping natural language queries to relevant code snippets.
+
+**Jina Code Embeddings v2.** Open-source, multilingual code embeddings. Good performance-to-cost ratio for self-hosted deployments.
+
+When choosing an embedding model, your [evaluation strategy](/blog/embedding-models-compared-openai-vs-open-source) should prioritize code-to-code and text-to-code retrieval benchmarks rather than general text similarity benchmarks. A model that scores well on MTEB may underperform on code retrieval.
+
+### Enriching Embeddings with Context
+
+Raw code chunks embed poorly because they lack the natural language context that helps the embedding model understand intent. I enrich each chunk before embedding:
+
+```python
+def create_enriched_embedding_text(chunk: CodeChunk) -> str:
+    """
+    Build a text representation that combines code
+    with natural language context for better embeddings.
+    """
+    parts = []
+
+    # File path gives project structure context
+    parts.append(f"File: {chunk.file_path}")
+
+    # Type and name
+    if chunk.parent_class:
+        parts.append(f"{chunk.chunk_type.title()} '{chunk.name}' of class '{chunk.parent_class}'")
+    else:
+        parts.append(f"{chunk.chunk_type.title()}: {chunk.name}")
+
+    # Docstring is natural language, highly valuable for embedding
+    if chunk.docstring:
+        parts.append(f"Description: {chunk.docstring}")
+
+    # Signature captures the interface
+    if chunk.signature:
+        parts.append(f"Signature: {chunk.signature}")
+
+    # The actual code
+    parts.append(f"Code:\n{chunk.content}")
+
+    return "\n".join(parts)
+```
+
+This enrichment boosts retrieval performance by 15 to 25% on our internal benchmarks compared to embedding raw code alone. The docstring and file path provide the semantic bridge between natural language queries and code content.
+
+## Index Architecture for Large Repositories
+
+A codebase with 50,000 files and 2 million lines of code can produce 200,000+ chunks. The index architecture needs to handle this scale while supporting incremental updates (you do not want to re-index the entire repo on every commit).
+
+### Incremental Indexing
+
+```python
+import hashlib
+from pathlib import Path
+
+class IncrementalCodeIndexer:
+    def __init__(self, vectorstore, chunker, embedder):
+        self.vectorstore = vectorstore
+        self.chunker = chunker
+        self.embedder = embedder
+        self.file_hashes: dict[str, str] = {}  # path -> content hash
+
+    def compute_file_hash(self, content: str) -> str:
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def index_repository(self, repo_path: str, extensions: list[str] = None):
+        if extensions is None:
+            extensions = [".py", ".ts", ".js", ".go", ".rs", ".java"]
+
+        repo = Path(repo_path)
+        files_to_index = []
+        files_unchanged = 0
+
+        for ext in extensions:
+            for file_path in repo.rglob(f"*{ext}"):
+                rel_path = str(file_path.relative_to(repo))
+                content = file_path.read_text(errors="ignore")
+                content_hash = self.compute_file_hash(content)
+
+                if self.file_hashes.get(rel_path) == content_hash:
+                    files_unchanged += 1
+                    continue
+
+                files_to_index.append((rel_path, content, content_hash))
+
+        print(f"Files unchanged: {files_unchanged}, files to index: {len(files_to_index)}")
+
+        for rel_path, content, content_hash in files_to_index:
+            # Remove old chunks for this file
+            self.vectorstore.delete(filter={"file_path": rel_path})
+
+            # Chunk, embed, and store
+            chunks = self.chunker.chunk_file(content, rel_path)
+            for chunk in chunks:
+                embedding_text = create_enriched_embedding_text(chunk)
+                embedding = self.embedder.embed(embedding_text)
+                self.vectorstore.add(
+                    content=chunk.content,
+                    embedding=embedding,
+                    metadata={
+                        "file_path": chunk.file_path,
+                        "chunk_type": chunk.chunk_type,
+                        "name": chunk.name,
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "language": chunk.language,
+                        "parent_class": chunk.parent_class or "",
+                        "signature": chunk.signature or "",
+                    }
+                )
+
+            self.file_hashes[rel_path] = content_hash
+```
+
+This approach only re-indexes files that have changed, which reduces indexing time from hours to seconds for typical commit-sized changes. In production, I store the file hash map in the same database as the vector store so it persists across indexer restarts.
+
+## Query Strategies
+
+Code search queries come in several forms, and the retrieval strategy should adapt accordingly.
+
+**Natural language to code:** "How do we validate user tokens?" This requires the semantic bridge that enriched embeddings provide. Dense retrieval with a code-aware embedding model works best here.
+
+**Code to code:** Pasting a snippet and asking "where is something similar?" This is where code-specific embeddings shine over general text models. The embedding captures structural patterns, not just surface text.
+
+**Signature search:** "Find all functions that take a DataFrame and return a dict." This benefits from metadata filtering on the signature field combined with semantic search.
+
+**Dependency tracing:** "What calls the `process_payment` function?" This is not well-served by embedding similarity alone. You need a call graph index built from static analysis, which complements the vector index.
+
+For most developer-facing code search tools, I recommend a [hybrid search approach](/blog/hybrid-search-combining-dense-and-sparse-retrieval) that combines dense retrieval (for semantic queries) with keyword search (for exact identifier matches). A query like "the PaymentProcessor class" should match on the exact identifier, not just on semantic similarity to payment processing concepts.
+
+## Multi-Language Support
+
+Real codebases are polyglot. The AST-based chunker above handles Python; you need analogous parsers for other languages. Tree-sitter is the practical choice here, as it provides incremental parsing for dozens of languages through a single interface.
+
+```python
+# Using tree-sitter for multi-language AST parsing
+import tree_sitter_python
+import tree_sitter_javascript
+from tree_sitter import Language, Parser
+
+# Configure parsers per language
+PARSERS = {
+    ".py": ("python", tree_sitter_python.language()),
+    ".js": ("javascript", tree_sitter_javascript.language()),
+    ".ts": ("typescript", None),  # requires tree-sitter-typescript
+}
+
+def get_parser_for_file(file_path: str) -> tuple[str, Parser]:
+    from pathlib import Path
+    ext = Path(file_path).suffix
+
+    if ext not in PARSERS:
+        return None, None
+
+    lang_name, lang_obj = PARSERS[ext]
+    if lang_obj is None:
+        return lang_name, None
+
+    parser = Parser(Language(lang_obj))
+    return lang_name, parser
+
+
+def extract_functions_tree_sitter(source: str, parser: Parser, lang: str) -> list[dict]:
+    """Extract function definitions using tree-sitter, language-agnostic."""
+    tree = parser.parse(bytes(source, "utf-8"))
+    root = tree.root_node
+
+    # Node types vary by language
+    function_types = {
+        "python": ["function_definition", "class_definition"],
+        "javascript": ["function_declaration", "class_declaration", "arrow_function"],
+        "typescript": ["function_declaration", "class_declaration", "arrow_function"],
+        "go": ["function_declaration", "method_declaration"],
+    }
+
+    target_types = function_types.get(lang, ["function_definition"])
+    functions = []
+
+    def walk(node):
+        if node.type in target_types:
+            functions.append({
+                "type": node.type,
+                "start_line": node.start_point[0] + 1,
+                "end_line": node.end_point[0] + 1,
+                "content": source[node.start_byte:node.end_byte],
+                "name": _get_name(node),
+            })
+        for child in node.children:
+            walk(child)
+
+    def _get_name(node):
+        for child in node.children:
+            if child.type in ("identifier", "property_identifier"):
+                return child.text.decode("utf-8")
+        return "anonymous"
+
+    walk(root)
+    return functions
+```
+
+Tree-sitter is fast enough for real-time indexing (it can parse a 10,000-line file in under 10 milliseconds), which means you can hook it into file watchers for near-real-time index updates during development.
+
+## Evaluation
+
+Evaluating code RAG is harder than evaluating document RAG because relevance is more nuanced. A retrieved chunk might be "related" to the query without being the specific function the developer needs.
+
+I use three evaluation dimensions:
+
+**Retrieval precision at k:** Of the top k retrieved chunks, how many are relevant to the query? Manually annotated query-result pairs are the gold standard. I aim for 70%+ precision at k=5.
+
+**Exact match rate:** For queries where there is a single correct answer (e.g., "find the definition of `calculate_tax`"), does the correct chunk appear in the top k results? This should be above 90% for identifier-based queries.
+
+**Task completion rate:** The ultimate measure. Given a natural language question and the retrieved code chunks, can a developer (or an LLM) correctly answer the question? This captures both retrieval quality and the usefulness of the chunk format.
+
+Building strong [domain-specific tokenizers](/blog/building-custom-tokenizers-for-domain-specific-nlp) can also improve retrieval quality, particularly for codebases with specialized naming conventions or domain-specific identifiers that general tokenizers handle poorly.
+
+## Key Takeaways
+
+- AST-based chunking produces dramatically better results than line-based or character-based chunking for code, because it preserves syntactic boundaries (functions, classes, methods).
+- Enriching code chunks with natural language context (docstrings, file paths, signatures) before embedding improves retrieval by 15 to 25% compared to embedding raw code.
+- Code-specific embedding models (Voyage Code 3, StarEncoder) outperform general text embeddings on code search tasks; evaluate on code retrieval benchmarks, not general text similarity.
+- Incremental indexing that tracks file content hashes reduces re-indexing time from hours to seconds for typical commit-sized changes.
+- Tree-sitter provides fast, multi-language AST parsing through a single interface, making it practical to support polyglot codebases.
+- Hybrid search (dense retrieval plus keyword matching) is essential for code, because exact identifier matches are as important as semantic similarity.
+- Evaluation should combine precision at k, exact match rate for identifier queries, and end-to-end task completion rate.
+- Large function handling requires secondary splitting that preserves the function signature and docstring as a prefix in each sub-chunk.

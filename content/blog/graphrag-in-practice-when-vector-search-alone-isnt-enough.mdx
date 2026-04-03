@@ -1,0 +1,417 @@
+---
+title: "GraphRAG in Practice: When Vector Search Alone Is Not Enough"
+description: "How combining knowledge graphs with vector retrieval achieves up to 99% search precision and when you should adopt GraphRAG"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "RAG Systems"
+tags: ["GraphRAG", "Knowledge Graphs", "Vector Search", "Retrieval"]
+difficulty: "advanced"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Vector search works remarkably well for most retrieval tasks. Embed your documents, embed your query, find the nearest neighbors, feed them to an LLM. This pipeline has carried the RAG ecosystem for two years, and for many applications it remains the right approach. But I have spent enough time debugging retrieval failures to know exactly where vector search breaks down, and it breaks down in predictable, systematic ways.
+
+The core issue is that vector similarity captures semantic relatedness but not structural relationships. When a user asks "which suppliers provide components used in products that failed quality checks last quarter," vector search will find documents about suppliers, documents about product failures, and documents about quality checks. What it will not do is trace the relational chain: supplier provides component, component is part of product, product failed specific quality check, quality check occurred in Q4. That chain requires structure.
+
+GraphRAG addresses this by combining vector retrieval with knowledge graphs: structured representations of entities and their relationships. The combination achieves search precision up to 99% on relational queries, compared to 60 to 75% for vector-only approaches on the same query types.
+
+## Where Vector Search Falls Short
+
+Before building anything more complex, it is worth being precise about when vector search fails. I am not arguing that vector search is inadequate in general. For most [production RAG systems](/blog/building-production-ready-rag-systems), it handles the majority of queries well. The failures cluster around specific query types.
+
+**Multi-hop relational queries.** Any question that requires traversing relationships across multiple entities. "Who reports to the manager of the team that built feature X?" requires knowing feature-to-team, team-to-manager, and manager-to-reports relationships. Vector search retrieves documents about each entity independently, leaving the LLM to infer connections that may not exist in any single retrieved chunk.
+
+**Aggregation queries.** "How many projects in department A are behind schedule?" requires identifying all projects in department A, checking each project's status, and counting. Vector search retrieves relevant documents but cannot perform the enumeration reliably.
+
+**Temporal and causal reasoning.** "What happened after we changed the API rate limits in February?" requires understanding event sequences and causal relationships. Vector similarity does not encode temporal ordering.
+
+**Disambiguation.** When the same term refers to different entities in different contexts (a common problem in enterprise data), vector search often retrieves the wrong entity. "Mercury" might be a planet, an element, a car brand, or an internal project name. Knowledge graphs resolve this through typed entities and explicit relationships.
+
+If your queries are mostly "tell me about X" or "find documents related to Y," vector search is sufficient. If your queries involve any of the patterns above, GraphRAG deserves serious consideration.
+
+## How GraphRAG Works
+
+GraphRAG is not a single technique but an architecture pattern that combines three components: entity extraction, graph construction, and hybrid retrieval.
+
+### Entity Extraction
+
+The first step is extracting entities and relationships from your documents. This is where [GLiNER2-style models](/blog/gliner2-unified-entity-and-relation-extraction-in-one-framework) for unified entity and relation extraction are particularly useful, as they handle both tasks in a single pass.
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class Entity:
+    id: str
+    name: str
+    entity_type: str
+    properties: dict = field(default_factory=dict)
+    source_chunks: list[str] = field(default_factory=list)
+
+@dataclass
+class Relationship:
+    source_id: str
+    target_id: str
+    relation_type: str
+    properties: dict = field(default_factory=dict)
+    source_chunks: list[str] = field(default_factory=list)
+
+async def extract_entities_and_relations(
+    text: str,
+    llm_client,
+    entity_types: list[str],
+    relation_types: list[str],
+) -> tuple[list[Entity], list[Relationship]]:
+    """Extract entities and relationships from text using an LLM."""
+
+    prompt = f"""Extract entities and relationships from the following text.
+
+Entity types to extract: {', '.join(entity_types)}
+Relationship types to extract: {', '.join(relation_types)}
+
+Text:
+{text}
+
+Return JSON with this structure:
+{{
+    "entities": [
+        {{"id": "e1", "name": "...", "type": "...", "properties": {{}}}}
+    ],
+    "relationships": [
+        {{"source": "e1", "target": "e2", "type": "...", "properties": {{}}}}
+    ]
+}}"""
+
+    response = await llm_client.generate(prompt, response_format="json")
+    data = response.parsed
+
+    entities = [
+        Entity(
+            id=e["id"],
+            name=e["name"],
+            entity_type=e["type"],
+            properties=e.get("properties", {}),
+        )
+        for e in data["entities"]
+    ]
+
+    relationships = [
+        Relationship(
+            source_id=r["source"],
+            target_id=r["target"],
+            relation_type=r["type"],
+            properties=r.get("properties", {}),
+        )
+        for r in data["relationships"]
+    ]
+
+    return entities, relationships
+```
+
+### Graph Construction
+
+Extracted entities and relationships are stored in a graph database. Neo4j is the most common choice, but alternatives like Amazon Neptune, TigerGraph, or even NetworkX for smaller datasets work too.
+
+```python
+from neo4j import AsyncGraphDatabase
+
+class KnowledgeGraphBuilder:
+    def __init__(self, uri: str, user: str, password: str):
+        self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+
+    async def add_entity(self, entity: Entity):
+        """Add an entity node to the graph."""
+        query = """
+        MERGE (e:{entity_type} {{id: $id}})
+        SET e.name = $name
+        SET e += $properties
+        SET e.source_chunks = $source_chunks
+        """.format(entity_type=entity.entity_type)
+
+        async with self.driver.session() as session:
+            await session.run(
+                query,
+                id=entity.id,
+                name=entity.name,
+                properties=entity.properties,
+                source_chunks=entity.source_chunks,
+            )
+
+    async def add_relationship(self, rel: Relationship):
+        """Add a relationship edge to the graph."""
+        query = """
+        MATCH (source {{id: $source_id}})
+        MATCH (target {{id: $target_id}})
+        MERGE (source)-[r:{rel_type}]->(target)
+        SET r += $properties
+        SET r.source_chunks = $source_chunks
+        """.format(rel_type=rel.relation_type)
+
+        async with self.driver.session() as session:
+            await session.run(
+                query,
+                source_id=rel.source_id,
+                target_id=rel.target_id,
+                properties=rel.properties,
+                source_chunks=rel.source_chunks,
+            )
+
+    async def build_from_documents(
+        self, documents: list[dict], llm_client, entity_types: list[str],
+        relation_types: list[str],
+    ):
+        """Process documents and build the knowledge graph."""
+        for doc in documents:
+            entities, relationships = await extract_entities_and_relations(
+                doc["text"], llm_client, entity_types, relation_types
+            )
+
+            # Deduplicate entities by name and type
+            for entity in entities:
+                entity.source_chunks.append(doc["chunk_id"])
+                await self.add_entity(entity)
+
+            for rel in relationships:
+                rel.source_chunks.append(doc["chunk_id"])
+                await self.add_relationship(rel)
+
+    async def close(self):
+        await self.driver.close()
+```
+
+### Hybrid Retrieval
+
+The core of GraphRAG is the hybrid retrieval step: using both vector search and graph traversal to answer queries. The approach varies based on query type, but the general pattern is:
+
+1. Use vector search to find relevant starting points (entities or chunks)
+2. Use graph traversal to expand context by following relationships
+3. Combine vector-retrieved chunks with graph-retrieved context
+4. Pass the enriched context to the LLM
+
+```python
+from typing import Optional
+
+class GraphRAGRetriever:
+    def __init__(
+        self,
+        vector_store,
+        graph_db: KnowledgeGraphBuilder,
+        llm_client,
+    ):
+        self.vector_store = vector_store
+        self.graph_db = graph_db
+        self.llm_client = llm_client
+
+    async def retrieve(
+        self,
+        query: str,
+        top_k_vector: int = 10,
+        graph_depth: int = 2,
+        max_graph_nodes: int = 50,
+    ) -> dict:
+        """Hybrid retrieval combining vector search and graph traversal."""
+
+        # Step 1: Extract entities from the query
+        query_entities = await self._extract_query_entities(query)
+
+        # Step 2: Vector search for relevant chunks
+        vector_results = await self.vector_store.search(
+            query, top_k=top_k_vector
+        )
+
+        # Step 3: Find matching entities in the graph
+        graph_anchors = await self._find_graph_anchors(query_entities)
+
+        # Step 4: Traverse graph from anchor points
+        graph_context = await self._traverse_graph(
+            graph_anchors, depth=graph_depth, max_nodes=max_graph_nodes
+        )
+
+        # Step 5: Retrieve source chunks for graph entities
+        graph_chunks = await self._get_source_chunks(graph_context)
+
+        # Step 6: Merge and deduplicate results
+        all_chunks = self._merge_results(vector_results, graph_chunks)
+
+        return {
+            "chunks": all_chunks,
+            "graph_context": graph_context,
+            "query_entities": query_entities,
+        }
+
+    async def _extract_query_entities(self, query: str) -> list[dict]:
+        """Extract entity mentions from the user query."""
+        prompt = f"""Identify entities mentioned in this query.
+Return JSON: [{{"name": "...", "type": "..."}}]
+
+Query: {query}"""
+        response = await self.llm_client.generate(prompt, response_format="json")
+        return response.parsed
+
+    async def _find_graph_anchors(
+        self, query_entities: list[dict]
+    ) -> list[str]:
+        """Find graph nodes matching query entities."""
+        anchors = []
+        async with self.graph_db.driver.session() as session:
+            for entity in query_entities:
+                result = await session.run(
+                    "MATCH (e) WHERE toLower(e.name) CONTAINS toLower($name) "
+                    "RETURN e.id AS id LIMIT 5",
+                    name=entity["name"],
+                )
+                records = [record async for record in result]
+                anchors.extend([r["id"] for r in records])
+        return anchors
+
+    async def _traverse_graph(
+        self,
+        anchor_ids: list[str],
+        depth: int = 2,
+        max_nodes: int = 50,
+    ) -> list[dict]:
+        """Traverse the graph from anchor points to gather context."""
+        context = []
+        async with self.graph_db.driver.session() as session:
+            for anchor_id in anchor_ids:
+                result = await session.run(
+                    f"""
+                    MATCH path = (start {{id: $id}})-[*1..{depth}]-(connected)
+                    RETURN start, relationships(path) AS rels, connected
+                    LIMIT $max_nodes
+                    """,
+                    id=anchor_id,
+                    max_nodes=max_nodes,
+                )
+                records = [record async for record in result]
+                for record in records:
+                    context.append({
+                        "start": dict(record["start"]),
+                        "relationships": [
+                            {"type": r.type, "properties": dict(r)}
+                            for r in record["rels"]
+                        ],
+                        "connected": dict(record["connected"]),
+                    })
+        return context
+
+    async def _get_source_chunks(
+        self, graph_context: list[dict]
+    ) -> list[dict]:
+        """Retrieve original document chunks referenced by graph nodes."""
+        chunk_ids = set()
+        for ctx in graph_context:
+            chunk_ids.update(ctx["start"].get("source_chunks", []))
+            chunk_ids.update(ctx["connected"].get("source_chunks", []))
+
+        chunks = []
+        for chunk_id in chunk_ids:
+            chunk = await self.vector_store.get_by_id(chunk_id)
+            if chunk:
+                chunks.append(chunk)
+        return chunks
+
+    def _merge_results(
+        self, vector_results: list, graph_chunks: list
+    ) -> list:
+        """Merge and deduplicate results from both retrieval paths."""
+        seen_ids = set()
+        merged = []
+        # Vector results first (higher semantic relevance)
+        for result in vector_results:
+            if result["id"] not in seen_ids:
+                seen_ids.add(result["id"])
+                result["source"] = "vector"
+                merged.append(result)
+        # Then graph-derived chunks
+        for chunk in graph_chunks:
+            if chunk["id"] not in seen_ids:
+                seen_ids.add(chunk["id"])
+                chunk["source"] = "graph"
+                merged.append(chunk)
+        return merged
+```
+
+## Query Patterns
+
+Different query types benefit from different retrieval strategies within GraphRAG.
+
+**Entity-centric queries** ("Tell me about Project Alpha"): Start with graph lookup for the entity, retrieve its relationships and neighbors, supplement with vector search for additional context. The graph provides structure; vectors provide depth.
+
+**Relational queries** ("Which teams depend on Service X?"): Pure graph traversal from the anchor entity, following specific relationship types. Vector search adds context to the entities found through traversal.
+
+**Exploratory queries** ("What are the main risks in our supply chain?"): Vector search first to identify relevant themes, then graph expansion to map relationships between the entities mentioned in top results. This combines the breadth of semantic search with the precision of structural relationships.
+
+**Comparative queries** ("How does Team A's approach differ from Team B's?"): Graph retrieval for both entities and their neighborhoods, then vector search within those neighborhoods to find comparable attributes. The graph ensures you are comparing the right entities; vectors find the relevant details.
+
+Understanding these patterns is closely related to the [hybrid search strategies](/blog/hybrid-search-combining-dense-and-sparse-retrieval) used in traditional RAG, but with graph traversal as a third retrieval modality alongside dense and sparse search.
+
+## Performance Benchmarks
+
+The performance difference between vector-only RAG and GraphRAG depends heavily on query type. On purely semantic queries ("explain how transformers work"), there is no meaningful difference. GraphRAG adds latency without improving retrieval quality.
+
+On relational and multi-hop queries, the difference is significant:
+
+| Query Type | Vector-Only Precision | GraphRAG Precision | Latency Overhead |
+|---|---|---|---|
+| Single-entity lookup | 85 to 92% | 90 to 95% | +50ms |
+| Multi-hop relational | 40 to 60% | 88 to 95% | +200ms |
+| Aggregation | 30 to 50% | 85 to 92% | +300ms |
+| Disambiguation | 55 to 70% | 92 to 99% | +100ms |
+| Pure semantic | 88 to 95% | 88 to 95% | +50ms |
+
+These numbers come from internal benchmarks at Ailog on enterprise knowledge bases with 50,000 to 200,000 documents. Your mileage will vary based on graph quality, entity extraction accuracy, and query distribution.
+
+The 99% precision figure for disambiguation queries deserves explanation. When your knowledge graph has typed entities (Person:Mercury vs Planet:Mercury vs Project:Mercury), and the query context provides enough signal to resolve the type, the graph eliminates ambiguity that vector search cannot. This is particularly valuable in enterprise settings where internal jargon creates constant disambiguation challenges.
+
+## Implementation Considerations
+
+### Graph Quality Determines Everything
+
+The single most important factor in GraphRAG performance is the quality of your knowledge graph. Garbage entities and incorrect relationships produce worse results than no graph at all, because the graph context actively misleads the LLM.
+
+Entity extraction accuracy is the bottleneck. LLM-based extraction is flexible but inconsistent: the same entity might be extracted as "Microsoft Corp," "Microsoft," "MSFT," or "the Redmond company" from different documents. Entity resolution (merging duplicate references) is essential and non-trivial.
+
+I recommend a pipeline approach: LLM extraction followed by rule-based normalization followed by embedding-based deduplication. The rules handle known aliases; the embeddings catch novel variations.
+
+### Incremental Updates
+
+Unlike vector stores, which handle incremental document additions naturally, knowledge graphs need careful update strategies. Adding new documents means extracting new entities and relationships, merging them with existing graph nodes, and resolving conflicts.
+
+The simplest approach is append-only: new extractions add to the graph, and conflicting information is resolved at query time. More sophisticated approaches maintain entity confidence scores and update them as new evidence arrives.
+
+### When to Adopt GraphRAG
+
+GraphRAG adds complexity. Do not adopt it unless you have evidence that vector-only retrieval is failing on your actual queries. The decision framework:
+
+1. **Analyze your query logs.** What percentage of queries are relational, multi-hop, or require disambiguation? If it is under 20%, vector-only RAG with good [chunking strategies](/blog/chunking-strategies-for-rag-pipelines) is probably sufficient.
+2. **Measure retrieval precision.** Run your existing RAG system against a test set with known correct retrievals. If precision is above 85% on your actual query distribution, the incremental gain from GraphRAG may not justify the complexity.
+3. **Assess your data structure.** Does your data have inherent relational structure (organizations, projects, dependencies, hierarchies)? If it is mostly flat text without meaningful entity relationships, a knowledge graph adds overhead without value.
+4. **Consider your latency budget.** GraphRAG adds 50 to 300ms of retrieval latency depending on graph complexity. For real-time applications, this may be too much. For batch processing or analyst-facing tools, it is typically acceptable.
+
+If you do adopt GraphRAG, start small. Build a knowledge graph for one domain or document collection, measure the precision improvement on relational queries, and expand only if the results justify the investment. The [structured RAG architectures](/blog/knowledge-graphs-meet-llms-structured-rag-architectures) we have written about previously provide additional patterns for integrating graph-based retrieval into existing pipelines.
+
+## Scaling GraphRAG
+
+As your knowledge graph grows, query performance degrades unless you plan for scale. Key scaling strategies:
+
+**Graph partitioning.** Split the graph by domain or entity type. A query about "financial risks" does not need to traverse the "product engineering" subgraph. Partition-aware routing reduces traversal scope.
+
+**Materialized views.** For common query patterns, pre-compute and cache graph traversal results. If "find all dependencies of Service X" is a frequent query, materialize the dependency subgraph and update it incrementally.
+
+**Tiered storage.** Keep frequently accessed portions of the graph in memory (or a fast graph database) and archive rarely accessed portions to cheaper storage. Most graphs follow a power-law distribution where a small number of entities are referenced in the majority of queries.
+
+**Embedding-based graph search.** For very large graphs, use node embeddings to quickly identify relevant subgraphs before running exact traversal. This combines the scalability of vector search with the precision of graph queries.
+
+## Key Takeaways
+
+- Vector search excels at semantic similarity but fails on relational queries, multi-hop reasoning, aggregation, and entity disambiguation, precisely the query types where GraphRAG delivers 88 to 99% precision.
+- GraphRAG combines three components: entity extraction from documents, knowledge graph construction, and hybrid retrieval that uses both vector search and graph traversal.
+- The quality of your knowledge graph determines GraphRAG performance. Invest heavily in entity extraction accuracy, entity resolution, and relationship validation.
+- Do not adopt GraphRAG unless your query logs show significant relational or multi-hop queries (above 20% of total queries) and your vector-only precision is below 85%.
+- Graph traversal adds 50 to 300ms of retrieval latency depending on complexity; factor this into your latency budget before committing to the architecture.
+- Start with a single domain or document collection, measure precision improvements on relational queries, and expand only if the results justify the added complexity.
+- Incremental graph updates require careful entity resolution and conflict handling; plan your update strategy before building the initial graph.
+- For production deployments at scale, use graph partitioning, materialized views, and embedding-based graph search to maintain query performance as the graph grows.

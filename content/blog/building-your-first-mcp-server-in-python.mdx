@@ -1,0 +1,510 @@
+---
+title: "Building Your First MCP Server in Python"
+description: "A step-by-step tutorial to create a Model Context Protocol server that exposes custom tools to AI agents"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "Getting Started"
+tags: ["MCP", "Python", "Tutorial", "AI Agents"]
+difficulty: "beginner"
+readTime: "10 min read"
+author: "Hélain Zimmermann"
+---
+
+Model Context Protocol (MCP) has crossed 97 million installs, and there is a good reason for that. Before MCP, connecting an LLM to a custom tool meant writing bespoke integration code for every client (Claude Desktop, Cursor, your own agent framework, etc.). MCP standardizes that connection. You build one server, and any MCP-compatible client can discover and call your tools.
+
+If you have read about [what MCP is and how it works](/blog/model-context-protocol-connecting-llms-to-external-tools), this tutorial is the natural next step. We are going to build an actual MCP server in Python, from zero to a working server that you can connect to Claude Desktop or any other MCP client.
+
+## What We Are Building
+
+By the end of this tutorial, you will have an MCP server that exposes two tools:
+
+1. **`search_notes`**: Searches a local collection of notes by keyword.
+2. **`create_note`**: Creates a new note and saves it to disk.
+
+These are deliberately simple tools. The point is to understand the MCP server structure, not to build something complex. Once you grasp the pattern, you can expose any Python functionality as an MCP tool: database queries, API calls, file operations, ML model inference, anything.
+
+## Prerequisites
+
+You need Python 3.10 or later and a basic understanding of Python. No prior experience with MCP is required.
+
+## Setting Up the Environment
+
+Start by creating a project directory and a virtual environment:
+
+```python
+# In your terminal:
+# mkdir mcp-notes-server && cd mcp-notes-server
+# python -m venv venv
+# source venv/bin/activate  (Linux/Mac)
+# venv\Scripts\activate      (Windows)
+
+# Install the MCP Python SDK
+# pip install mcp
+```
+
+The `mcp` package is the official Python SDK for building MCP servers and clients. It handles the protocol details (JSON-RPC transport, capability negotiation, message framing) so you can focus on your tool logic.
+
+## The Minimal MCP Server
+
+Here is the smallest possible MCP server. It does nothing useful, but it shows the skeleton:
+
+```python
+# server.py
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+
+app = Server("notes-server")
+
+async def main():
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(
+            read_stream,
+            write_stream,
+            app.create_initialization_options()
+        )
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+Three things to notice. First, an MCP server is an async application. The `Server` class manages the protocol lifecycle. Second, `stdio_server()` sets up communication over stdin/stdout, which is the standard transport for local MCP servers. Third, `create_initialization_options()` tells the client what capabilities this server supports.
+
+If you run `python server.py` right now, the server starts and waits for a client to connect via stdio. It will not do anything because we have not defined any tools yet.
+
+## Adding Your First Tool
+
+Tools are the core of an MCP server. Each tool has a name, a description, an input schema, and a handler function. The MCP SDK uses decorators to register tools.
+
+```python
+# server.py
+import json
+from pathlib import Path
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+from pydantic import BaseModel
+
+app = Server("notes-server")
+
+# Storage directory for notes
+NOTES_DIR = Path("./notes")
+NOTES_DIR.mkdir(exist_ok=True)
+
+
+class SearchNotesInput(BaseModel):
+    query: str
+
+
+class CreateNoteInput(BaseModel):
+    title: str
+    content: str
+
+
+@app.list_tools()
+async def list_tools() -> list[Tool]:
+    """Return the list of tools this server provides."""
+    return [
+        Tool(
+            name="search_notes",
+            description="Search through saved notes by keyword. Returns matching notes with their titles and content.",
+            inputSchema=SearchNotesInput.model_json_schema(),
+        ),
+        Tool(
+            name="create_note",
+            description="Create a new note with a title and content. Saves the note to disk.",
+            inputSchema=CreateNoteInput.model_json_schema(),
+        ),
+    ]
+```
+
+The `@app.list_tools()` decorator registers a function that the client calls during capability discovery. When Claude Desktop (or another client) connects to your server, it calls this function to learn what tools are available. The client then shows these tools to the LLM, which can decide to call them.
+
+Notice the input schemas. They use Pydantic models, which the SDK converts to JSON Schema automatically. This schema tells the LLM what arguments each tool expects, their types, and which are required.
+
+## Implementing Tool Handlers
+
+The `list_tools` function describes the tools; the `call_tool` handler executes them:
+
+```python
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    """Handle tool execution requests."""
+
+    if name == "search_notes":
+        return await handle_search_notes(arguments)
+    elif name == "create_note":
+        return await handle_create_note(arguments)
+    else:
+        raise ValueError(f"Unknown tool: {name}")
+
+
+async def handle_search_notes(arguments: dict) -> list[TextContent]:
+    query = arguments["query"].lower()
+    results = []
+
+    for note_file in NOTES_DIR.glob("*.json"):
+        note = json.loads(note_file.read_text())
+        if query in note["title"].lower() or query in note["content"].lower():
+            results.append(note)
+
+    if not results:
+        return [TextContent(type="text", text=f"No notes found matching '{arguments['query']}'.")]
+
+    output_lines = [f"Found {len(results)} matching note(s):\n"]
+    for note in results:
+        output_lines.append(f"Title: {note['title']}")
+        output_lines.append(f"Content: {note['content']}")
+        output_lines.append("")
+
+    return [TextContent(type="text", text="\n".join(output_lines))]
+
+
+async def handle_create_note(arguments: dict) -> list[TextContent]:
+    title = arguments["title"]
+    content = arguments["content"]
+
+    # Create a filename from the title
+    safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in title)
+    safe_title = safe_title.strip().replace(" ", "_").lower()
+    file_path = NOTES_DIR / f"{safe_title}.json"
+
+    note = {
+        "title": title,
+        "content": content,
+        "created_at": __import__("datetime").datetime.utcnow().isoformat(),
+    }
+
+    file_path.write_text(json.dumps(note, indent=2))
+
+    return [TextContent(
+        type="text",
+        text=f"Note '{title}' saved successfully to {file_path}."
+    )]
+```
+
+Each tool handler receives the arguments as a dictionary (already validated against the schema by the client) and returns a list of `TextContent` objects. The text content gets sent back to the LLM, which uses it to formulate its response to the user.
+
+## The Complete Server
+
+Putting it all together:
+
+```python
+# server.py
+import json
+import datetime
+from pathlib import Path
+import asyncio
+
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+from pydantic import BaseModel
+
+app = Server("notes-server")
+
+NOTES_DIR = Path("./notes")
+NOTES_DIR.mkdir(exist_ok=True)
+
+
+class SearchNotesInput(BaseModel):
+    query: str
+
+
+class CreateNoteInput(BaseModel):
+    title: str
+    content: str
+    tags: list[str] = []
+
+
+@app.list_tools()
+async def list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="search_notes",
+            description=(
+                "Search through saved notes by keyword. "
+                "Returns matching notes with their titles and content."
+            ),
+            inputSchema=SearchNotesInput.model_json_schema(),
+        ),
+        Tool(
+            name="create_note",
+            description=(
+                "Create a new note with a title, content, and optional tags. "
+                "Saves the note as a JSON file to disk."
+            ),
+            inputSchema=CreateNoteInput.model_json_schema(),
+        ),
+    ]
+
+
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    if name == "search_notes":
+        return await handle_search_notes(arguments)
+    elif name == "create_note":
+        return await handle_create_note(arguments)
+    else:
+        raise ValueError(f"Unknown tool: {name}")
+
+
+async def handle_search_notes(arguments: dict) -> list[TextContent]:
+    query = arguments["query"].lower()
+    results = []
+
+    for note_file in NOTES_DIR.glob("*.json"):
+        try:
+            note = json.loads(note_file.read_text())
+        except json.JSONDecodeError:
+            continue
+
+        title_match = query in note.get("title", "").lower()
+        content_match = query in note.get("content", "").lower()
+        tag_match = any(query in tag.lower() for tag in note.get("tags", []))
+
+        if title_match or content_match or tag_match:
+            results.append(note)
+
+    if not results:
+        return [TextContent(
+            type="text",
+            text=f"No notes found matching '{arguments['query']}'."
+        )]
+
+    output_lines = [f"Found {len(results)} matching note(s):\n"]
+    for note in results:
+        output_lines.append(f"**{note['title']}**")
+        if note.get("tags"):
+            output_lines.append(f"Tags: {', '.join(note['tags'])}")
+        output_lines.append(note["content"])
+        output_lines.append(f"Created: {note.get('created_at', 'unknown')}\n")
+
+    return [TextContent(type="text", text="\n".join(output_lines))]
+
+
+async def handle_create_note(arguments: dict) -> list[TextContent]:
+    title = arguments["title"]
+    content = arguments["content"]
+    tags = arguments.get("tags", [])
+
+    safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in title)
+    safe_title = safe_title.strip().replace(" ", "_").lower()
+
+    if not safe_title:
+        safe_title = f"note_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+
+    file_path = NOTES_DIR / f"{safe_title}.json"
+
+    note = {
+        "title": title,
+        "content": content,
+        "tags": tags,
+        "created_at": datetime.datetime.utcnow().isoformat(),
+    }
+
+    file_path.write_text(json.dumps(note, indent=2))
+
+    return [TextContent(
+        type="text",
+        text=f"Note '{title}' saved successfully to {file_path}."
+    )]
+
+
+async def main():
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(
+            read_stream,
+            write_stream,
+            app.create_initialization_options()
+        )
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Testing Your Server
+
+Before connecting to a full client, test your server with the MCP Inspector, a debugging tool that ships with the SDK:
+
+```python
+# Install the inspector
+# npx @modelcontextprotocol/inspector python server.py
+```
+
+The Inspector opens a web UI where you can see your server's tools, call them manually, and inspect the request/response messages. This is invaluable for debugging.
+
+You can also test programmatically with the MCP client SDK:
+
+```python
+# test_client.py
+import asyncio
+from mcp.client import Client
+from mcp.client.stdio import stdio_client, StdioServerParameters
+
+async def test():
+    server_params = StdioServerParameters(
+        command="python",
+        args=["server.py"],
+    )
+
+    async with stdio_client(server_params) as (read, write):
+        async with Client("test-client", read, write) as client:
+            # Discover tools
+            tools = await client.list_tools()
+            print("Available tools:")
+            for tool in tools.tools:
+                print(f"  {tool.name}: {tool.description}")
+
+            # Create a note
+            result = await client.call_tool(
+                "create_note",
+                {
+                    "title": "MCP Test Note",
+                    "content": "This note was created by the MCP test client.",
+                    "tags": ["test", "mcp"],
+                },
+            )
+            print(f"\nCreate result: {result.content[0].text}")
+
+            # Search for it
+            result = await client.call_tool(
+                "search_notes",
+                {"query": "MCP"},
+            )
+            print(f"\nSearch result: {result.content[0].text}")
+
+asyncio.run(test())
+```
+
+Run this test client, and you should see the tool discovery, note creation, and search all working end to end.
+
+## Connecting to Claude Desktop
+
+To use your server with Claude Desktop, add it to the Claude Desktop configuration file.
+
+On macOS, edit `~/Library/Application Support/Claude/claude_desktop_config.json`. On Windows, edit `%APPDATA%\Claude\claude_desktop_config.json`. On Linux, edit `~/.config/Claude/claude_desktop_config.json`.
+
+```json
+{
+  "mcpServers": {
+    "notes-server": {
+      "command": "python",
+      "args": ["/absolute/path/to/your/server.py"],
+      "env": {}
+    }
+  }
+}
+```
+
+After restarting Claude Desktop, you should see your tools available in the interface. When you ask Claude something like "create a note about today's meeting," it will use your `create_note` tool.
+
+## Adding Resources
+
+MCP is not only about tools. Resources let your server expose data that the client can read without the LLM explicitly calling a tool. This is useful for providing context that the LLM might need.
+
+```python
+from mcp.types import Resource
+
+@app.list_resources()
+async def list_resources() -> list[Resource]:
+    """Expose saved notes as readable resources."""
+    resources = []
+    for note_file in NOTES_DIR.glob("*.json"):
+        try:
+            note = json.loads(note_file.read_text())
+            resources.append(Resource(
+                uri=f"notes://{note_file.stem}",
+                name=note["title"],
+                description=f"Note: {note['title']}",
+                mimeType="application/json",
+            ))
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return resources
+
+
+@app.read_resource()
+async def read_resource(uri: str) -> str:
+    """Return the content of a specific note resource."""
+    # Parse the URI to get the file stem
+    if not uri.startswith("notes://"):
+        raise ValueError(f"Unknown resource URI: {uri}")
+
+    stem = uri.replace("notes://", "")
+    file_path = NOTES_DIR / f"{stem}.json"
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"Note not found: {stem}")
+
+    note = json.loads(file_path.read_text())
+    return json.dumps(note, indent=2)
+```
+
+Resources are read-only data that the client can pull into the conversation context. They complement tools, which are for actions. A good mental model: resources are nouns (data you can read), tools are verbs (actions you can perform).
+
+## Error Handling
+
+Production MCP servers need robust error handling. The SDK propagates exceptions as error responses to the client, but you want to provide meaningful error messages:
+
+```python
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    try:
+        if name == "search_notes":
+            return await handle_search_notes(arguments)
+        elif name == "create_note":
+            return await handle_create_note(arguments)
+        else:
+            raise ValueError(f"Unknown tool: {name}")
+    except KeyError as e:
+        return [TextContent(
+            type="text",
+            text=f"Missing required argument: {e}"
+        )]
+    except PermissionError:
+        return [TextContent(
+            type="text",
+            text="Permission denied. Check that the notes directory is writable."
+        )]
+    except Exception as e:
+        return [TextContent(
+            type="text",
+            text=f"Error executing {name}: {str(e)}"
+        )]
+```
+
+Return errors as `TextContent` rather than raising exceptions when possible. This gives the LLM a chance to recover or inform the user, rather than crashing the tool call entirely.
+
+## Common Pitfalls
+
+**Forgetting `async`.** MCP handlers must be async functions. If you write synchronous tool handlers, they will block the event loop and make the server unresponsive. For CPU-bound work, use `asyncio.to_thread()` to run it in a thread pool.
+
+**Overly broad tool descriptions.** The LLM uses your tool description to decide when to call it. A vague description like "does stuff with notes" leads to the model calling your tool at inappropriate times. Be specific about what the tool does, what inputs it expects, and what it returns.
+
+**Not validating inputs.** Although the client validates against the JSON Schema, edge cases slip through. Validate inputs in your handler (empty strings, path traversal attempts, excessively long content) before processing.
+
+**Blocking on startup.** If your server needs to load data or connect to a database at startup, do it lazily on first use rather than in the module scope. A slow-starting server causes connection timeouts in the client.
+
+**Ignoring the transport layer.** Stdio transport works for local servers, but if you need to serve multiple clients or run the server remotely, look into the SSE (Server-Sent Events) transport that the SDK also supports.
+
+## Where to Go From Here
+
+This tutorial gives you the foundation. From here, the path branches depending on what you are building. If you want your MCP tools to integrate with a [RAG pipeline](/blog/building-a-rag-chatbot-from-scratch-with-python), expose your retrieval function as an MCP tool and your document store as resources. If you are building [multi-agent systems](/blog/the-multi-agent-systems-explosion-327-adoption-growth-in-2026), MCP servers become the standardized interface through which agents access external capabilities, replacing ad-hoc tool integrations.
+
+The pattern of dynamic tool discovery through MCP is also reshaping how agents find and use tools at runtime, a topic covered in depth in [how dynamic discovery reshapes agent design](/blog/gpt-5-4-tool-search-how-dynamic-discovery-reshapes-agent-design).
+
+The key insight is that MCP separates the "what tools exist" question from the "how to call them" implementation. Build your tools once, and any MCP-compatible client can use them.
+
+## Key Takeaways
+
+- MCP standardizes how LLMs connect to external tools, so you build one server and any compatible client can use it.
+- An MCP server needs three components: tool definitions (with JSON Schema inputs), tool handlers (async functions that execute the logic), and a transport layer (stdio for local, SSE for remote).
+- Use Pydantic models for input schemas; the SDK converts them to JSON Schema automatically, giving you validation and documentation for free.
+- Test with the MCP Inspector (`npx @modelcontextprotocol/inspector`) before connecting to a full client; it shows the raw protocol messages and helps catch issues early.
+- Resources complement tools: resources expose readable data (nouns), tools perform actions (verbs).
+- Return errors as `TextContent` rather than raising exceptions, so the LLM can recover gracefully or inform the user.
+- Tool descriptions matter enormously; the LLM decides when to call your tool based entirely on the description, so make it specific and accurate.
+- For production servers, add input validation, lazy initialization, and consider SSE transport for multi-client or remote deployments.

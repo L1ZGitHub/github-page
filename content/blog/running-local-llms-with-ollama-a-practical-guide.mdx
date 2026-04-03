@@ -1,0 +1,493 @@
+---
+title: "Running Local LLMs with Ollama: A Practical Guide"
+description: "How to set up, run, and integrate local language models using Ollama for development, testing, and privacy-sensitive workloads"
+date: "2026-04-03"
+dateModified: "2026-04-03"
+status: "draft"
+category: "Getting Started"
+tags: ["Ollama", "Local LLM", "Tutorial", "Privacy"]
+difficulty: "beginner"
+readTime: "9 min read"
+author: "Hélain Zimmermann"
+---
+
+Not everything should go to an API. When you are prototyping at 2 AM and do not want to burn through API credits, when your data cannot leave the building, when you need deterministic outputs for testing, or when you simply want to understand how these models work without a billing dashboard, local LLMs make sense. Ollama is the tool that makes running them practical.
+
+Ollama wraps the complexity of model formats, quantization, GPU memory management, and inference servers into a single binary with a Docker-like interface. You pull a model, you run it. That simplicity has made it the default choice for local LLM development in 2026.
+
+## Installation
+
+Ollama runs on Linux, macOS, and Windows. The installation is a one-liner on each platform.
+
+**Linux:**
+```python
+# curl -fsSL https://ollama.com/install.sh | sh
+```
+
+**macOS:**
+Download from ollama.com or use Homebrew:
+```python
+# brew install ollama
+```
+
+**Windows:**
+Download the installer from ollama.com. It installs as a service that runs in the background.
+
+After installation, verify it works:
+```python
+# ollama --version
+# ollama serve  (starts the server if not running as a service)
+```
+
+The Ollama server runs on `localhost:11434` by default. It exposes a REST API that any HTTP client can talk to.
+
+## Pulling and Running Models
+
+Ollama uses a registry model similar to Docker. You pull models by name, and they download to your local machine.
+
+```python
+# Pull some popular models
+# ollama pull llama3.1:8b
+# ollama pull mistral:7b
+# ollama pull deepseek-r1:8b
+# ollama pull phi3:mini
+# ollama pull gemma2:9b
+```
+
+The tag after the colon specifies the variant. Most models come in multiple sizes and quantization levels. Common tags:
+
+- `7b`, `8b`, `13b`, `70b`: Parameter count.
+- `q4_0`, `q4_K_M`, `q8_0`: Quantization level (lower = smaller and faster but less accurate).
+- `:latest`: The default variant, usually a good balance.
+
+To chat interactively:
+```python
+# ollama run llama3.1:8b
+```
+
+This drops you into a REPL where you can type prompts and see responses. Useful for quick testing, but the real power is in the API.
+
+## The Ollama API
+
+Ollama exposes a clean REST API that mirrors the OpenAI API closely enough that many libraries work with both. The two endpoints you will use most:
+
+### Generate (completion)
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:11434/api/generate",
+    json={
+        "model": "llama3.1:8b",
+        "prompt": "Explain what a vector database is in two sentences.",
+        "stream": False,
+        "options": {
+            "temperature": 0.7,
+            "num_predict": 256,
+        }
+    }
+)
+
+result = response.json()
+print(result["response"])
+```
+
+### Chat (multi-turn conversation)
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:11434/api/chat",
+    json={
+        "model": "llama3.1:8b",
+        "messages": [
+            {"role": "system", "content": "You are a helpful coding assistant."},
+            {"role": "user", "content": "Write a Python function to calculate fibonacci numbers."},
+        ],
+        "stream": False,
+    }
+)
+
+result = response.json()
+print(result["message"]["content"])
+```
+
+### Streaming Responses
+
+For interactive applications, streaming gives a much better user experience. The API streams JSON objects line by line:
+
+```python
+import requests
+import json
+
+response = requests.post(
+    "http://localhost:11434/api/chat",
+    json={
+        "model": "llama3.1:8b",
+        "messages": [
+            {"role": "user", "content": "What are the main differences between REST and GraphQL?"},
+        ],
+        "stream": True,
+    },
+    stream=True,
+)
+
+for line in response.iter_lines():
+    if line:
+        chunk = json.loads(line)
+        if not chunk.get("done"):
+            print(chunk["message"]["content"], end="", flush=True)
+
+print()  # Final newline
+```
+
+## Python Integration with the Ollama Library
+
+The `ollama` Python package provides a cleaner interface than raw HTTP:
+
+```python
+# pip install ollama
+
+import ollama
+
+# Simple generation
+response = ollama.chat(
+    model="llama3.1:8b",
+    messages=[
+        {"role": "user", "content": "What is retrieval-augmented generation?"},
+    ],
+)
+print(response["message"]["content"])
+
+# Streaming
+for chunk in ollama.chat(
+    model="llama3.1:8b",
+    messages=[
+        {"role": "user", "content": "Explain transformers in simple terms."},
+    ],
+    stream=True,
+):
+    print(chunk["message"]["content"], end="", flush=True)
+```
+
+### Using Ollama with LangChain
+
+If you are already using LangChain for [RAG pipelines](/blog/building-a-rag-chatbot-from-scratch-with-python) or agent workflows, swapping in a local model is straightforward:
+
+```python
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+
+# Use a local LLM for chat
+llm = ChatOllama(
+    model="llama3.1:8b",
+    temperature=0,
+    base_url="http://localhost:11434",
+)
+
+response = llm.invoke("Summarize the key principles of clean code.")
+print(response.content)
+
+# Use local embeddings
+embeddings = OllamaEmbeddings(
+    model="nomic-embed-text",
+    base_url="http://localhost:11434",
+)
+
+vectors = embeddings.embed_documents([
+    "Vector databases store high-dimensional embeddings.",
+    "RAG combines retrieval with generation.",
+])
+print(f"Embedding dimension: {len(vectors[0])}")
+```
+
+This means you can develop and test your entire RAG pipeline locally before switching to cloud models for production. The same code works with both; you only change the model configuration.
+
+### OpenAI-Compatible Endpoint
+
+Ollama also exposes an OpenAI-compatible API at `/v1/`, so you can use the OpenAI Python SDK directly:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:11434/v1/",
+    api_key="not-needed",  # Ollama doesn't require an API key
+)
+
+response = client.chat.completions.create(
+    model="llama3.1:8b",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What are embeddings?"},
+    ],
+    temperature=0.7,
+)
+
+print(response.choices[0].message.content)
+```
+
+This compatibility layer makes it trivial to switch between local and cloud models during development.
+
+## Performance Tuning
+
+Out of the box, Ollama works. But tuning a few parameters can significantly improve the experience.
+
+### GPU Offloading
+
+Ollama automatically uses your GPU if it detects one. You can control how many layers are offloaded to GPU:
+
+```python
+# In the API request, use num_gpu to control GPU layer count
+response = requests.post(
+    "http://localhost:11434/api/generate",
+    json={
+        "model": "llama3.1:8b",
+        "prompt": "Hello",
+        "options": {
+            "num_gpu": 35,  # Number of layers to offload to GPU
+        }
+    }
+)
+```
+
+For a 7B model on a GPU with 8 GB VRAM, you can typically offload all layers. For 13B models, you may need to split between GPU and CPU. The `num_gpu` parameter controls this split: set it to the number of layers that fit in your VRAM.
+
+### Context Window Size
+
+The default context window varies by model. You can increase it, but larger contexts use more memory:
+
+```python
+response = ollama.chat(
+    model="llama3.1:8b",
+    messages=[{"role": "user", "content": "Summarize this long document..."}],
+    options={
+        "num_ctx": 8192,  # Context window size in tokens
+    }
+)
+```
+
+For RAG applications where you stuff multiple retrieved chunks into the prompt, you often need 4096 to 8192 tokens of context. Monitor your memory usage when increasing this.
+
+### Model Quantization Trade-offs
+
+Quantization reduces model size and memory usage at the cost of some quality. Here is what I have observed across our projects:
+
+| Quantization | Size (7B model) | Speed | Quality |
+|---|---|---|---|
+| f16 (full) | ~14 GB | Baseline | Best |
+| q8_0 | ~7 GB | 1.3x faster | Near-full quality |
+| q4_K_M | ~4 GB | 2x faster | Good for most tasks |
+| q4_0 | ~3.5 GB | 2.2x faster | Noticeable degradation on complex reasoning |
+
+For development and testing, `q4_K_M` is the sweet spot. For quality-sensitive production workloads, use `q8_0` or full precision. The [efficiency gains from smaller models](/blog/sub-10b-models-winning-the-efficiency-race) are real, and quantized 8B models now handle many tasks that required 70B parameters two years ago.
+
+## Model Comparison for Different Tasks
+
+Not all local models are equally good at everything. Based on our testing at Ailog:
+
+**General chat and instruction following:** Llama 3.1 8B is the default choice. Consistent, well-rounded, good at following complex instructions.
+
+**Code generation:** DeepSeek Coder V2 Lite or CodeLlama. Both produce cleaner, more correct code than general-purpose models of the same size.
+
+**Reasoning and math:** DeepSeek R1 8B. The chain-of-thought reasoning it generates is genuinely useful for multi-step problems.
+
+**Embeddings:** `nomic-embed-text` or `mxbai-embed-large` through Ollama. Both produce quality embeddings for [semantic search and retrieval](/blog/semantic-search-vs-keyword-search-when-to-use-what).
+
+**Summarization:** Mistral 7B or Gemma 2 9B. Both produce concise, accurate summaries without the excessive verbosity some models exhibit.
+
+**Multilingual tasks:** Gemma 2 or Qwen 2.5. Both handle non-English languages significantly better than Llama variants, which are still English-dominant.
+
+## When Local Makes Sense vs. Cloud
+
+Local LLMs are not always the right choice. Here is my decision framework:
+
+**Use local when:**
+- Data cannot leave your network (healthcare records, financial data, legal documents, PII).
+- You are developing and testing, and API costs would add up during rapid iteration.
+- You need deterministic outputs (same prompt, same response) for testing or evaluation.
+- Latency matters and you are already hitting API rate limits.
+- You want to experiment with multiple models without managing API keys for each provider.
+
+**Use cloud when:**
+- You need the strongest models available (GPT-4 class, Claude Opus). Local models are good; they are not yet at the frontier for complex reasoning.
+- You do not have adequate hardware. Running a 70B model requires 40+ GB of VRAM.
+- You need to scale to many concurrent users. A single GPU can handle maybe 2 to 5 concurrent requests.
+- Uptime and reliability matter more than privacy. Cloud providers handle infrastructure; you handle your GPU.
+
+For many teams, the best approach is a hybrid: develop and test locally, deploy to cloud for production. The OpenAI-compatible API endpoint makes this switch nearly seamless.
+
+## Building a Simple Chat Application
+
+Here is a complete, working chat application that runs entirely locally:
+
+```python
+# chat_app.py
+import ollama
+import sys
+
+def chat():
+    model = "llama3.1:8b"
+    messages = []
+
+    system_prompt = {
+        "role": "system",
+        "content": (
+            "You are a helpful AI assistant running locally. "
+            "Be concise and direct in your responses."
+        ),
+    }
+    messages.append(system_prompt)
+
+    print(f"Chat with {model} (type 'quit' to exit, 'clear' to reset)")
+    print("=" * 50)
+
+    while True:
+        try:
+            user_input = input("\nYou: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nGoodbye.")
+            break
+
+        if not user_input:
+            continue
+        if user_input.lower() == "quit":
+            print("Goodbye.")
+            break
+        if user_input.lower() == "clear":
+            messages = [system_prompt]
+            print("Conversation cleared.")
+            continue
+
+        messages.append({"role": "user", "content": user_input})
+
+        print(f"\n{model}: ", end="", flush=True)
+
+        full_response = ""
+        for chunk in ollama.chat(model=model, messages=messages, stream=True):
+            token = chunk["message"]["content"]
+            print(token, end="", flush=True)
+            full_response += token
+
+        print()  # Newline after response
+
+        messages.append({"role": "assistant", "content": full_response})
+
+
+if __name__ == "__main__":
+    chat()
+```
+
+This gives you a full conversational experience with history, streaming output, and the ability to clear context. The entire application is about 50 lines and runs with zero external dependencies beyond the `ollama` package.
+
+## Integrating Local LLMs into Agent Workflows
+
+Local models pair well with [multi-agent architectures](/blog/multi-agent-multi-llm-architectures-a-2026-guide) for specific roles. I often use a local model for high-frequency, low-complexity tasks (classification, extraction, simple Q&A) and route complex reasoning to a cloud model. This keeps costs down while maintaining quality where it matters.
+
+```python
+import ollama
+from openai import OpenAI
+
+class HybridLLMRouter:
+    """Route requests to local or cloud models based on complexity."""
+
+    def __init__(self):
+        self.local_model = "llama3.1:8b"
+        self.cloud_client = OpenAI()  # Uses OPENAI_API_KEY env var
+        self.cloud_model = "gpt-4o"
+
+    def classify_complexity(self, prompt: str) -> str:
+        """Use the local model to decide if this needs cloud inference."""
+        response = ollama.chat(
+            model=self.local_model,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Classify this task as SIMPLE or COMPLEX. "
+                    f"SIMPLE: factual lookup, classification, extraction, summarization. "
+                    f"COMPLEX: multi-step reasoning, creative writing, nuanced analysis. "
+                    f"Respond with only SIMPLE or COMPLEX.\n\n"
+                    f"Task: {prompt}"
+                ),
+            }],
+            options={"temperature": 0, "num_predict": 10},
+        )
+        classification = response["message"]["content"].strip().upper()
+        return "simple" if "SIMPLE" in classification else "complex"
+
+    def generate(self, prompt: str, force_local: bool = False) -> str:
+        if force_local or self.classify_complexity(prompt) == "simple":
+            response = ollama.chat(
+                model=self.local_model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response["message"]["content"]
+        else:
+            response = self.cloud_client.chat.completions.create(
+                model=self.cloud_model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+
+
+# Usage
+router = HybridLLMRouter()
+
+# This goes to local model
+answer = router.generate("What is the capital of France?")
+
+# This gets routed to cloud
+analysis = router.generate(
+    "Analyze the implications of the EU AI Act on open-source model distribution, "
+    "considering both the innovation and safety perspectives."
+)
+```
+
+This hybrid approach is particularly effective in agentic workflows where an [orchestrator agent](/blog/anatomy-of-an-openclaw-agent) handles routing and simpler sub-tasks locally, while delegating complex reasoning steps to more capable cloud models.
+
+## Custom Modelfiles
+
+Ollama lets you create custom model configurations using Modelfiles, similar to Dockerfiles:
+
+```python
+# Save as Modelfile
+"""
+FROM llama3.1:8b
+
+PARAMETER temperature 0.3
+PARAMETER num_ctx 4096
+
+SYSTEM You are a Python code review assistant. Review code for bugs,
+security issues, and style problems. Be specific and cite line numbers.
+"""
+
+# Then build and run:
+# ollama create code-reviewer -f Modelfile
+# ollama run code-reviewer
+```
+
+Modelfiles let you bake system prompts, parameters, and even adapter weights into a reusable model configuration. This is useful for distributing pre-configured models to your team.
+
+## Common Issues and Solutions
+
+**Slow first response.** Ollama loads the model into memory on the first request after startup. Subsequent requests are fast. To keep the model loaded, set `keep_alive` in your request options or use `OLLAMA_KEEP_ALIVE` environment variable.
+
+**Out of memory.** If you see OOM errors, either use a smaller quantization (`q4_0` instead of `q8_0`), reduce `num_ctx`, or reduce `num_gpu` to offload fewer layers to VRAM.
+
+**Model not found.** Run `ollama list` to see which models are downloaded locally. Model names are case-sensitive.
+
+**Inconsistent outputs.** Set `temperature: 0` and `seed: 42` (or any fixed seed) for reproducible outputs. This is essential for testing and evaluation.
+
+**Port conflict.** If port 11434 is in use, set `OLLAMA_HOST=0.0.0.0:11435` before starting Ollama.
+
+## Key Takeaways
+
+- Ollama provides a Docker-like experience for local LLMs: `ollama pull` to download, `ollama run` to use, with automatic GPU detection and memory management.
+- The REST API and OpenAI-compatible endpoint make it trivial to swap between local and cloud models in your code.
+- For development and testing, `q4_K_M` quantization offers the best balance of speed, memory usage, and quality; use `q8_0` for quality-sensitive workloads.
+- Different models excel at different tasks: Llama 3.1 for general use, DeepSeek R1 for reasoning, CodeLlama for code, Gemma 2 for multilingual work.
+- Local models are best for privacy-sensitive data, rapid development iteration, deterministic testing, and cost control; cloud models remain superior for complex reasoning at the frontier.
+- A hybrid routing approach (local for simple tasks, cloud for complex ones) gives the best cost-to-quality ratio in production agent systems.
+- Custom Modelfiles let you package system prompts, parameters, and configurations into reusable, distributable model setups.
+- Monitor memory usage carefully when increasing context window sizes; a 7B model with 8192 token context can consume 8+ GB of VRAM.
