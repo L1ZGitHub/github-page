@@ -2,8 +2,8 @@ import { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Calendar, Clock, User, BarChart3 } from "lucide-react"
-import { getAllSlugs, getPostBySlug } from "@/lib/mdx"
-import { getRelatedPosts } from "@/lib/blog"
+import { getPostBySlug } from "@/lib/mdx"
+import { getAllPosts, getRelatedPosts } from "@/lib/blog"
 import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
 import { RelatedArticleCard } from "@/components/related-article-card"
 import { AnimatedCards } from "@/components/animated-cards"
@@ -13,14 +13,16 @@ interface Props {
 }
 
 export async function generateStaticParams() {
-  const slugs = getAllSlugs()
-  return slugs.map((slug) => ({ slug }))
+  return getAllPosts().map((post) => ({ slug: post.slug }))
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   try {
     const post = await getPostBySlug(slug)
+    if (post.status !== "published") {
+      return { title: "Article Not Found" }
+    }
     return {
       title: post.title,
       description: post.description,
@@ -50,6 +52,10 @@ export default async function BlogPost({ params }: Props) {
   try {
     post = await getPostBySlug(slug)
   } catch {
+    notFound()
+  }
+
+  if (post.status !== "published") {
     notFound()
   }
 
