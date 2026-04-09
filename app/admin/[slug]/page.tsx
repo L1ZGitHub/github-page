@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, Clock, User, BarChart3, Tag, Link2 } from "lucide-
 import { getPostBySlug } from "@/lib/mdx"
 import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
 import ArticleActions from "../components/article-actions"
+import CrosspostPreview from "../components/crosspost-preview"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +28,13 @@ function extractCrossReferences(html: string): string[] {
   return Array.from(slugs)
 }
 
+function extractExcerpt(html: string, maxWords = 150): string {
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+  const words = text.split(" ")
+  if (words.length <= maxWords) return text
+  return words.slice(0, maxWords).join(" ") + "..."
+}
+
 export default async function AdminArticleDetail({ params }: Props) {
   const { slug } = await params
 
@@ -38,6 +46,7 @@ export default async function AdminArticleDetail({ params }: Props) {
   }
 
   const crossRefs = extractCrossReferences(post.content)
+  const excerpt = extractExcerpt(post.content)
 
   return (
     <div>
@@ -120,6 +129,17 @@ export default async function AdminArticleDetail({ params }: Props) {
 
         {/* Article actions (client component) */}
         <ArticleActions slug={slug} status={post.status} scheduledDate={post.scheduledDate} />
+
+        {/* Cross-posting previews */}
+        {post.status === "published" && (
+          <CrosspostPreview
+            title={post.title}
+            description={post.description}
+            slug={slug}
+            tags={post.tags}
+            excerpt={excerpt}
+          />
+        )}
 
         {/* Cross-references */}
         {crossRefs.length > 0 && (
