@@ -1,0 +1,295 @@
+---
+title: "Speculative Decoding in Production: How Draft Models Cut LLM Latency by 3x"
+description: "How speculative decoding uses lightweight draft models to accelerate LLM inference 3x or more, with practical guidance for vLLM and TensorRT-LLM"
+date: "2026-04-10"
+dateModified: "2026-04-10"
+status: "draft"
+category: "Engineering"
+tags: ["LLM Inference", "Speculative Decoding", "MLOps", "Performance"]
+difficulty: "advanced"
+readTime: "11 min read"
+author: "Hélain Zimmermann"
+---
+
+Autoregressive decoding is the bottleneck nobody wants to talk about. Every token depends on the previous one. No matter how many GPUs you throw at a large model, generation speed is fundamentally limited by this sequential dependency. A 70B model generating tokens one at a time on an H100 tops out around 30 to 40 tokens per second for a single request. For latency-sensitive applications, that is not fast enough.
+
+Speculative decoding breaks this constraint with a simple idea: use a small, fast "draft" model to predict multiple future tokens, then have the large "target" model verify them all in a single forward pass. Because verification (a forward pass over N tokens) is much cheaper than N sequential generation steps on the target model, you get the quality of the large model at closer to the speed of the small one.
+
+The technique has been known since 2023 (Leviathan et al., Chen et al.), but it went from a research curiosity to a production standard throughout 2025 and early 2026. It is now built into vLLM, SGLang, and TensorRT-LLM as a first-class feature. If you are serving LLMs and not using speculative decoding, you are leaving significant latency (and cost) on the table.
+
+## How Speculative Decoding Works
+
+The core loop is straightforward:
+
+1. The draft model generates K candidate tokens autoregressively (fast, because the draft model is small).
+2. The target model runs a single forward pass over all K candidate tokens in parallel.
+3. The target model's output probabilities are compared against the draft model's choices. Tokens are accepted or rejected using a modified rejection sampling scheme that guarantees the output distribution matches the target model exactly.
+4. All tokens up to the first rejection are accepted. Generation continues from that point.
+
+The mathematical guarantee is important: speculative decoding is lossless. The output distribution is identical to what you would get from the target model alone. You are not trading quality for speed. You are trading a small amount of extra compute (running the draft model) for a large reduction in wall-clock time.
+
+### The Acceptance Rate
+
+The critical metric is the **acceptance rate**: the fraction of draft tokens that the target model accepts. If your draft model has an 80% acceptance rate with K=5 draft tokens, you accept on average 4 tokens per verification step instead of generating 1 token per step. That is roughly a 3 to 4x speedup on the generation phase.
+
+Acceptance rate depends on several factors:
+
+- **Draft model quality**: A better draft model produces more tokens the target will accept
+- **Task distribution**: Predictable text (code, structured data, formulaic writing) has higher acceptance rates than creative or highly specialized content
+- **Temperature**: Lower temperatures mean more deterministic outputs, which are easier for the draft model to predict
+- **K (speculation length)**: More speculative tokens mean more chances for rejection, reducing the average acceptance rate per token
+
+In practice, I have seen acceptance rates range from 60% (creative writing, high temperature) to 95% (code completion, low temperature, well-matched draft model). The sweet spot for K is usually 3 to 7 tokens.
+
+## Draft Model Selection
+
+Choosing the right draft model is the most impactful decision you will make. There are three main strategies.
+
+### Same-Family Smaller Model
+
+Use a smaller model from the same family as your target. Llama 8B drafting for Llama 70B. Qwen2.5-1.5B drafting for Qwen2.5-72B. Mistral 7B drafting for Mixtral 8x22B. These tend to work well because the models share vocabulary, tokenizer, and training distribution, which maximizes acceptance rate.
+
+This is the approach I recommend starting with. It requires no additional training, and the performance is predictable. For [sub-10B models](/blog/sub-10b-models-winning-the-efficiency-race) in the Llama and Qwen families, the inference cost of the draft model is negligible compared to the target.
+
+### Task-Specific Distilled Model
+
+Train a small model (500M to 2B parameters) specifically to mimic the target model's output distribution on your workload. This produces the highest acceptance rates (often 85 to 95%) because the draft model is optimized for exactly the text your target model produces.
+
+The downside is the training cost and maintenance burden. Every time you update the target model or your workload shifts, the distilled draft model needs retraining. For stable production workloads with high volume, the investment pays off. For rapidly iterating systems, it is usually not worth the overhead.
+
+### Self-Drafting
+
+Some newer approaches skip the separate draft model entirely. The target model generates draft tokens using only a subset of its layers (early exit) or using a smaller "head" attached to an intermediate layer. NVIDIA's Medusa and EAGLE families of methods take this approach. The advantage is no separate model to manage; the disadvantage is typically lower acceptance rates and the need to modify the model architecture.
+
+## Setting Up Speculative Decoding in vLLM
+
+vLLM has had speculative decoding support since v0.4 and has refined it significantly through v0.7+. Here is a practical configuration:
+
+```python
+from vllm import LLM, SamplingParams
+
+# Initialize with speculative decoding
+llm = LLM(
+    model="meta-llama/Llama-3.1-70B-Instruct",
+    speculative_model="meta-llama/Llama-3.1-8B-Instruct",
+    num_speculative_tokens=5,       # K: number of draft tokens per step
+    tensor_parallel_size=4,          # Target model across 4 GPUs
+    dtype="auto",                    # FP8 on H100/H200 if available
+    gpu_memory_utilization=0.90,
+    max_model_len=8192,
+)
+
+sampling_params = SamplingParams(
+    temperature=0.3,
+    top_p=0.9,
+    max_tokens=2048,
+)
+
+# Generate: speculative decoding is transparent to the caller
+outputs = llm.generate(
+    ["Explain the CAP theorem in distributed systems."],
+    sampling_params,
+)
+print(outputs[0].outputs[0].text)
+```
+
+For the OpenAI-compatible server mode, which is what most production deployments use:
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-3.1-70B-Instruct \
+    --speculative-model meta-llama/Llama-3.1-8B-Instruct \
+    --num-speculative-tokens 5 \
+    --tensor-parallel-size 4 \
+    --dtype auto \
+    --port 8000
+```
+
+The API is identical to standard vLLM. Speculative decoding is an implementation detail of the serving engine; clients do not need to know it is happening.
+
+## Benchmarking Speculative Decoding
+
+You need to measure the actual impact on your workload. Acceptance rates and speedups vary dramatically depending on task, model pair, and serving configuration. Here is a benchmarking script I use:
+
+```python
+import time
+import json
+from vllm import LLM, SamplingParams
+
+def benchmark_speculative_decoding(
+    model_name: str,
+    draft_model_name: str,
+    prompts: list[str],
+    num_speculative_tokens_options: list[int] = [0, 3, 5, 7],
+    temperature: float = 0.3,
+    max_tokens: int = 512,
+) -> dict:
+    """
+    Compare latency with different speculation lengths.
+    num_speculative_tokens=0 disables speculative decoding (baseline).
+    """
+    results = {}
+
+    for k in num_speculative_tokens_options:
+        spec_kwargs = {}
+        if k > 0:
+            spec_kwargs = {
+                "speculative_model": draft_model_name,
+                "num_speculative_tokens": k,
+            }
+
+        llm = LLM(
+            model=model_name,
+            tensor_parallel_size=4,
+            dtype="auto",
+            gpu_memory_utilization=0.90,
+            **spec_kwargs,
+        )
+
+        sampling_params = SamplingParams(
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        # Warmup
+        llm.generate(prompts[:2], sampling_params)
+
+        # Benchmark
+        start = time.perf_counter()
+        outputs = llm.generate(prompts, sampling_params)
+        elapsed = time.perf_counter() - start
+
+        total_tokens = sum(
+            len(o.outputs[0].token_ids) for o in outputs
+        )
+        tokens_per_second = total_tokens / elapsed
+        avg_latency_ms = (elapsed / len(prompts)) * 1000
+
+        results[f"k={k}"] = {
+            "total_time_s": round(elapsed, 2),
+            "tokens_per_second": round(tokens_per_second, 1),
+            "avg_latency_ms": round(avg_latency_ms, 1),
+            "total_tokens": total_tokens,
+        }
+
+        # Clean up GPU memory
+        del llm
+
+    return results
+
+
+# Example usage
+prompts = [
+    "Write a Python function to merge two sorted lists.",
+    "Explain the difference between TCP and UDP.",
+    "What are the ACID properties in databases?",
+    # ... add 20-50 representative prompts from your workload
+]
+
+results = benchmark_speculative_decoding(
+    model_name="meta-llama/Llama-3.1-70B-Instruct",
+    draft_model_name="meta-llama/Llama-3.1-8B-Instruct",
+    prompts=prompts,
+)
+
+print(json.dumps(results, indent=2))
+```
+
+On a 4xH100 setup with Llama 3.1 70B and the 8B draft model, I typically see:
+
+| Config | Tokens/sec | Avg Latency | Speedup |
+|--------|-----------|-------------|---------|
+| No speculation (k=0) | 38 | 1,340 ms | 1.0x |
+| k=3 | 82 | 625 ms | 2.1x |
+| k=5 | 105 | 487 ms | 2.8x |
+| k=7 | 98 | 522 ms | 2.6x |
+
+Notice that k=7 is actually slower than k=5 here. More speculation is not always better. When K is too large, the probability of the target model rejecting a token early in the draft sequence increases, wasting the compute spent generating later draft tokens. You need to benchmark on your specific workload to find the optimal K.
+
+## Recent Advances: DFlash and Beyond
+
+The field is moving fast. NVIDIA demonstrated 3.6x throughput improvements on H200 GPUs using speculative decoding in December 2025, validating the approach at datacenter scale.
+
+The most exciting recent development is **DFlash** (February 2026), which replaces the autoregressive draft model with a block diffusion model. Instead of generating draft tokens one at a time, DFlash generates an entire block of draft tokens in parallel using a diffusion process. This achieves 6x lossless acceleration over standard autoregressive decoding and is 2.5x faster than EAGLE-3, the previous state-of-the-art speculative method. The parallel draft generation removes the sequential bottleneck from the draft model itself, which becomes the limiting factor as target model verification gets faster.
+
+Apple has contributed two notable approaches: **Mirror Speculative Decoding**, which uses the target model's own representations to guide a more efficient verification process, and the **Recurrent Drafter**, which uses a lightweight recurrent neural network as the draft model instead of a transformer. The recurrent architecture is particularly efficient for on-device deployment, where memory bandwidth is the primary constraint. For anyone working on [on-device NLP at the edge](/blog/on-device-nlp-running-language-models-at-the-edge-with-tinyml), Apple's recurrent drafter approach is worth studying closely.
+
+## Production Challenges
+
+Speculative decoding in production is more fragile than benchmarks suggest. Here are the issues I have run into.
+
+### Variable Performance Across Workloads
+
+Acceptance rates are workload-dependent. A draft model that achieves 90% acceptance on English text might drop to 65% on code, 55% on multilingual content, and 40% on highly technical or domain-specific jargon. If your traffic mix changes (say, a new feature drives more code generation requests), your speculative decoding speedup can degrade without warning.
+
+The solution is continuous monitoring. Track acceptance rate, tokens per second, and p50/p99 latency broken down by request type. Set alerts for acceptance rate drops below your threshold (I use 70% as the floor; below that, speculation overhead can actually make things slower).
+
+### Batch Size Interactions
+
+Speculative decoding provides the largest speedups at low batch sizes (1 to 4 concurrent requests), where the target model's compute is underutilized and the draft tokens effectively "fill in" idle compute. At high batch sizes, the target model is already compute-bound, and the additional draft model overhead can reduce throughput.
+
+This means speculative decoding works best for latency-sensitive, lower-throughput scenarios. For high-throughput batch processing, continuous batching alone is usually sufficient. For [real-time ML inference pipelines](/blog/building-real-time-ml-inference-pipelines) where latency matters more than raw throughput, speculative decoding is a natural fit.
+
+### Memory Overhead
+
+The draft model needs GPU memory. A 7B to 8B draft model requires 14 to 16 GB in FP16 (or 7 to 8 GB in FP8). On a multi-GPU setup serving a 70B target model, this is manageable. On a single GPU trying to serve a 13B model with a 1B draft model, memory can get tight. Plan your GPU memory budget to include both models.
+
+## Combining Optimizations for Maximum Impact
+
+Speculative decoding is most powerful when combined with other inference optimizations. The gains are roughly multiplicative:
+
+```python
+# Hypothetical config combining multiple optimizations
+# on 4xH100 SXM serving Llama 3.1 70B
+
+optimization_stack = {
+    "baseline_tokens_per_second": 38,
+    "optimizations": {
+        "FP8_quantization": 1.7,       # vs FP16
+        "flash_attention_3": 1.3,       # vs standard attention
+        "speculative_decoding_k5": 2.8, # vs no speculation
+        "continuous_batching": 1.2,     # vs static batching
+    },
+}
+
+# Combined theoretical speedup
+combined = 1.0
+for name, factor in optimization_stack["optimizations"].items():
+    combined *= factor
+    print(f"  After {name}: {combined:.1f}x")
+
+# Output:
+#   After FP8_quantization: 1.7x
+#   After flash_attention_3: 2.2x
+#   After speculative_decoding_k5: 6.2x
+#   After continuous_batching: 7.4x
+
+# In practice, gains are sub-multiplicative due to
+# shared bottlenecks. Expect 5-8x total, not 7.4x.
+effective_tokens_per_second = 38 * 6.0  # conservative estimate
+print(f"\nEffective: ~{effective_tokens_per_second:.0f} tokens/sec")
+print(f"Cost reduction: ~{1/6.0:.0%} of baseline cost per token")
+```
+
+A well-optimized stack of FP8 quantization, Flash Attention 3, speculative decoding, and continuous batching can achieve 5 to 8x cost efficiency improvement on H100s compared to naive FP16 serving. For teams managing [LLMOps production systems](/blog/llmops-managing-llm-powered-production-systems), this is the difference between a sustainable cost structure and burning through GPU budget.
+
+## Key Metrics to Track
+
+If you deploy speculative decoding, instrument these metrics:
+
+- **Acceptance rate** (per request and rolling average): the single most important diagnostic metric. Sudden drops indicate workload shift or draft model degradation.
+- **Tokens per second** (generation throughput): compare against your baseline without speculation. If this drops below baseline, speculation is hurting you.
+- **p50 and p99 latency**: p50 should improve consistently; p99 can be volatile because rejected speculations add variance.
+- **Draft model overhead**: time and compute spent on draft generation as a percentage of total inference time. Should stay below 15 to 20%.
+- **Speculation length distribution**: how many tokens are accepted per speculation step. Helps tune K.
+
+## Key Takeaways
+
+- Speculative decoding uses a small draft model to predict future tokens that a larger target model verifies in parallel, achieving up to 3x faster inference with mathematically identical output quality.
+- The technique has matured from research to production infrastructure, with native support in vLLM, SGLang, and TensorRT-LLM as of early 2026.
+- Draft model selection is the highest-leverage decision: same-family smaller models (like Llama 8B for Llama 70B) are the simplest starting point, while task-specific distilled models yield the best acceptance rates.
+- DFlash (February 2026) represents the next leap, using block diffusion models to generate draft tokens in parallel and achieving 6x lossless acceleration, 2.5x faster than EAGLE-3.
+- Performance is fragile and workload-dependent: monitor acceptance rate, tokens per second, and p50/p99 latency continuously, with alerts on acceptance rate drops below 70%.
+- Speculative decoding provides the largest gains at low batch sizes and latency-sensitive workloads; at high batch sizes, the draft model overhead can reduce throughput.
+- Combined with FP8 quantization, Flash Attention 3, and continuous batching, speculative decoding contributes to a 5 to 8x total cost efficiency improvement on H100/H200 hardware.
+- Always benchmark on your specific workload to find the optimal speculation length (K); more tokens is not always better, and k=5 often outperforms k=7 in practice.

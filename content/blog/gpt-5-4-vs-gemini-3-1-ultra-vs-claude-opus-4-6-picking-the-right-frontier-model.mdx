@@ -1,0 +1,185 @@
+---
+title: "GPT-5.4 vs Gemini 3.1 Ultra vs Claude Opus 4.6: Picking the Right Frontier Model"
+description: "A benchmark-driven comparison of GPT-5.4, Gemini 3.1 Ultra, and Claude Opus 4.6 with practical recommendations by use case"
+date: "2026-04-10"
+dateModified: "2026-04-10"
+status: "draft"
+category: "AI & ML"
+tags: ["GPT-5", "Gemini", "Claude", "Benchmarks"]
+difficulty: "intermediate"
+readTime: "12 min read"
+author: "Hélain Zimmermann"
+---
+
+Three frontier models shipped within weeks of each other in March 2026, and the benchmarks tell a story that would have been hard to predict a year ago: no single model wins across the board. GPT-5.4, Gemini 3.1 Ultra, and Claude Opus 4.6 each claim clear victories in different domains, which means the "best model" question now has a genuinely unsatisfying answer. It depends on what you are building.
+
+I have spent the past month testing all three across production workloads, benchmarks, and side projects. Here is what I found, starting with the numbers.
+
+## The Benchmark Landscape
+
+| Benchmark | What It Measures | GPT-5.4 | Gemini 3.1 Ultra | Claude Opus 4.6 |
+|-----------|-----------------|---------|-------------------|-----------------|
+| SWE-bench Verified | Real-world coding | 57.7% (Pro) | N/A | **80.8%** |
+| Terminal-Bench 2.0 | Agentic terminal coding | N/A | N/A | **65.4%** |
+| OSWorld | Computer use | **75.0%** | N/A | 72.7% |
+| GPQA Diamond | Graduate-level science | N/A | **94.3%** | N/A |
+| MMMU-Pro | Visual understanding | **81.2%** | N/A | N/A |
+| ARC-AGI-2 | Abstract reasoning | N/A | **77.1%** (Pro) | N/A |
+| BrowseComp | Agentic search | N/A | N/A | **84.0%** |
+| Humanity's Last Exam | Broad expert knowledge | N/A | N/A | **53.1%** (tools) |
+| Context window | Max tokens | 1M | **2M** | 1M |
+| Max output | Single response | N/A | N/A | **128K** |
+
+A few notes on reading this table. I have only included the strongest published score for each model per benchmark. "N/A" does not mean the model cannot perform the task; it means either the vendor did not report that specific benchmark, or a competitor clearly dominates it. The landscape is fragmented enough that cherry-picking benchmarks to declare any single model "the best" would be dishonest.
+
+## GPT-5.4: The Multimodal Generalist
+
+OpenAI released GPT-5.4 on March 5, 2026, and the most notable change is architectural unification. Previous generations had separate models for coding (Codex) and general reasoning. GPT-5.4 is the first mainline model that bakes GPT-5.3-Codex capabilities directly into the standard model, alongside the existing [tool search mechanism](/blog/gpt-5-4-tool-search-how-dynamic-discovery-reshapes-agent-design) that shipped at launch.
+
+The practical impact: you no longer need to route between a coding model and a general model. One model handles both, with three operating modes (Standard, Thinking, and Pro) that let you trade latency for depth.
+
+### Where GPT-5.4 Leads
+
+**Computer use.** The OSWorld score of 75.0% deserves attention because it exceeds the human baseline of 72.4%. This is the first time a commercial model has crossed that threshold on a standardized computer-use benchmark. If you are building automation that involves navigating GUIs, filling forms, or operating desktop applications, GPT-5.4 is currently the safest bet.
+
+**Visual understanding.** MMMU-Pro at 81.2% shows strong performance on tasks that require reasoning about images, diagrams, and charts. For document processing pipelines that handle mixed visual and textual content, this matters.
+
+**Factual reliability.** OpenAI reports 33% fewer factual errors compared to GPT-5.2. In production systems where hallucination directly causes user harm (medical, legal, financial), this kind of improvement compounds over millions of queries.
+
+### Where It Falls Short
+
+Coding. The SWE-bench Pro score of 57.7% is respectable, but Claude Opus 4.6 scores 80.8% on SWE-bench Verified. Even accounting for the difference between Pro and Verified variants of the benchmark, the gap is significant. If your primary use case is code generation or software engineering agents, GPT-5.4 is not the top choice.
+
+## Gemini 3.1 Ultra: The Scientific Reasoning Engine
+
+Google's strategy with Gemini 3.1 is a clear dual-model split: Ultra for maximum capability, and [Flash-Lite for cost-sensitive workloads](/blog/gemini-3-1-flash-lite-and-the-arrival-of-sub-dollar-inference) at $0.25 per million input tokens. This is not a compromise; it is an acknowledgment that one model cannot optimize for both depth and speed simultaneously.
+
+### Where Gemini 3.1 Ultra Leads
+
+**Scientific reasoning.** GPQA Diamond at 94.3% is the highest score any model has achieved on this benchmark. These are graduate-level science questions that require multi-step reasoning across physics, chemistry, and biology. If you are building tools for researchers, scientific literature analysis, or technical due diligence, Gemini 3.1 Ultra is the model to evaluate first.
+
+**Abstract reasoning.** ARC-AGI-2 at 77.1% (via the 3.1 Pro variant) shows strong performance on tasks that require identifying patterns and generalizing from few examples. This benchmark specifically tests the kind of reasoning that does not reduce to pattern matching over training data.
+
+**Long context.** The 2M token context window is the largest among the three models. You can feed it 1,500+ pages of documentation or hours of video in a single session. For use cases like codebase analysis, legal document review, or video understanding, having 2x the context window of the competition is a concrete advantage, not a marketing number.
+
+**Native multimodal processing.** Unlike models that bolt on vision or audio capabilities, Gemini 3.1 Ultra processes text, images, video, and audio through a unified architecture. The result is more coherent cross-modal reasoning, particularly for tasks like analyzing a video lecture while referencing a textbook.
+
+### Where It Falls Short
+
+Gemini 3.1 Ultra does not appear at the top of any coding or agentic benchmark. Google's strength is clearly in reasoning and multimodal processing, not in the kind of autonomous, multi-step tool use that defines modern agent workflows. For agentic applications, you will want to look elsewhere.
+
+## Claude Opus 4.6: The Agentic Coding Specialist
+
+Anthropic's Claude Opus 4.6 occupies a distinct position: it is the strongest model for agentic and coding workflows by a meaningful margin. The numbers speak clearly here.
+
+### Where Claude Opus 4.6 Leads
+
+**Software engineering.** SWE-bench Verified at 80.8% is the highest score on this benchmark. Terminal-Bench 2.0 at 65.4%, which tests agentic terminal coding (navigating file systems, running commands, debugging across multiple files), is also number one. If you are building coding assistants, CI/CD agents, or automated code review systems, this is the model with the strongest track record.
+
+**Agentic workflows.** BrowseComp at 84.0% measures agentic search, the ability to autonomously navigate the web, find information, and synthesize answers across multiple sources. Combined with the computer-use score of 72.7% (close to GPT-5.4's 75.0%), Claude Opus 4.6 is the most consistently strong model across the full spectrum of agentic tasks.
+
+**Output length.** The 128K max output token limit is significantly higher than the competition. For tasks that require generating long documents, comprehensive code reviews, or detailed analysis, this avoids the truncation problem that plagues shorter-output models.
+
+**Adaptive thinking and conversation compaction.** Two architectural features worth mentioning. Adaptive thinking lets the model decide how much internal reasoning to apply based on query complexity, avoiding the latency penalty of always-on chain-of-thought. Conversation compaction allows long conversations to stay coherent by intelligently compressing earlier context rather than simply truncating it.
+
+These features align with what the [Anthropic Mythos reasoning research](/blog/anthropic-mythos-and-the-next-gen-reasoning-race) has been pointing toward: reasoning as a dynamic resource allocation problem, not a fixed pipeline.
+
+### Where It Falls Short
+
+Scientific reasoning and visual understanding. Claude Opus 4.6's published benchmarks emphasize coding and agentic tasks. For GPQA-level scientific reasoning or MMMU-Pro visual tasks, Gemini 3.1 Ultra and GPT-5.4 respectively hold clear advantages.
+
+## Head-to-Head: Practical Recommendations
+
+| Use Case | Best Model | Why |
+|----------|-----------|-----|
+| Coding and software engineering | Claude Opus 4.6 | SWE-bench 80.8%, Terminal-Bench 65.4% |
+| Scientific reasoning | Gemini 3.1 Ultra | GPQA Diamond 94.3% |
+| Computer use and GUI automation | GPT-5.4 | OSWorld 75.0%, exceeds human baseline |
+| Cost-sensitive workloads | Gemini Flash-Lite | $0.25/M input tokens, 2.5x faster |
+| Long context processing | Gemini 3.1 Ultra | 2M token context window |
+| Agentic workflows | Claude Opus 4.6 | BrowseComp 84.0%, strong across all agentic benchmarks |
+| Visual and multimodal | GPT-5.4 | MMMU-Pro 81.2% |
+| Long-form generation | Claude Opus 4.6 | 128K max output tokens |
+
+The pattern is clear enough. If your workload is primarily about code, pick Claude. If it is about science or needs massive context, pick Gemini Ultra. If it is about multimodal understanding or computer use, pick GPT-5.4. If cost matters more than peak capability, pick Gemini Flash-Lite.
+
+## A Multi-Model Strategy in Practice
+
+For most production systems, the right answer is not picking one model. It is routing to the right model per task. Here is a minimal example of a routing layer using the Anthropic SDK:
+
+```python
+import anthropic
+import openai
+import google.generativeai as genai
+
+# Initialize clients
+claude_client = anthropic.Anthropic()
+openai_client = openai.OpenAI()
+genai.configure(api_key="your-google-key")
+gemini_model = genai.GenerativeModel("gemini-3.1-ultra")
+
+def route_and_query(task_type: str, prompt: str) -> str:
+    """Route to the best model based on task type."""
+
+    if task_type in ("code_generation", "code_review", "debugging"):
+        # Claude Opus 4.6 for coding tasks
+        response = claude_client.messages.create(
+            model="claude-opus-4-6-20260310",
+            max_tokens=16384,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+
+    elif task_type in ("scientific_analysis", "long_document"):
+        # Gemini 3.1 Ultra for science and long context
+        response = gemini_model.generate_content(prompt)
+        return response.text
+
+    elif task_type in ("gui_automation", "visual_analysis"):
+        # GPT-5.4 for computer use and multimodal
+        response = openai_client.chat.completions.create(
+            model="gpt-5.4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content
+
+    else:
+        # Default to Claude for general tasks
+        response = claude_client.messages.create(
+            model="claude-opus-4-6-20260310",
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+```
+
+This is deliberately simple. In production, you would add retry logic, cost tracking, and possibly a secondary classifier that learns from routing decisions over time. But the core idea is sound: match the model to the task, not the other way around.
+
+## The Open-Source Factor
+
+It is worth noting that this comparison focuses on closed, commercial models. The [open-source landscape](/blog/open-source-llms-2026-deepseek-vs-llama-vs-mistral) has its own dynamics, with DeepSeek, Llama, and Mistral all pushing boundaries at different price points and capability levels. For latency-sensitive or privacy-critical workloads, self-hosted open-weight models remain a strong option, even if they trail the frontier on absolute benchmarks.
+
+The [Chinese LLM ecosystem](/blog/glm5-kimi-deepseek-panorama-2026-chinese-llms) adds another dimension. Models like GLM-5 and Kimi are achieving competitive benchmark scores at substantially lower price points, though availability and API reliability outside of China remain variable.
+
+## What the Benchmarks Do Not Tell You
+
+Benchmarks are useful for narrowing the field, but they do not capture everything that matters in production:
+
+**Latency profiles.** A model that scores 5% higher on a benchmark but takes 3x longer to respond may be worse for your users. GPT-5.4's Standard mode is faster than its Thinking mode; Claude's adaptive thinking adjusts automatically; Gemini's Flash-Lite trades capability for speed. Test latency on your actual workloads.
+
+**Reliability and uptime.** Over the past month, I have experienced occasional rate limiting on all three APIs during peak hours. None of them is perfectly reliable at high volume. Build for fallback.
+
+**Instruction following.** Benchmarks test capability, not compliance. How well does the model follow complex system prompts, respect output format constraints, and avoid doing things you explicitly told it not to do? This varies more than benchmark scores suggest, and it matters enormously for production systems.
+
+**Cost at scale.** The per-token price is only part of the story. How many tokens does the model need to solve the problem? A cheaper model that requires longer prompts or more retries can end up costing more. Measure end-to-end cost per successful task, not just per-token price.
+
+## Key Takeaways
+
+- **No single frontier model dominates across all tasks.** The era of one model to rule them all is over. Each of the three leaders has clear, defensible strengths in different domains.
+- **Claude Opus 4.6 is the strongest choice for coding and agentic workflows,** with SWE-bench Verified at 80.8% and Terminal-Bench 2.0 at 65.4%. If you write code with AI, this is the model to start with.
+- **Gemini 3.1 Ultra owns scientific reasoning and long context,** with GPQA Diamond at 94.3% and a 2M token context window. For research, technical analysis, or processing large document sets, it is unmatched.
+- **GPT-5.4 leads in computer use and visual understanding,** with OSWorld at 75.0% (above the human baseline) and MMMU-Pro at 81.2%. For GUI automation and multimodal tasks, it is the top pick.
+- **Multi-model routing is becoming a production necessity,** not an optimization. The performance gaps between models on different tasks are large enough that using a single model for everything leaves significant capability on the table.
+- **Gemini Flash-Lite at $0.25/M input tokens makes cost-sensitive routing viable.** Use frontier models only where you need them, and route everything else to Flash-Lite.
+- **Benchmarks are a starting point, not a destination.** Test latency, reliability, instruction-following, and cost-per-task on your actual workloads before committing to a model.
+- **The landscape will shift again within months.** Build your systems to swap models without rewriting business logic. The routing layer you build today is more durable than any individual model choice.
