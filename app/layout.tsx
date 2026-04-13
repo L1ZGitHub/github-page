@@ -19,6 +19,9 @@ export const metadata: Metadata = {
   description:
     "Co-Founder & CTO at Ailog. AI Engineer specializing in RAG systems, privacy-preserving NLP, and machine learning. ENSIMAG & KTH ML Master.",
   metadataBase: new URL("https://helain-zimmermann.com"),
+  alternates: {
+    canonical: "https://helain-zimmermann.com",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -27,12 +30,21 @@ export const metadata: Metadata = {
     title: "Hélain Zimmermann | AI Engineer & CTO",
     description:
       "Co-Founder & CTO at Ailog. AI Engineer specializing in RAG systems, privacy-preserving NLP, and machine learning.",
+    images: [
+      {
+        url: "/images/og-image.png",
+        width: 1536,
+        height: 1024,
+        alt: "Hélain Zimmermann — AI Engineer & CTO",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Hélain Zimmermann | AI Engineer & CTO",
     description:
       "Co-Founder & CTO at Ailog. AI Engineer specializing in RAG systems, privacy-preserving NLP, and machine learning.",
+    images: ["/images/og-image.png"],
   },
   verification: {
     google: "fGxd4XLuu53IV4fPu1-xY_2JZTB7hBs5gAmyES6v-b0",

@@ -39,6 +39,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         authors: [post.author],
         tags: post.tags,
       },
+      twitter: {
+        card: "summary",
+        title: post.title,
+        description: post.description,
+      },
     }
   } catch {
     return { title: "Article Not Found" }

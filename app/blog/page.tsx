@@ -5,6 +5,20 @@ import { BlogContent } from "./blog-content"
 export const metadata: Metadata = {
   title: "Blog",
   description: "Articles on AI, machine learning, RAG systems, NLP, and more.",
+  alternates: {
+    canonical: "https://helain-zimmermann.com/blog",
+  },
+  openGraph: {
+    title: "Blog | Hélain Zimmermann",
+    description: "Articles on AI, machine learning, RAG systems, NLP, and more.",
+    url: "https://helain-zimmermann.com/blog",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Blog | Hélain Zimmermann",
+    description: "Articles on AI, machine learning, RAG systems, NLP, and more.",
+  },
 }
 
 export default function BlogIndex() {

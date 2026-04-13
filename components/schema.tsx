@@ -32,6 +32,9 @@ export function SchemaOrg() {
     sameAs: [
       "https://www.linkedin.com/in/helain-zimmermann/",
       "https://github.com/L1ZGitHub",
+      "https://scholar.google.fr/citations?hl=fr&user=MXMobs8AAAAJ",
+      "https://dev.to/helain",
+      "https://medium.com/@helain.zimmermann",
     ],
   }
 
