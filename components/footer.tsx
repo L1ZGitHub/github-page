@@ -23,7 +23,7 @@ export function Footer() {
             <Github className="size-5" />
           </Link>
           <Link
-            href="mailto:helain.login@protonmail.com"
+            href="mailto:contact@helain-zimmermann.com"
             className="hover:text-white transition-colors"
           >
             <Mail className="size-5" />

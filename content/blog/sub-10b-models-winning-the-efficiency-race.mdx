@@ -34,7 +34,7 @@ Three families of techniques are driving the current generation of competitive s
 
 The core idea of distillation is simple: train a small "student" model to mimic the outputs of a large "teacher" model. What has changed is the scale and sophistication of the approach.
 
-Modern distillation does not just match the teacher's final output logits. It matches intermediate representations, attention patterns, and chain-of-thought reasoning traces. DeepSeek pioneered this approach with their R1-Distill series, where they distilled their full reasoning model into compact variants that retained most of the reasoning capability at a fraction of the cost. The key insight was that [reasoning behavior can be transferred](/blog/inference-time-scaling-how-modern-llms-think-their-way-to-better-answers) from large models to small ones if you distill the thinking process, not just the answers.
+Modern distillation does not just match the teacher's final output logits. It matches intermediate representations, attention patterns, and chain-of-thought reasoning traces. DeepSeek pioneered this approach with their R1-Distill series, where they distilled their full reasoning model into compact variants that retained most of the reasoning capability at a fraction of the cost. The key insight was that [reasoning behavior can be transferred](/blog/inference-time-compute-scaling-why-thinking-longer-beats-training-bigger) from large models to small ones if you distill the thinking process, not just the answers.
 
 Here is a simplified example of how distillation loss works in practice:
 
@@ -67,7 +67,7 @@ The temperature parameter controls how much of the teacher's uncertainty distrib
 
 ### Sparse Architectures and Conditional Computation
 
-The second technique is architectural: instead of activating all parameters for every token, activate only a subset. [Mixture-of-Experts (MoE) architectures](/blog/mixture-of-experts-architecture-deep-dive-lessons-from-llama-4-and-beyond) are the most established approach here. DeepSeek V4 takes this to an extreme with 1 trillion total parameters but only 32 billion active per token. The effective model "seen" by any individual input is relatively small, but the total knowledge capacity is enormous.
+The second technique is architectural: instead of activating all parameters for every token, activate only a subset. [Mixture-of-Experts (MoE) architectures](/blog/mistral-small-4-one-moe-to-replace-three-models) are the most established approach here. DeepSeek V4 takes this to an extreme with 1 trillion total parameters but only 32 billion active per token. The effective model "seen" by any individual input is relatively small, but the total knowledge capacity is enormous.
 
 What makes this relevant for sub-10B models is that the same principle applies at smaller scales. A 9B MoE model with 8 experts, each roughly 2B parameters, activating 2 experts per token, gives you 4B effective parameters per forward pass but 9B parameters worth of specialized knowledge. The routing network learns which experts to activate based on the input, so different types of queries engage different subsets of the model.
 
