@@ -1,12 +1,16 @@
 import { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Calendar, Clock, User, BarChart3 } from "lucide-react"
+import { Clock, BarChart3 } from "lucide-react"
 import { getPostBySlug } from "@/lib/mdx"
 import { getAllPosts, getRelatedPosts } from "@/lib/blog"
 import { getCategoryStyle, getDifficultyStyle } from "@/lib/category-colors"
+import { ARXIV_PAPER_ID, ORG_ID, PERSON_ID } from "@/lib/person-id"
 import { RelatedArticleCard } from "@/components/related-article-card"
 import { AnimatedCards } from "@/components/animated-cards"
+import { ArticleByline } from "@/components/article-byline"
+import { ArticleChangelog } from "@/components/article-changelog"
+import { AuthorBio } from "@/components/author-bio"
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -66,38 +70,43 @@ export default async function BlogPost({ params }: Props) {
 
   const relatedPosts = getRelatedPosts(slug, 3)
 
+  // Pillar articles about privacy-preserving NLP cite the arXiv paper.
+  const isPrivacyNlpPillar =
+    post.tags?.some((t) =>
+      /privacy|anonymi[sz]|differential|federated/i.test(t),
+    ) ?? false
+
+  const blogPosting: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.description,
+    datePublished: post.date,
+    dateModified: post.dateModified || post.date,
+    author: { "@id": PERSON_ID },
+    publisher: { "@id": ORG_ID },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": `https://helain-zimmermann.com/blog/${slug}`,
+    },
+    keywords: post.tags.join(", "),
+    articleSection: post.category,
+  }
+
+  if (isPrivacyNlpPillar) {
+    blogPosting.citation = [
+      {
+        "@type": "ScholarlyArticle",
+        "@id": ARXIV_PAPER_ID,
+      },
+    ]
+  }
+
   return (
     <article>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "BlogPosting",
-            headline: post.title,
-            description: post.description,
-            datePublished: post.date,
-            dateModified: post.dateModified || post.date,
-            author: {
-              "@type": "Person",
-              name: post.author,
-              url: "https://helain-zimmermann.com",
-              jobTitle: "Co-Founder & CTO",
-              worksFor: { "@type": "Organization", name: "Ailog" },
-            },
-            publisher: {
-              "@type": "Organization",
-              name: "Ailog",
-              url: "https://www.ailog.fr",
-            },
-            mainEntityOfPage: {
-              "@type": "WebPage",
-              "@id": `https://helain-zimmermann.com/blog/${slug}`,
-            },
-            keywords: post.tags.join(", "),
-            articleSection: post.category,
-          }),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(blogPosting) }}
       />
       <script
         type="application/ld+json"
@@ -131,16 +140,13 @@ export default async function BlogPost({ params }: Props) {
           {/* Title */}
           <h1 className="article-title">{post.title}</h1>
 
+          {/* Byline with author photo + E-E-A-T signals */}
+          <div style={{ margin: "1rem 0 0.75rem" }}>
+            <ArticleByline datePublished={post.date} dateModified={post.dateModified} />
+          </div>
+
           {/* Meta row */}
           <div className="article-meta-row">
-            <span className="article-meta-item">
-              <Calendar className="size-4 text-gray-400" />
-              {new Date(post.date).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </span>
             <span className="article-meta-item">
               <Clock className="size-4 text-gray-400" />
               {post.readTime}
@@ -148,10 +154,6 @@ export default async function BlogPost({ params }: Props) {
             <span className="article-difficulty-badge" style={getDifficultyStyle(post.difficulty)}>
               <BarChart3 className="size-3" />
               {post.difficulty}
-            </span>
-            <span className="article-meta-item">
-              <User className="size-4 text-gray-400" />
-              {post.author}
             </span>
           </div>
 
@@ -169,13 +171,16 @@ export default async function BlogPost({ params }: Props) {
       {/* Article body */}
       <div
         className="article-prose"
-        style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1.5rem 4rem" }}
+        style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1.5rem 1rem" }}
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
 
+      {/* Changelog (only if entries exist) */}
+      <ArticleChangelog entries={post.changelog || []} />
+
       {/* Related posts */}
       {relatedPosts.length > 0 && (
-        <section style={{ maxWidth: "800px", margin: "0 auto", padding: "3rem 1.5rem 4rem", borderTop: "1px solid #e5e7eb" }}>
+        <section style={{ maxWidth: "800px", margin: "0 auto", padding: "3rem 1.5rem 2rem", borderTop: "1px solid #e5e7eb" }}>
           <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111827", marginBottom: "1.5rem" }}>
             Related Articles
           </h2>
@@ -196,6 +201,11 @@ export default async function BlogPost({ params }: Props) {
           </div>
         </section>
       )}
+
+      {/* Author bio (E-E-A-T) */}
+      <div style={{ padding: "0 1.5rem 4rem" }}>
+        <AuthorBio />
+      </div>
     </article>
   )
 }

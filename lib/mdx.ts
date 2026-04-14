@@ -13,6 +13,11 @@ const CONTENT_DIR = path.join(process.cwd(), "content", "blog")
 
 export type ArticleStatus = "draft" | "scheduled" | "published"
 
+export interface ChangelogEntry {
+  date: string
+  note: string
+}
+
 export interface BlogPost {
   slug: string
   title: string
@@ -26,6 +31,7 @@ export interface BlogPost {
   difficulty: string
   readTime: string
   author: string
+  changelog?: ChangelogEntry[]
   content: string // HTML string
 }
 
@@ -42,6 +48,7 @@ export interface BlogPostMeta {
   difficulty: string
   readTime: string
   author: string
+  changelog?: ChangelogEntry[]
 }
 
 export async function getPostBySlug(slug: string): Promise<BlogPost> {
@@ -72,6 +79,7 @@ export async function getPostBySlug(slug: string): Promise<BlogPost> {
     difficulty: data.difficulty,
     readTime: data.readTime,
     author: data.author,
+    changelog: data.changelog,
     content: contentHtml,
   }
 }
@@ -94,6 +102,7 @@ export function getPostMetaBySlug(slug: string): BlogPostMeta {
     difficulty: data.difficulty,
     readTime: data.readTime,
     author: data.author,
+    changelog: data.changelog,
   }
 }
 

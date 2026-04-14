@@ -4,20 +4,20 @@ import { BlogContent } from "./blog-content"
 
 export const metadata: Metadata = {
   title: "Blog",
-  description: "Articles on AI, machine learning, RAG systems, NLP, and more.",
+  description: "Notes on RAG pipelines, AI agents, privacy-preserving NLP, and production AI engineering.",
   alternates: {
     canonical: "https://helain-zimmermann.com/blog",
   },
   openGraph: {
     title: "Blog | Hélain Zimmermann",
-    description: "Articles on AI, machine learning, RAG systems, NLP, and more.",
+    description: "Notes on RAG pipelines, AI agents, privacy-preserving NLP, and production AI engineering.",
     url: "https://helain-zimmermann.com/blog",
     type: "website",
   },
   twitter: {
     card: "summary",
     title: "Blog | Hélain Zimmermann",
-    description: "Articles on AI, machine learning, RAG systems, NLP, and more.",
+    description: "Notes on RAG pipelines, AI agents, privacy-preserving NLP, and production AI engineering.",
   },
 }
 
@@ -39,8 +39,8 @@ export default function BlogIndex() {
             Blog
           </h1>
           <p className="mx-auto max-w-xl text-lg leading-relaxed text-gray-600">
-            Insights on AI, Machine Learning, RAG Systems, and the future of
-            intelligent software
+            Notes from production: RAG, agents, privacy-preserving NLP. What I
+            ship, what breaks, what I&apos;d do differently.
           </p>
         </div>
       </section>

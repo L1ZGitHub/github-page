@@ -20,21 +20,21 @@ const CATEGORIES: Record<string, string> = {
 // SEO descriptions per category
 const DESCRIPTIONS: Record<string, string> = {
   "ai-ml":
-    "Articles on machine learning models, architectures, benchmarks, and the latest advances in artificial intelligence.",
+    "Models, architectures, benchmarks. What works, what doesn't, what the papers get wrong.",
   "ai-agents":
-    "Deep dives into multi-agent systems, orchestration patterns, tool use, and the Model Context Protocol.",
+    "Multi-agent systems, orchestration, tool use, Model Context Protocol. Built, broken, shipped.",
   "rag-systems":
-    "Guides on retrieval-augmented generation: chunking, vector databases, hybrid search, and evaluation.",
+    "Retrieval-augmented generation: chunking, vector stores, hybrid search, eval. Notes from production.",
   "ai-security":
-    "Privacy-preserving AI, differential privacy, federated learning, ZKP, FHE, and threat modeling for AI systems.",
+    "Privacy-preserving AI, differential privacy, federated learning, ZKP, FHE. Threat models for real systems.",
   "engineering":
-    "MLOps, CI/CD for ML, deployment patterns, monitoring, and production infrastructure for AI.",
+    "MLOps, CI/CD, deployment, monitoring. How AI actually runs in production.",
   "getting-started":
-    "Hands-on tutorials and beginner-friendly guides to get started with AI, ML, and RAG systems.",
+    "Tutorials for people starting with AI, ML, and RAG. No fluff.",
   "industry":
-    "AI adoption stories, ROI analysis, and sector-specific use cases across finance, healthcare, and more.",
+    "Where AI pays off and where it doesn't: finance, healthcare, and more. Written from experience.",
   "strategy":
-    "Build vs buy decisions, AI roadmaps, team organization, and strategic frameworks for AI adoption.",
+    "Build vs buy, team shape, roadmaps. Written from the chair of someone shipping.",
 }
 
 export function generateStaticParams() {
