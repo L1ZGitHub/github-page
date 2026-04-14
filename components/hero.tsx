@@ -29,9 +29,9 @@ export function Hero() {
           Co-Founder &amp; CTO @ Ailog
         </p>
         <p className="mx-auto mb-10 max-w-xl text-lg leading-relaxed text-gray-600">
-          AI Engineer specializing in machine learning systems, RAG architectures,
-          and privacy-preserving NLP. Currently pursuing a Master&apos;s in Machine
-          Learning at KTH Stockholm.
+          I ship AI systems: RAG, agents, fine-tuning. Finishing an MSc in
+          Machine Learning at KTH Stockholm alongside an engineering degree at
+          ENSIMAG Grenoble.
         </p>
 
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">

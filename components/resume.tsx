@@ -53,7 +53,7 @@ export function Resume() {
         <div className="mb-16 text-center scroll-mt-24">
           <div className="mx-auto mb-6 h-px w-16 bg-gray-300" />
           <h2 className="mb-3 text-3xl font-bold text-gray-900 md:text-4xl">Resume</h2>
-          <p className="text-lg text-gray-600">Experience and education journey</p>
+          <p className="text-lg text-gray-600">Experience and education.</p>
         </div>
 
         <div className="grid gap-8 md:grid-cols-2">

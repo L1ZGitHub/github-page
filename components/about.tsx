@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 
 const skills = [
@@ -16,27 +17,16 @@ export function About() {
           <div className="mx-auto mb-6 h-px w-16 bg-gray-300" />
           <h2 className="mb-3 text-3xl font-bold text-gray-900 md:text-4xl">About Me</h2>
           <p className="text-lg text-gray-600">
-            Building AI systems that respect privacy and deliver real value
+            Shipping code, not slides. Papers only when they exist.
           </p>
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
           <p className="mb-4 leading-relaxed text-gray-700">
-            AI Engineer and entrepreneur building intelligent systems that create real
-            business impact. As{" "}
-            <strong className="text-gray-900">Co-Founder &amp; CTO of Ailog</strong>, I lead
-            the development of RAG-powered solutions, custom LLM integrations, and
-            automation pipelines for companies seeking to leverage AI effectively.
+            I&apos;m <strong className="text-gray-900">Co-Founder &amp; CTO at Ailog</strong>, where we build AI features for small and mid-sized teams: retrieval over messy internal documents, agent workflows that replace brittle scripts, automation around the tools clients already pay for.
           </p>
           <p className="leading-relaxed text-gray-700">
-            My background combines rigorous engineering training at{" "}
-            <strong className="text-gray-900">ENSIMAG</strong> with research experience at{" "}
-            <strong className="text-gray-900">INRIA</strong> on privacy-preserving NLP.
-            Currently pursuing a{" "}
-            <strong className="text-gray-900">
-              Master&apos;s in Machine Learning at KTH Stockholm
-            </strong>{" "}
-            to deepen my expertise in scalable AI systems.
+            Before Ailog I spent a summer at <strong className="text-gray-900">INRIA Grenoble</strong> on privacy-preserving NLP, which became <Link href="https://arxiv.org/abs/2501.02407" target="_blank" className="text-amber-600 hover:underline">arXiv:2501.02407</Link>. I&apos;m finishing an MSc in Machine Learning at <strong className="text-gray-900">KTH Stockholm</strong> alongside an engineering degree at <strong className="text-gray-900">ENSIMAG Grenoble</strong>. My research keeps going on the side: multi-expert LoRA with learned routing, and a validation framework for LLM-based social simulations (SimValid).
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-2">

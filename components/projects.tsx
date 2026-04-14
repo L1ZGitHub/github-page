@@ -6,7 +6,7 @@ const projects = [
     icon: Bot,
     title: "Ailog – Custom AI Agents",
     description:
-      "Co-founded the startup helping companies unlock AI through tailored solutions: custom LLM development, RAG systems, business process automation, and AI training programs.",
+      "Co-founded Ailog in March 2025 to build AI features for small and mid-sized teams. We integrate LLMs into existing stacks: RAG over internal docs, agent workflows, automation around tools clients already pay for.",
     tags: ["RAG", "LLM", "Automation", "Data Science"],
     link: { href: "https://www.ailog.fr/fr/landing", label: "Visit Website" },
   },
@@ -73,7 +73,7 @@ export function Projects() {
         <div className="mb-16 text-center scroll-mt-24">
           <div className="mx-auto mb-6 h-px w-16 bg-gray-300" />
           <h2 className="mb-3 text-3xl font-bold text-gray-900 md:text-4xl">Selected Projects</h2>
-          <p className="text-lg text-gray-600">From startup ventures to research innovations</p>
+          <p className="text-lg text-gray-600">A mix of startup work, research, and older engineering projects.</p>
         </div>
 
         <div className="mx-auto grid max-w-[1000px] gap-6 md:grid-cols-2">

@@ -80,7 +80,7 @@ export function Contact() {
           <div className="mx-auto mb-6 h-px w-16 bg-gray-300" />
           <h2 className="mb-3 text-3xl font-bold text-gray-900 md:text-4xl">Get in Touch</h2>
           <p className="text-lg text-gray-600">
-            Let&apos;s discuss AI, research, or explore collaborations
+            AI engineering, research, or client work at Ailog.
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export function Contact() {
               <Linkedin className="size-5" />
             </div>
             <h3 className="mb-2 text-lg font-bold text-gray-900">Connect on LinkedIn</h3>
-            <p className="mb-6 text-sm text-gray-600">Let&apos;s connect and stay in touch</p>
+            <p className="mb-6 text-sm text-gray-600">Let&apos;s connect and stay in touch.</p>
             <Link
               href="https://www.linkedin.com/in/helain-zimmermann/"
               target="_blank"

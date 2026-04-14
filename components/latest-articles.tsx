@@ -14,7 +14,7 @@ export function LatestArticles() {
         <div className="mb-16 text-center">
           <div className="mx-auto mb-6 h-px w-16 bg-gray-300" />
           <h2 className="mb-3 text-3xl font-bold text-gray-900 md:text-4xl">Latest Articles</h2>
-          <p className="text-lg text-gray-600">Insights on AI, ML, and building intelligent systems</p>
+          <p className="text-lg text-gray-600">Notes from production: RAG, agents, privacy-preserving NLP.</p>
         </div>
 
         <div className="mx-auto grid max-w-[1000px] gap-6 md:grid-cols-2 lg:grid-cols-3">

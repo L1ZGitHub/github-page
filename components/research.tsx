@@ -11,7 +11,7 @@ export function Research() {
         <div className="mb-16 text-center scroll-mt-24">
           <div className="mx-auto mb-6 h-px w-16 bg-gray-300" />
           <h2 className="mb-3 text-3xl font-bold text-gray-900 md:text-4xl">Research</h2>
-          <p className="text-lg text-gray-600">Academic contributions to privacy-preserving AI</p>
+          <p className="text-lg text-gray-600">Research on privacy-preserving NLP, done at INRIA Grenoble.</p>
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-8 transition-all hover:-translate-y-1 hover:border-emerald-400 hover:shadow-xl">
@@ -19,14 +19,11 @@ export function Research() {
             2024 – INRIA
           </span>
           <h3 className="mb-2 text-xl font-bold text-gray-900">
-            Towards the Anonymization of Language Modeling
+            Towards the Anonymization of the Language Modeling
           </h3>
-          <p className="mb-4 text-sm text-gray-500">arXiv pre-print • INRIA Grenoble</p>
+          <p className="mb-4 text-sm text-gray-500">arXiv • INRIA Grenoble</p>
           <p className="leading-relaxed text-gray-600">
-            Developed novel techniques to mitigate sensitive data leakage in language
-            models while preserving model utility. The research focuses on preventing
-            memorization of personally identifiable information during training,
-            contributing to safer deployment of LLMs in privacy-sensitive applications.
+            Two training schemes against memorization in fine-tuned language models: a masked objective for BERT-style models, a causal one for GPT-style. Both target direct and indirect identifiers. Evaluated on a medical dataset against several baselines.
           </p>
           <Link
             href="https://arxiv.org/html/2501.02407v2"

@@ -32,6 +32,16 @@ export function Footer() {
 
         <p className="text-sm">© 2025-2026 Hélain Zimmermann. All rights reserved.</p>
       </div>
+
+      <div className="mx-auto mt-6 flex max-w-[1200px] items-center justify-center gap-4 border-t border-gray-800 pt-6 text-sm text-gray-500">
+        <Link href="/editorial-policy" className="hover:text-gray-300 transition-colors">
+          Editorial policy
+        </Link>
+        <span aria-hidden="true">·</span>
+        <Link href="/contact" className="hover:text-gray-300 transition-colors">
+          Contact
+        </Link>
+      </div>
     </footer>
   )
 }
