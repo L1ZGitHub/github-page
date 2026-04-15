@@ -118,6 +118,13 @@ export function Contact() {
             </button>
           </div>
         </div>
+
+        <p className="mt-8 text-center text-sm text-gray-600">
+          Prefer dev.to, Scholar, or another channel?{" "}
+          <Link href="/contact" className="font-medium text-amber-600 hover:underline">
+            See all ways to reach me <ArrowRight className="inline size-3.5" />
+          </Link>
+        </p>
       </div>
 
       {/* Contact Modal */}
