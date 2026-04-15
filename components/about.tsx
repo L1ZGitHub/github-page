@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 const skills = [
@@ -22,11 +23,8 @@ export function About() {
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
-          <p className="mb-4 leading-relaxed text-gray-700">
-            I&apos;m <strong className="text-gray-900">Co-Founder &amp; CTO at Ailog</strong>, where we build AI features for small and mid-sized teams: retrieval over messy internal documents, agent workflows that replace brittle scripts, automation around the tools clients already pay for.
-          </p>
           <p className="leading-relaxed text-gray-700">
-            Before Ailog I spent a summer at <strong className="text-gray-900">INRIA Grenoble</strong> on privacy-preserving NLP, which became <Link href="https://arxiv.org/abs/2501.02407" target="_blank" className="text-amber-600 hover:underline">arXiv:2501.02407</Link>. I&apos;m finishing an MSc in Machine Learning at <strong className="text-gray-900">KTH Stockholm</strong> alongside an engineering degree at <strong className="text-gray-900">ENSIMAG Grenoble</strong>. My research keeps going on the side: multi-expert LoRA with learned routing, and a validation framework for LLM-based social simulations (SimValid).
+            I&apos;m <strong className="text-gray-900">Co-Founder &amp; CTO at Ailog</strong>, where we build AI features for small and mid-sized teams: retrieval over messy internal documents, agent workflows that replace brittle scripts, automation around the tools clients already pay for. Before Ailog I researched privacy-preserving NLP at <strong className="text-gray-900">INRIA Grenoble</strong>, and I&apos;m finishing an MSc in Machine Learning at <strong className="text-gray-900">KTH Stockholm</strong> alongside an engineering degree at <strong className="text-gray-900">ENSIMAG Grenoble</strong>.
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-2">
@@ -39,6 +37,16 @@ export function About() {
                 {skill}
               </Badge>
             ))}
+          </div>
+
+          <div className="mt-8 text-center">
+            <Link
+              href="/about"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 hover:text-amber-700 hover:underline"
+            >
+              Read the full bio
+              <ArrowRight className="size-4" />
+            </Link>
           </div>
         </div>
       </div>
