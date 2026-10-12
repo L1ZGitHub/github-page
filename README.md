@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# helain-zimmermann.com
 
-## Getting Started
+The personal site of Hélain Zimmermann: one page, written as an interview in five questions, over a film that the
+scroll plays. No framework, no build step, no tracking.
 
-First, run the development server:
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `site/index.html` | The page: markup, styles and script in one file |
+| `site/film/` | The film as video (`film-1280.mp4` for wide screens, `film-960.mp4` for phones, `film-rough.mp4` shown first on slow lines, `film-960.webm` where H.264 is missing) and its first frame |
+| `site/fonts/` | Butler, Bricolage Grotesque, Spline Sans Mono, self-hosted |
+| `site/tg-engine.js` | Drawing engine of the plant on the left rail, fetched on wide screens only |
+| `site/files/` | The CV |
+| `site/robots.txt`, `sitemap.xml`, `llms.txt`, `humans.txt`, `.well-known/security.txt`, `site.webmanifest` | Discovery files |
+| `site/404.html` | Shown for missing pages and for the retired blog |
+| `nginx.conf` | Caching, security headers, and what the previous site's addresses now return |
+| `Dockerfile` | nginx serving `site/` on port 3000 |
+
+## Preview
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker build -t helain-site .
+docker run --rm -p 3000:3000 helain-site    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`?jump=<pixels>` opens the page at a scroll position, which helps when checking one moment of the film.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Coolify builds the `Dockerfile` from `main` and routes helain-zimmermann.com to port 3000.
 
-## Learn More
+## The previous site
 
-To learn more about Next.js, take a look at the following resources:
+Until October 2026 this repository held a Next.js site with a blog. `/about` and `/contact` now redirect to the front
+page; `/blog`, `/feed.xml`, `/admin` and `/editorial-policy` answer 410 Gone.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Credits
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The plant on the rail is drawn with the engine of [Type Garden](https://type-garden.vercel.app) by Akshat Agarwal.
+Butler by Fabian De Smet, Bricolage Grotesque by Mathieu Triay, Spline Sans Mono by SorkinType.

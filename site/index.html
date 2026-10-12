@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hélain Zimmermann | Co-Founder &amp; CTO at Ailog</title>
+<meta name="description" content="Hélain Zimmermann, Co-Founder &amp; CTO at Ailog. I build AI systems and the companies around them: retrieval, agents, fine-tuning. ENSIMAG and KTH.">
+<link rel="canonical" href="https://helain-zimmermann.com/">
+<meta name="author" content="Hélain Zimmermann">
+<meta name="theme-color" content="#12100E">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="Hélain Zimmermann">
+<meta property="og:title" content="Hélain Zimmermann | Co-Founder &amp; CTO at Ailog">
+<meta property="og:description" content="Hélain Zimmermann, Co-Founder &amp; CTO at Ailog. I build AI systems and the companies around them: retrieval, agents, fine-tuning. ENSIMAG and KTH.">
+<meta property="og:url" content="https://helain-zimmermann.com/">
+<meta property="og:image" content="https://helain-zimmermann.com/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hélain Zimmermann. I build AI systems, and the companies around them.">
+<meta property="og:locale" content="en_GB">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hélain Zimmermann | Co-Founder &amp; CTO at Ailog">
+<meta name="twitter:description" content="Hélain Zimmermann, Co-Founder &amp; CTO at Ailog. I build AI systems and the companies around them: retrieval, agents, fine-tuning. ENSIMAG and KTH.">
+<meta name="twitter:image" content="https://helain-zimmermann.com/og.jpg">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://helain-zimmermann.com/#website","url":"https://helain-zimmermann.com/","name":"Hélain Zimmermann","inLanguage":"en"},{"@type":"Person","@id":"https://helain-zimmermann.com/#person","name":"Hélain Zimmermann","url":"https://helain-zimmermann.com/","image":"https://helain-zimmermann.com/og.jpg","jobTitle":"Co-Founder & CTO","worksFor":{"@type":"Organization","name":"Ailog","url":"https://www.ailog.fr/"},"description":"AI engineer. Retrieval, agents and fine-tuning; builder of Pylae, Delona and Nefeli.","alumniOf":[{"@type":"CollegeOrUniversity","name":"Grenoble INP - Ensimag"},{"@type":"CollegeOrUniversity","name":"KTH Royal Institute of Technology"}],"knowsAbout":["Retrieval-augmented generation","AI agents","Fine-tuning","Privacy-preserving natural language processing","Machine learning"],"sameAs":["https://www.linkedin.com/in/helain-zimmermann/","https://github.com/L1ZGitHub","https://dev.to/helain","https://medium.com/@helain.zimmermann","https://scholar.google.com/citations?user=MXMobs8AAAAJ"]}]}</script>
+<link rel="preload" href="film/poster.webp" as="image" type="image/webp" fetchpriority="high">
+<link rel="preload" href="fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Bricolage Grotesque";src:url("fonts/bricolage-grotesque-latin.woff2") format("woff2");font-weight:300 800;font-stretch:75% 100%;font-display:swap}
+@font-face{font-family:"Spline Sans Mono";src:url("fonts/spline-sans-mono-latin.woff2") format("woff2");font-weight:400 500;font-display:swap}
+@font-face{font-family:"Butler";src:url("fonts/Butler_Regular.woff") format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:"Butler";src:url("fonts/Butler_Medium.woff") format("woff");font-weight:500;font-display:swap}
+:root{--bg:#12100E;--fg:#F1ECE2;--dim:#8F887B;--line:#2E2A25;--lime:#C8F04B;--pad:clamp(20px,6vw,96px);--rail:80px;--padl:max(calc(var(--rail) + 4.2vw),112px);--shrink:.64;--anstop:calc(max(13vh,128px) + 150px)}
+@media(max-width:820px){:root{--rail:0px;--padl:var(--pad);--shrink:.46;--anstop:calc(max(12vh,112px) + 104px)}}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 18px/1.45 "Bricolage Grotesque",system-ui,sans-serif}
+a{color:inherit}
+.mono{font:400 12px/1.4 "Spline Sans Mono",ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase}
+h1{font-weight:500}
+h2,h3{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-stretch:78%;font-weight:700;letter-spacing:-.03em}
+
+/* chrome */
+:root{--bar:78px;--wm:clamp(38px,4.4vw,64px)}
+.top{position:fixed;inset:0 0 auto 0;z-index:30;display:flex;justify-content:space-between;align-items:center;height:var(--bar);padding:0 var(--pad) 0 var(--padl);pointer-events:none}
+.hline{position:absolute;left:0;right:0;top:var(--bar);height:1px;background:currentColor;opacity:.3}
+.top>*{pointer-events:auto}
+.name{text-decoration:none;display:flex;align-items:center;gap:10px}
+.wm{position:absolute;left:50%;top:var(--bar);transform:translate(-50%,calc(-100% + var(--wm) * .2656));font:500 var(--wm)/1 "Butler",Georgia,serif;letter-spacing:.2em;padding-left:.2em;text-decoration:none;white-space:nowrap}
+.rec{width:9px;height:9px;border-radius:50%;background:var(--lime);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25;transform:scale(.7)}}
+.acts{display:flex;gap:8px}
+.btn{display:inline-block;padding:10px 16px;border:1.5px solid currentColor;border-radius:999px;text-decoration:none;font:500 12px/1 "Spline Sans Mono",monospace;letter-spacing:.1em;text-transform:uppercase;transition:background .2s,color .2s}
+.btn:hover,.btn:focus-visible{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.btn.go{background:var(--lime);color:var(--bg);border-color:var(--lime)}
+.btn.go:hover,.btn.go:focus-visible{background:var(--fg);border-color:var(--fg)}
+body.inv .top{color:var(--bg)}
+body.inv .rec{background:var(--bg)}
+body.inv .top .btn.go{background:var(--bg);color:var(--lime);border-color:var(--bg)}
+.side{position:fixed;left:0;top:0;bottom:0;width:var(--rail);z-index:29;pointer-events:none;color:var(--fg)}
+.side::before{content:"";position:absolute;left:var(--rail);top:0;bottom:0;width:1px;background:currentColor;opacity:.3}
+.side .glyph{position:absolute;left:26px;top:108px;line-height:5px;font-size:0}
+.side .glyph i{display:inline-block;width:3px;height:3px;background:currentColor;margin:1px}
+.side .ticks{position:absolute;left:var(--rail);top:150px;list-style:none;margin:0;padding:0}
+.side .ticks li{width:8px;height:1px;background:currentColor;opacity:.45;margin-bottom:34px;transition:width .3s,opacity .3s,background .3s}
+.side .ticks li.done{opacity:.95}
+.side .ticks li.on{width:20px;height:2px;opacity:1;background:var(--lime)}
+.chapter{position:absolute;left:calc(var(--rail) - 22px);top:max(46vh,340px);display:flex;align-items:center;gap:10px;white-space:nowrap;writing-mode:vertical-rl;transform:rotate(180deg);font-size:10.5px;letter-spacing:.18em;opacity:.9}
+.chapter::before{content:"";width:1px;height:22px;background:currentColor}
+.chapter .num{opacity:.55}
+.seal{position:fixed;top:var(--bar);left:var(--rail);transform:translate(-50%,-50%);width:68px;height:68px;z-index:31;color:var(--fg);background:var(--bg);border-radius:50%;transition:transform .8s cubic-bezier(.22,.61,.36,1)}
+.seal:hover,.seal:focus-visible{transform:translate(-50%,-50%) rotate(12deg)}
+.seal svg{width:100%;height:100%;display:block}
+body.inv .side,body.inv .seal{color:var(--bg)}
+body.inv .seal{background:var(--lime)}
+body.inv .side .ticks li.on{background:var(--bg)}
+@media(max-width:820px){:root{--bar:64px;--wm:24px}.side{display:none}.name{display:none}.top{justify-content:flex-start}.acts{margin-left:auto}.wm{position:static;transform:none;padding-left:0}.seal{position:static;transform:none;width:32px;height:32px;margin-right:10px;background:none;flex:none}.seal:hover,.seal:focus-visible{transform:none}body.inv .seal{background:none}}
+
+/* progress primitives */
+.w,.f,.up,.wipe,.card{--a:clamp(0,calc((var(--p,1) - var(--s,0)) / (var(--e,1) - var(--s,0))),1)}
+.w{display:inline-block;opacity:var(--a);transform:translateY(calc((1 - var(--a)) * .35em))}
+.f{opacity:var(--a)}
+.up{opacity:var(--a);transform:translateY(calc((1 - var(--a)) * 28px))}
+.wipe{clip-path:inset(0 calc((1 - var(--a)) * 100%) 0 0)}
+
+[data-stage]{position:relative;height:300vh}
+.sticky{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden}
+.who{position:absolute;left:var(--padl);top:max(11vh,calc(var(--bar) + 22px));color:var(--lime);display:flex;gap:10px;align-items:center}
+.ask{--m:clamp(0,calc((var(--p,1) - .3) / .14),1);position:absolute;left:var(--padl);right:var(--pad);top:0;transform-origin:left top;
+  transform:translateY(calc(max(15vh,var(--bar) + 50px) + (1 - var(--m)) * var(--y0,20vh))) scale(calc(1 - var(--m) * var(--shrink)));
+  font-size:clamp(46px,10.5vw,168px);line-height:.92;max-width:11em;color:color-mix(in srgb,var(--fg) calc(100% - var(--m) * 45%),var(--dim))}
+.ans{position:absolute;left:var(--padl);right:var(--pad);top:var(--anstop);bottom:64px}
+
+/* the eyes: a drawn cutout over the first screen */
+#who .ask{--y0:31vh}
+.eyes{position:absolute;left:calc(50% + var(--rail) / 2);top:max(12vh,calc(var(--bar) + 30px));width:min(1180px,calc(100vw - var(--padl) - var(--pad)),116vh);transform:translate(-50%,calc(var(--p,0) * -10vh));opacity:calc(1 - clamp(0,calc((var(--p,0) - .29) / .12),1));pointer-events:none}
+.eyes svg{display:block;width:100%;height:auto;overflow:visible}
+@media(max-width:820px){.eyes{width:calc(100vw - 20px);top:calc(var(--bar) + 64px)}}
+@media (prefers-reduced-motion:reduce){.eyes{display:none}}
+
+/* the film: footage scrubbed by the scroll behind the first question */
+#who{height:350vh;margin-top:-100vh;margin-top:-100lvh}
+.filmwrap{position:relative}
+.filmwrap>section{z-index:1}
+.filmwrap>section+section{height:400vh}
+#who .eyes{display:none}
+/* the film and the lime ground fill the tall viewport (browser bar hidden); the text screens keep the short one, so nothing sits under the bar */
+.film{position:sticky;top:0;height:100vh;height:100lvh;overflow:hidden}
+.film{background:#0B0A09}
+.film img,.film video{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover;object-position:var(--fx,50%) 50%;pointer-events:none}
+.film::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(to bottom,rgba(18,16,14,.74),rgba(18,16,14,0) 28%),
+  linear-gradient(to right,rgba(18,16,14,.55),rgba(18,16,14,0) 36%),
+  linear-gradient(to top,rgba(18,16,14,.9),rgba(18,16,14,.55) 24%,rgba(18,16,14,0) 56%),
+  rgba(18,16,14,var(--scrim,.1))}
+#who .sticky{opacity:var(--so,1)}
+/* the first stage is set like a film: a title at the foot of the frame, then a lower third under the face */
+#who .ask{top:auto;bottom:8vh;transform:none;font-size:clamp(44px,8vw,128px);max-width:none;color:var(--fg);opacity:var(--qo,1)}
+#who .ans{top:auto;bottom:6vh;display:flex;flex-direction:column;justify-content:flex-end}
+#who .lede{font-size:clamp(26px,3.3vw,52px);max-width:22em;margin:0 0 2.6vh}
+#who .facts{max-width:920px;border-top-color:rgba(241,236,226,.3)}
+/* the projects arrive as a pile on the left, so the desk stays in view */
+@media(min-width:821px){
+.filmwrap .cards{grid-template-columns:1fr;width:min(540px,38vw);height:min(100%,50vh)}
+.filmwrap .card{grid-area:1/1;box-shadow:0 18px 50px rgba(0,0,0,.45);
+  transform:translate(calc((1 - var(--a)) * 105vw + var(--dx,0px)),var(--dy,0px)) rotate(calc((1 - var(--a)) * 9deg + var(--r,0deg)))}
+.filmwrap .card:nth-child(2){--dx:18px;--dy:14px;--r:1.6deg}
+.filmwrap .card:nth-child(3){--dx:36px;--dy:28px;--r:-1.2deg}
+}
+.filmwrap .card:nth-child(1){--s:.44!important;--e:.58!important}
+.filmwrap .card:nth-child(2){--s:.6!important;--e:.74!important}
+.filmwrap .card:nth-child(3){--s:.76!important;--e:.9!important}
+.filmwrap .ans .q{display:block;color:var(--lime);margin:0 0 14px}
+@media(min-width:821px){.filmwrap>section:nth-of-type(2) .ask{max-width:5em}}
+
+/* the garden on the rail is drawn on a canvas by the Type Garden engine */
+.side .ticks{display:none}
+.railgarden{position:absolute;left:0;top:0;width:230px;height:100%;pointer-events:none}
+@media(max-width:820px){.railgarden{display:none}}
+
+/* 1 */
+.lede{font:500 clamp(30px,4.6vw,74px)/1.04 "Butler",Georgia,serif;max-width:16em;margin:0 0 4vh;letter-spacing:-.005em}
+.lede em{color:var(--lime);font-style:normal}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-top:1px solid var(--line);max-width:1100px}
+.facts div{padding:16px 18px 0 0}
+.facts b a{color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+.facts b{display:block;font:500 clamp(18px,1.7vw,24px)/1.2 "Bricolage Grotesque",sans-serif;font-stretch:85%;margin-top:6px}
+@media(max-width:820px){.facts{grid-template-columns:1fr}.facts div{padding:10px 0;border-bottom:1px solid var(--line)}}
+
+/* 2 */
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(12px,1.6vw,24px);height:min(100%,56vh)}
+.card{background:var(--fg);color:var(--bg);border-radius:18px;padding:clamp(16px,2vw,30px);display:flex;flex-direction:column;justify-content:space-between;
+  transform:translateX(calc((1 - var(--a)) * 70vw)) rotate(calc((1 - var(--a)) * 9deg));opacity:clamp(0,calc(var(--a) * 4),1)}
+.card h3{font-size:clamp(34px,4.4vw,72px);line-height:.95}
+.card p{margin:10px 0 0;font:400 clamp(17px,1.35vw,22px)/1.32 "Butler",Georgia,serif}
+.card svg{width:clamp(40px,5vw,72px);height:auto;align-self:flex-end}
+.card .mono{color:#5E584E}
+@media(max-width:820px){.cards{grid-template-columns:1fr;height:auto;gap:10px}.card{flex-direction:row;align-items:center;gap:14px;padding:14px 16px}.card svg{display:none}.card h3{font-size:30px;min-width:4.3em}.card p{margin:0;font-size:15px}.card .mono{display:none}}
+
+/* 3 */
+.ledger{list-style:none;margin:0;padding:0;border-top:1px solid var(--line);max-width:1200px}
+.ledger li{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:clamp(7px,1.25vh,16px) 0;border-bottom:1px solid var(--line)}
+.ledger h3{font-size:clamp(22px,3.3vw,52px);line-height:1;font-weight:600}
+.ledger span{color:var(--dim);text-align:right;white-space:nowrap}
+.ledger li:last-child h3{color:var(--lime)}
+.ledger a{color:var(--lime)}
+@media(max-width:820px){.ledger span{font-size:10px;white-space:normal;max-width:9.5em}}
+
+/* 4 */
+.places{display:grid;gap:clamp(8px,2vh,22px);max-width:1200px}
+.places div{display:grid;grid-template-columns:8.5em 1fr;align-items:baseline;gap:18px;border-bottom:1px solid var(--line);padding-bottom:clamp(8px,2vh,22px)}
+.places h3{font-size:clamp(40px,8vw,128px);line-height:.9}
+.places h3 small{display:block;font:400 clamp(16px,1.4vw,22px)/1.3 "Butler",Georgia,serif;letter-spacing:0;color:var(--dim);margin-top:8px;font-stretch:100%}
+.places .mono{color:var(--lime)}
+@media(max-width:820px){.places div{grid-template-columns:1fr;gap:2px}}
+
+/* 5 — the room flips */
+#you .sticky::before{content:"";position:absolute;inset:0;background:var(--lime)}
+#you{height:260vh;background:var(--lime)}
+#you .who{color:var(--bg)}
+#you .ask{--m:0;color:var(--bg);max-width:9em}
+#you .tail{position:absolute;left:var(--padl);right:var(--pad);bottom:74px;color:var(--bg)}
+#you .tail p{font:400 clamp(20px,2vw,30px)/1.3 "Butler",Georgia,serif;max-width:26em;margin:0 0 20px}
+#you .btn{border-color:var(--bg)}
+#you .btn:hover,#you .btn:focus-visible{background:var(--bg);color:var(--lime);border-color:var(--bg)}
+#you .btn.go{background:var(--bg);color:var(--lime)}
+.links{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mail{color:inherit;text-transform:none;letter-spacing:.04em;margin-left:8px;text-underline-offset:4px}
+#you .tail{right:calc(var(--pad) + 380px)}
+.else{position:absolute;right:var(--pad);bottom:74px;width:320px;color:var(--bg)}
+.else ul{list-style:none;margin:10px 0 0;padding:0;border-top:1.5px solid var(--bg)}
+.else li{border-bottom:1px solid rgba(18,16,14,.28)}
+.else a{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:9px 0;color:inherit;text-decoration:none}
+.else b{font:700 18px/1.2 "Bricolage Grotesque",sans-serif;letter-spacing:-.01em}
+.else a .mono{font-size:11px;text-transform:none;letter-spacing:.04em;opacity:.75}
+.else a:hover b,.else a:focus-visible b{text-decoration:underline;text-underline-offset:4px}
+@media(max-width:820px){#you .tail{right:var(--pad);bottom:258px}#you .tail p{margin-bottom:14px}.mail{margin:6px 0 0;flex-basis:100%}.else{left:var(--pad);right:var(--pad);width:auto;bottom:34px}.else a{padding:7px 0}.else b{font-size:16px}}
+/* measured on the screen itself (the short viewport), so the browser bar hiding does not make the paragraph pop in and out */
+#you .sticky{container-type:size}
+@container (max-width:820px) and (max-height:800px){#you .tail p{display:none}}
+@container (max-width:820px) and (max-height:700px){.else a{padding:5px 0}#you .tail{bottom:236px}}
+
+@media (prefers-reduced-motion:reduce){[data-stage]{height:auto!important}.sticky{position:static;height:auto;padding:16vh var(--pad) 8vh}.who,.ask,.ans,#you .tail,.else{position:static;transform:none}.else{width:auto;margin-top:28px}.ask{margin:18px 0 26px;font-size:clamp(40px,7vw,96px)}.card{transform:none;opacity:1}.rec{animation:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="seal" href="#who" aria-label="Hélain Zimmermann, top of page"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="29" stroke="currentColor" stroke-width="1" opacity=".5"/><path d="M32 8.5C37.5 15 41.5 20.2 41.5 25.8A9.5 9.5 0 0 1 22.5 25.8C22.5 22.3 24.3 19.6 27 17.4C27.3 20.4 28.4 22.2 30.2 23C29.2 17.8 29.9 12.8 32 8.5Z" fill="currentColor"/><path d="M23.5 34.5H28.3L31.07 56.5H30ZM29.6 34.5H34.4L32.53 56.5H31.47ZM35.7 34.5H40.5L34 56.5H32.93Z" fill="currentColor"/><path d="M23.4 40H40.6M26 48H38" stroke="currentColor" stroke-width="2.4"/></svg></a>
+  <span class="name mono" aria-hidden="true"><i class="rec"></i><span id="tc">00:00</span></span>
+  <a class="wm" href="#who" aria-hidden="true" tabindex="-1">HÉLAIN</a>
+  <i class="hline" aria-hidden="true"></i>
+  <nav class="acts" aria-label="Quick links">
+    <a class="btn" href="/files/ZIMMERMANN_Helain_Resume_en.pdf">CV</a>
+    <a class="btn go" href="#you">Contact</a>
+  </nav>
+</header>
+<aside class="side mono" aria-hidden="true">
+  <div class="glyph"><i></i><i></i><br><i></i><i></i></div>
+  <ol class="ticks" id="ticks"><li></li><li></li><li></li><li></li><li></li></ol>
+  <div class="chapter"><span class="num" id="chn">01</span><span id="chname">Who</span></div>
+</aside>
+
+<main>
+<div class="filmwrap">
+<div class="film" aria-hidden="true"><img src="film/poster.webp" alt="" fetchpriority="high"></div>
+<section id="who" data-stage>
+  <div class="sticky">
+    <div class="eyes" aria-hidden="true"><svg id="eyes" viewBox="0 0 1040 250"></svg></div>
+    <div class="who mono"><span>You ask</span><span>01</span></div>
+    <h2 class="ask" data-q data-from="-1">Who are you?</h2>
+    <div class="ans">
+      <span class="q mono up" style="--s:.4;--e:.46" aria-hidden="true">Who are you?</span>
+      <h1 class="lede up" style="--s:.42;--e:.56">Hélain Zimmermann. I build <em>AI systems</em>, and the companies around them.</h1>
+      <div class="facts f" style="--s:.5;--e:.58">
+        <div class="up" style="--s:.56;--e:.68"><span class="mono">What I am</span><b>Co-Founder &amp; CTO at <a href="https://www.ailog.fr/" rel="noopener">Ailog</a></b></div>
+        <div class="up" style="--s:.62;--e:.74"><span class="mono">What I ship</span><b>Retrieval, agents, fine-tuning</b></div>
+        <div class="up" style="--s:.68;--e:.8"><span class="mono">How</span><b>Code, not slides. Papers only when they exist.</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section data-stage>
+  <div class="sticky">
+    <div class="who mono"><span>You ask</span><span>02</span></div>
+    <h2 class="ask" data-q>What do you build?</h2>
+    <div class="ans">
+      <div class="cards">
+        <article class="card" style="--s:.48;--e:.66">
+          <div><span class="mono">Gateway</span><h3>Pylae</h3><p>One European gate to every large language model. Your own keys, and each provider's jurisdiction stated plainly.</p></div>
+          <svg viewBox="0 0 72 72" aria-hidden="true"><path d="M12 66V22H24V66M48 66V22H60V66M8 22H64V12H8Z" fill="none" stroke="#12100E" stroke-width="3" stroke-linejoin="round"/><path d="M24 22L38 28V62L24 66" fill="none" stroke="#12100E" stroke-width="3" stroke-linejoin="round"/></svg>
+        </article>
+        <article class="card" style="--s:.56;--e:.74">
+          <div><span class="mono">Explainers</span><h3>Delona</h3><p>Research explained with figures you can move. One idea per article, reviewed before it goes out.</p></div>
+          <svg viewBox="0 0 72 72" aria-hidden="true"><path d="M8 8V64H66" fill="none" stroke="#12100E" stroke-width="3"/><path d="M8 60C26 60 28 16 38 16S50 60 66 60" fill="none" stroke="#12100E" stroke-width="3"/></svg>
+        </article>
+        <article class="card" style="--s:.56;--e:.74">
+          <div><span class="mono">Dev server</span><h3>Nefeli</h3><p>An agent-first development server in the cloud: AI agents, a terminal and your files in one browser tab, on a phone or a computer. It sits on a private network, closed to the open internet.</p></div>
+          <svg viewBox="0 0 72 72" aria-hidden="true"><rect x="9" y="15" width="54" height="42" rx="6" fill="none" stroke="#12100E" stroke-width="3"/><path d="M21 29L30 36L21 43M36 44H50" fill="none" stroke="#12100E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section data-stage>
+  <div class="sticky">
+    <div class="who mono"><span>You ask</span><span>03</span></div>
+    <h2 class="ask" data-q>Can you actually engineer?</h2>
+    <div class="ans">
+      <ul class="ledger f" style="--s:.38;--e:.44">
+        <li class="wipe" style="--s:.42;--e:.5"><h3>A RISC-V processor</h3><span class="mono">VHDL · run on FPGA</span></li>
+        <li class="wipe" style="--s:.48;--e:.56"><h3>A JPEG encoder</h3><span class="mono">C · from scratch</span></li>
+        <li class="wipe" style="--s:.54;--e:.62"><h3>Image resizing on GPU</h3><span class="mono">10–100× faster</span></li>
+        <li class="wipe" style="--s:.6;--e:.68"><h3>Firefighting robots</h3><span class="mono">A* planning · Java</span></li>
+        <li class="wipe" style="--s:.66;--e:.74"><h3>A home-automation hub</h3><span class="mono">ESP32 · Docker</span></li>
+        <li class="wipe" style="--s:.72;--e:.8"><h3>A published paper on privacy in NLP</h3><span class="mono"><a href="https://arxiv.org/html/2501.02407v2">INRIA · read it</a></span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section data-stage>
+  <div class="sticky">
+    <div class="who mono"><span>You ask</span><span>04</span></div>
+    <h2 class="ask" data-q>Where did you learn it?</h2>
+    <div class="ans">
+      <div class="places">
+        <div class="up" style="--s:.42;--e:.54"><span class="mono">Grenoble</span><h3>ENSIMAG<small>Engineering degree in computer science and applied mathematics.</small></h3></div>
+        <div class="up" style="--s:.52;--e:.64"><span class="mono">Grenoble</span><h3>INRIA<small>Research on privacy-preserving natural language processing.</small></h3></div>
+        <div class="up" style="--s:.62;--e:.74"><span class="mono">Stockholm</span><h3>KTH<small>Master of Science in Machine Learning.</small></h3></div>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+
+<section id="you" data-stage>
+  <div class="sticky">
+    <div class="who mono"><span>Hélain asks</span><span>05</span></div>
+    <h2 class="ask" data-q data-from=".03">And you. What are you trying to build?</h2>
+    <div class="tail up" style="--s:.3;--e:.44">
+      <p>Tell me what the system has to do. I will tell you honestly whether I am the person to build it.</p>
+      <div class="links">
+        <a class="btn go" href="mailto:contact@helain-zimmermann.com">Write to me</a>
+        <a class="btn" href="/files/ZIMMERMANN_Helain_Resume_en.pdf">CV (PDF)</a>
+        <a class="mail mono" href="mailto:contact@helain-zimmermann.com">contact@helain-zimmermann.com</a>
+      </div>
+    </div>
+    <nav class="else up" style="--s:.36;--e:.5" aria-label="Elsewhere">
+      <span class="mono">Elsewhere</span>
+      <ul>
+        <li><a href="https://www.linkedin.com/in/helain-zimmermann/" target="_blank" rel="noopener"><b>LinkedIn</b><span class="mono">helain-zimmermann</span></a></li>
+        <li><a href="https://github.com/L1ZGitHub" target="_blank" rel="noopener"><b>GitHub</b><span class="mono">L1ZGitHub</span></a></li>
+        <li><a href="https://dev.to/helain" target="_blank" rel="noopener"><b>dev.to</b><span class="mono">@helain</span></a></li>
+        <li><a href="https://medium.com/@helain.zimmermann" target="_blank" rel="noopener"><b>Medium</b><span class="mono">@helain.zimmermann</span></a></li>
+        <li><a href="https://scholar.google.com/citations?user=MXMobs8AAAAJ" target="_blank" rel="noopener"><b>Google Scholar</b><span class="mono">Hélain Zimmermann</span></a></li>
+      </ul>
+    </nav>
+  </div>
+</section>
+</main>
+
+<script>
+(()=>{
+/* split each question into words that arrive one after another */
+document.querySelectorAll('[data-q]').forEach(h=>{
+  const from=parseFloat(h.dataset.from||'0.02'),words=h.textContent.trim().split(/\s+/);
+  h.setAttribute('aria-label',h.textContent.trim());h.textContent='';
+  words.forEach((w,i)=>{const s=document.createElement('span');s.className='w';s.setAttribute('aria-hidden','true');
+    const a=from+i*.035;s.style.setProperty('--s',a.toFixed(3));s.style.setProperty('--e',(a+.07).toFixed(3));s.textContent=w;
+    h.appendChild(s);h.appendChild(document.createTextNode(' '))});
+});
+
+/* the eyes: lids, lashes and gaze are recomputed from one "open" value */
+(function(){
+  const NS='http://www.w3.org/2000/svg',svg=document.getElementById('eyes'),INK='#F1ECE2',LIME='#C8F04B';
+  const mk=(t,a,p)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);p.appendChild(n);return n};
+  const lerp=(a,b,t)=>a+(b-a)*t,P0=[40,130],P3=[360,142];
+  const parts=[false,true].map((mir,i)=>{
+    const g=mk('g',mir?{transform:'translate(1040,0) scale(-1,1)'}:{},svg),id='eye'+i;
+    const cp=mk('path',{},mk('clipPath',{id},g));
+    const brow=mk('path',{d:'M20 80C96 28 250 8 388 62',fill:'none',stroke:INK,'stroke-width':13,'stroke-linecap':'round'},g);
+    const crease=mk('path',{fill:'none',stroke:INK,'stroke-width':1.6,'stroke-linecap':'round'},g);
+    const ball=mk('g',{'clip-path':`url(#${id})`},g);
+    mk('rect',{x:0,y:0,width:400,height:260,fill:'#221E19'},ball);
+    const iris=mk('g',{},ball);
+    mk('circle',{r:61,fill:'#15130F',stroke:LIME,'stroke-width':3.5},iris);
+    let rays='';for(let k=0;k<32;k++){const a=k/32*Math.PI*2,c=Math.cos(a),s=Math.sin(a),r0=k%2?30:36;rays+=`M${(c*r0).toFixed(1)} ${(s*r0).toFixed(1)}L${(c*55).toFixed(1)} ${(s*55).toFixed(1)}`}
+    mk('path',{d:rays,stroke:LIME,'stroke-width':1.5,opacity:.6},iris);
+    mk('circle',{r:25,fill:'#070605'},iris);
+    mk('circle',{cx:mir?17:-17,cy:-21,r:9,fill:INK},iris);mk('circle',{cx:mir?-15:15,cy:18,r:4,fill:INK,opacity:.55},iris);
+    const lower=mk('path',{fill:'none',stroke:INK,'stroke-width':1.8,opacity:.7,'stroke-linecap':'round'},g);
+    const upper=mk('path',{fill:'none',stroke:INK,'stroke-width':4.6,'stroke-linecap':'round'},g);
+    const lashes=mk('path',{fill:'none',stroke:INK,'stroke-width':2.2,'stroke-linecap':'round'},g);
+    return {mir,cp,brow,crease,iris,lower,upper,lashes};
+  });
+  let open=0,gx=0,gy=0;
+  function draw(){const o=open,oc=Math.min(1,Math.max(0,o));
+    const u1=[lerp(112,96,o),lerp(171,58,o)],u2=[lerp(280,262,o),lerp(179,40,o)],l1=[110,lerp(174,199,o)],l2=[280,lerp(182,207,o)];
+    const f=a=>a.map(v=>v.toFixed(1)).join(' ');
+    const up=`M${f(P0)}C${f(u1)} ${f(u2)} ${f(P3)}`,lo=`M${f(P0)}C${f(l1)} ${f(l2)} ${f(P3)}`;
+    let lash='';const k=2*oc-1;
+    for(let i=0;i<10;i++){const t=.07+i*.093,u=1-t;
+      const x=u*u*u*P0[0]+3*u*u*t*u1[0]+3*u*t*t*u2[0]+t*t*t*P3[0],y=u*u*u*P0[1]+3*u*u*t*u1[1]+3*u*t*t*u2[1]+t*t*t*P3[1];
+      let tx=3*u*u*(u1[0]-P0[0])+6*u*t*(u2[0]-u1[0])+3*t*t*(P3[0]-u2[0]),ty=3*u*u*(u1[1]-P0[1])+6*u*t*(u2[1]-u1[1])+3*t*t*(P3[1]-u2[1]);
+      const n=Math.hypot(tx,ty);tx/=n;ty/=n;const lean=(t-.5)*1.5;let dx=ty*k+tx*lean,dy=-tx*k+ty*lean;const m=Math.hypot(dx,dy)||1,L=14+13*Math.sin(Math.PI*t);
+      lash+=`M${x.toFixed(1)} ${y.toFixed(1)}l${(dx/m*L).toFixed(1)} ${(dy/m*L).toFixed(1)}`}
+    for(const e of parts){
+      e.cp.setAttribute('d',`${up}C${f(l2)} ${f(l1)} ${f(P0)}Z`);e.upper.setAttribute('d',up);e.lower.setAttribute('d',lo);e.lashes.setAttribute('d',lash);
+      e.crease.setAttribute('d',`M54 ${lerp(150,116,o).toFixed(1)}C106 ${lerp(152,38,o).toFixed(1)} 262 ${lerp(158,20,o).toFixed(1)} 348 ${lerp(152,124,o).toFixed(1)}`);e.crease.setAttribute('opacity',(oc*.55).toFixed(2));
+      e.brow.setAttribute('transform',`translate(0 ${(-11*o).toFixed(1)})`);
+      e.iris.setAttribute('transform',`translate(${(206+(e.mir?-gx:gx)*oc).toFixed(1)} ${(lerp(152,128,oc)+gy*oc).toFixed(1)})`)}}
+  document.getElementById('who')._on=p=>{const t=Math.min(1,Math.max(0,p/.2)),c=1.15;open=t<=0?0:1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);draw()};
+  addEventListener('pointermove',ev=>{gx=(ev.clientX/innerWidth-.5)*20;gy=(ev.clientY/innerHeight-.5)*12;if(open>.2)draw()},{passive:true});
+  draw();
+})();
+
+/* the film: one 879-frame video behind the first four questions, scrubbed by the scroll. The video element itself is
+   on the page and the browser shows its frames; nothing is copied to a canvas, which a phone's hardware decoder can
+   answer with black. A small rough copy comes first, the sharp one slides in under it and takes over. */
+window.__film=(function(){
+  const N=879,FPS=24,stage=document.getElementById('who'),layer=document.querySelector('.film');
+  const txt=stage.querySelectorAll('.who,.ask,.ans'),cl=v=>Math.min(1,Math.max(0,v)),ramp=(u,a,b)=>cl((u-a)/(b-a));
+  let vid=null,want=0,shown=-1,at=0,ut=0,uc=0,raf=0,busy=false;
+  let file='';
+  /* on a tall screen the crop follows the subject: the face first, the desk at the end */
+  const fxOf=i=>i<210?.5:i<330?.5+.08*(i-210)/120:i<449?.58+.12*(i-330)/118:.7-.2*ramp(i,449,540);
+  const frameShown=i=>{shown=i;layer.style.setProperty('--fx',(fxOf(i)*100).toFixed(2)+'%')};
+  function paint(){if(!vid||busy||want===shown)return;busy=true;at=want;vid.currentTime=(at+.5)/FPS}
+  function make(){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';v.disablePictureInPicture=true;v.disableRemotePlayback=true;v.tabIndex=-1;
+    v.setAttribute('muted','');v.setAttribute('playsinline','');
+    v.addEventListener('seeked',()=>{if(v!==vid)return;busy=false;frameShown(at);paint()});
+    return v}
+  /* u = screens scrolled since the top of the first stage, in hundredths */
+  function apply(u){
+    /* eyes open, the answer is written while the film keeps moving, it nearly stops for half a screen, then turns and
+       pulls back to the desk as the second question and its projects arrive; a breath at the desk, then back into the
+       hall under the third question; a breath there, then down the arcade under the fourth */
+    const f=u<160?u/160*150:u<205?150+ramp(u,160,205)*7:u<600?157+ramp(u,205,600)*291:u<650?448+ramp(u,600,650)*7
+      :u<960?455+ramp(u,650,960)*184:u<1040?639+ramp(u,960,1040)*6:645+ramp(u,1040,1420)*(N-1-645);
+    want=Math.round(f);paint();
+    const q=u<60?0:.4+ramp(u,70,160)*.42;for(const n of txt)n.style.setProperty('--p',q.toFixed(4));
+    stage.style.setProperty('--qo',(1-ramp(u,20,45)).toFixed(3));
+    stage.style.setProperty('--so',(1-ramp(u,207,240)).toFixed(3));
+    layer.style.setProperty('--scrim',(.1+.08*ramp(u,70,120)-.08*ramp(u,207,250)+.1*ramp(u,350,420)+.42*ramp(u,850,910)
+      -.3*ramp(u,1040,1090)+.36*ramp(u,1210,1290)).toFixed(3))}
+  const target=()=>-stage.getBoundingClientRect().top/innerHeight*100;
+  function tick(){const d=ut-uc;if(Math.abs(d)>.05){uc+=d*.18;raf=requestAnimationFrame(tick)}else{uc=ut;raf=0}apply(uc)}
+  function kick(){ut=target();if(!raf)raf=requestAnimationFrame(tick)}
+  const snap=()=>{ut=uc=target();apply(uc)};
+  addEventListener('scroll',kick,{passive:true});addEventListener('resize',snap);snap();
+  /* a file is fetched whole, put on the page under the one in use, brought to the current frame, and only then takes over */
+  const load=name=>fetch('film/'+name).then(r=>{if(!r.ok)throw new Error(name+' http '+r.status);return r.blob()}).then(b=>new Promise((done,fail)=>{const v=make();
+    v.addEventListener('loadeddata',()=>{const i=want;
+      v.addEventListener('seeked',()=>{const old=vid;vid=v;busy=false;frameShown(i);file=name;
+        if(old){const u=old.src;old.remove();old.removeAttribute('src');old.load();URL.revokeObjectURL(u)}paint();done()},{once:true});
+      v.currentTime=(i+.5)/FPS},{once:true});
+    v.addEventListener('error',()=>fail(new Error(name+' does not decode')),{once:true});
+    vid?layer.insertBefore(v,vid):layer.appendChild(v);v.src=URL.createObjectURL(b);v.load()}));
+  const h264=document.createElement('video').canPlayType('video/mp4; codecs="avc1.64001f"'),small=matchMedia('(max-width:820px)').matches;
+  const sharp=h264?(small?'film-960.mp4':'film-1280.mp4'):'film-960.webm';
+  const ready=(h264?load('film-rough.mp4').catch(()=>{}):Promise.resolve()).then(()=>load(sharp)).catch(()=>{});
+  return {ready,snap,get url(){return file},idle:()=>!!vid&&!busy&&want===shown,frame:()=>shown};
+})();
+
+/* the garden on the rail, drawn by the Type Garden engine. The rail itself is the main stem: it is as long as the page
+   is scrolled. Shoots grow out of it as the tip passes them and wither if you scroll back; a rose opens where each
+   question begins. */
+function garden(){
+  const side=document.querySelector('.side'),E=new TypeGardenEngine(),cv=document.createElement('canvas');
+  cv.className='railgarden';cv.setAttribute('aria-hidden','true');side.appendChild(cv);
+  const g=cv.getContext('2d'),B=E.backend(g),still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DARK={red:'#F1ECE2',blue:'#C8F04B',line:'#12100E',text:'#F1ECE2',vein:'#12100E'},LIME={red:'#F1ECE2',blue:'#12100E',line:'#12100E',text:'#12100E',vein:'#C8F04B'};
+  const TOP=118,S=86,W=230;let H=0,END=0,dpr=1,P=[],nodes=[],hot=0,lastF=-1,lastTip=-1,lastC=null,fresh=true;
+  const span=()=>Math.max(1,document.documentElement.scrollHeight-innerHeight);
+  function build(){nodes=[];if(getComputedStyle(side).display==='none')return;
+    dpr=Math.min(devicePixelRatio||1,2);H=innerHeight;END=H-16;cv.width=W*dpr;cv.height=H*dpr;fresh=true;lastTip=-1;
+    const rx=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rail'))||80;
+    P=[];for(let y=TOP;y<=END;y+=6)P.push([rx+6*Math.sin((y-TOP)/66)+2.5*Math.sin((y-TOP)/21),y]);
+    const r=E.rng(20261011),lab=document.querySelector('.chapter').getBoundingClientRect();
+    const at=y=>E.at(P,Math.min(.98,Math.max(.02,(y-TOP)/(END-TOP))))[0];
+    const node=(y,flower)=>{const i=nodes.length,q=at(y),els=[],p=E.wordParams(1000+i*37);p.w=.5;let k=0;const nid=()=>(i+5)*100+(k++);
+      const nearLabel=y>lab.top-30&&y<lab.bottom+60,right=nearLabel||(y>TOP+60&&i%2===0),n=flower?1:1+(r()<.35?1:0);   /* the first rose leans left, clear of the question */
+      for(let s=0;s<n;s++){const sd=(s?!right||nearLabel:right)?1:-1;
+        E.grow(r,els,nid,p,{base:[0,0],dir:Math.PI/2-sd*(.7+r()*.5),len:flower?.46:.34+r()*.3,d0:40+s*150,tip:flower?'rose':null})}
+      nodes.push({id:i+5,x:q[0],y:q[1],els,birth:null,dead:null})};
+    const starts=[...document.querySelectorAll('[data-stage]')].map(st=>TOP+(END-TOP)*Math.min(1,(st.getBoundingClientRect().top+scrollY)/span())).map(y=>Math.min(END-70,Math.max(TOP+14,y)));
+    starts.forEach(y=>node(y,true));
+    for(let y=TOP+56;y<END-50;y+=58+r()*34)if(starts.every(sy=>Math.abs(sy-y)>34))node(y,false)}
+  function frame(now){requestAnimationFrame(frame);if(!nodes.length)return;
+    const tip=TOP+(END-TOP)*Math.min(1,Math.max(0,scrollY/span()));
+    for(const n of nodes){
+      if(n.birth==null&&tip>=n.y+4){n.birth=fresh?now-9000:now;n.dead=null;hot=now+3200}
+      else if(n.birth!=null&&n.dead==null&&tip<n.y-10){n.dead=now;hot=now+700}
+      if(n.dead!=null&&now-n.dead>300){n.birth=null;n.dead=null}}
+    fresh=false;
+    const f=still?0:Math.floor(now/120),C=document.body.classList.contains('inv')?LIME:DARK;
+    if(now>hot&&f===lastF&&Math.abs(tip-lastTip)<.5&&C===lastC)return;lastF=f;lastTip=tip;lastC=C;
+    E.cc=C;E._now=now;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+    const st={S,C,boil:!still,recoil:20,speed:1,wither:260},amp=still?0:Math.max(.8,S*.01),frac=(tip-TOP)/(END-TOP);
+    const j=E.jit(1,f,amp),PP=P.map(p=>[p[0]+j[0],p[1]]);
+    if(frac>.004)E.strokeRange(B,PP,0,Math.min(1,frac),C.blue,S*.03);
+    for(const layer of[0,1])for(const n of nodes){if(n.birth==null)continue;
+      const age=now-n.birth,kk=n.dead!=null?1-E.eo((now-n.dead)/260):1;
+      for(const e of n.els){if(e.t==='stem')E.drawStem(B,e,n,age,kk,st,f,amp,layer);else if(e.layer===layer)E.drawEl(B,e,n,age,kk,st,f,amp)}}
+    if(frac>.004){const q=E.at(PP,Math.min(.985,Math.max(.02,frac)));   /* the growing tip: a pair of young leaves */
+      E.leaf(B,q[0][0],q[0][1],q[1]-.55,S*.2,.5);E.leaf(B,q[0][0],q[0][1],q[1]+.55,S*.2,-.5)}}
+  addEventListener('resize',build);build();requestAnimationFrame(frame);
+}
+/* the rail is hidden on narrow screens, so its engine is only fetched where it shows */
+{const wide=matchMedia('(min-width:821px)'),go=()=>{if(!wide.matches||go.done)return;go.done=true;const sc=document.createElement('script');sc.src='tg-engine.js';sc.onload=garden;document.head.appendChild(sc)};go();wide.addEventListener('change',go)}
+
+const JUMP=new URLSearchParams(location.search).get('jump');
+if(JUMP!==null)history.scrollRestoration='manual';
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clamp=v=>Math.min(1,Math.max(0,v));
+const items=[...document.querySelectorAll('[data-stage]')].map(n=>({n,cur:0,tgt:0}));
+const rail=[...document.querySelectorAll('#ticks li')],tc=document.getElementById('tc'),last=items[items.length-1];
+const chn=document.getElementById('chn'),chname=document.getElementById('chname'),NAMES=['Who','What','Proof','Training','You'];let shown=-1;
+let raf=0,snap=false;
+function measure(){const vh=innerHeight;
+  for(const o of items){const r=o.n.getBoundingClientRect();o.tgt=reduce?1:clamp(-r.top/Math.max(1,r.height-vh));o.top=r.top}
+  let active=0;items.forEach((o,i)=>{if(o.top<=vh*.5)active=i});
+  rail.forEach((li,i)=>{li.className=i<active?'done':i===active?'on':''});
+  if(active!==shown){shown=active;chn.textContent='0'+(active+1);chname.textContent=NAMES[active]}
+  const t=Math.round(clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-vh))*120);
+  tc.textContent=String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')}
+function frame(){let moving=false;
+  for(const o of items){const d=o.tgt-o.cur;if(Math.abs(d)>.0006&&!snap){o.cur+=d*.18;moving=true}else o.cur=o.tgt;o.n.style.setProperty('--p',o.cur.toFixed(4));o.n._on&&o.n._on(o.cur)}
+  document.body.classList.toggle('inv',!reduce&&last.top<48);
+  raf=moving?requestAnimationFrame(frame):0}
+function kick(){measure();if(!raf)raf=requestAnimationFrame(frame)}
+addEventListener('scroll',kick,{passive:true});addEventListener('resize',kick);
+/* Contact lands on the end of the last screen, where the ways to reach me are shown, not on its empty first frame */
+document.querySelector('.acts a[href="#you"]').addEventListener('click',ev=>{ev.preventDefault();scrollTo(0,document.documentElement.scrollHeight)});
+/* on a computer "Write to me" copies the address instead of opening the system mail app; on a phone it opens mail as usual */
+if(!matchMedia('(pointer:coarse)').matches)document.querySelectorAll('#you a[href^="mailto:"]').forEach(a=>{const label=a.textContent;let t=0;
+  a.addEventListener('click',ev=>{ev.preventDefault();const addr=a.getAttribute('href').slice(7);
+    const done=()=>{a.textContent='Address copied';clearTimeout(t);t=setTimeout(()=>{a.textContent=label},2000)};
+    const old=()=>{const ta=document.createElement('textarea');ta.value=addr;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();
+      let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();ok?done():(location.href=a.href)};
+    navigator.clipboard?navigator.clipboard.writeText(addr).then(done,old):old()})});
+function settle(){if(JUMP!==null)scrollTo(0,+JUMP||0);snap=true;measure();frame();snap=false;window.__film.ready.then(()=>{snap=true;frame();snap=false;window.__film.snap();window.__ready=true})}
+(document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,2500))]):Promise.resolve()).then(()=>requestAnimationFrame(settle));
+})();
+</script>
+</body>
+</html>

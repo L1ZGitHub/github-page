@@ -1,0 +1,13 @@
+/* TEAM */
+Author: Hélain Zimmermann
+Contact: contact@helain-zimmermann.com
+
+/* THANKS */
+The plant on the left rail is drawn with the engine of Type Garden, by Akshat Agarwal: https://type-garden.vercel.app
+Butler typeface by Fabian De Smet
+Bricolage Grotesque by Mathieu Triay
+Spline Sans Mono by SorkinType
+
+/* SITE */
+Last update: 2026-10-12
+Built by hand: one HTML page, no framework, no tracking
