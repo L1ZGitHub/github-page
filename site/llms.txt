@@ -1,0 +1,43 @@
+# Hélain Zimmermann
+
+> Co-Founder & CTO at Ailog. AI engineer who builds AI systems and the companies around them: retrieval, agents and fine-tuning. Trained at ENSIMAG (Grenoble) and KTH (Stockholm), with research at INRIA on privacy-preserving natural language processing.
+
+This site is a single page, written as an interview in five questions. Everything it says is below.
+
+## Who
+
+- Name: Hélain Zimmermann
+- Role: Co-Founder & CTO at [Ailog](https://www.ailog.fr/)
+- Ships: retrieval, agents, fine-tuning
+- Method: code, not slides. Papers only when they exist.
+
+## What he builds
+
+- Pylae (gateway): one European gate to every large language model. Your own keys, and each provider's jurisdiction stated plainly.
+- Delona (explainers): research explained with figures you can move. One idea per article, reviewed before it goes out.
+- Nefeli (dev server): an agent-first development server in the cloud. AI agents, a terminal and your files in one browser tab, on a phone or a computer. It sits on a private network, closed to the open internet.
+
+## Engineering record
+
+- A RISC-V processor (VHDL, run on FPGA)
+- A JPEG encoder (C, from scratch)
+- Image resizing on GPU (10 to 100 times faster)
+- Firefighting robots (A* planning, Java)
+- A home-automation hub (ESP32, Docker)
+- [A published paper on privacy in NLP](https://arxiv.org/html/2501.02407v2) (INRIA)
+
+## Training
+
+- ENSIMAG, Grenoble: engineering degree in computer science and applied mathematics
+- INRIA, Grenoble: research on privacy-preserving natural language processing
+- KTH, Stockholm: Master of Science in Machine Learning
+
+## Contact
+
+- Email: contact@helain-zimmermann.com
+- [CV (PDF)](https://helain-zimmermann.com/files/ZIMMERMANN_Helain_Resume_en.pdf)
+- [LinkedIn](https://www.linkedin.com/in/helain-zimmermann/)
+- [GitHub](https://github.com/L1ZGitHub)
+- [dev.to](https://dev.to/helain)
+- [Medium](https://medium.com/@helain.zimmermann)
+- [Google Scholar](https://scholar.google.com/citations?user=MXMobs8AAAAJ)
