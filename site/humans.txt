@@ -9,5 +9,5 @@ Bricolage Grotesque by Mathieu Triay
 Spline Sans Mono by SorkinType
 
 /* SITE */
-Last update: 2026-10-12
+Last update: 2026-10-13
 Built by hand: one HTML page, no framework, no tracking
