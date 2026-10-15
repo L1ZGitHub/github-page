@@ -13,6 +13,7 @@ scroll plays. No framework, no build step, no tracking.
 | `site/tg-engine.js` | Drawing engine of the plant on the left rail, fetched on wide screens only |
 | `site/files/` | The CV |
 | `site/robots.txt`, `sitemap.xml`, `llms.txt`, `humans.txt`, `.well-known/security.txt`, `site.webmanifest` | Discovery files |
+| `site/legal.html` | Legal notice and privacy, served at `/legal` |
 | `site/404.html` | Shown for missing pages and for the retired blog |
 | `nginx.conf` | Caching, security headers, and what the previous site's addresses now return |
 | `Dockerfile` | nginx serving `site/` on port 3000 |
@@ -34,6 +35,8 @@ Coolify builds the `Dockerfile` from `main` and routes helain-zimmermann.com to 
 
 Until October 2026 this repository held a Next.js site with a blog. `/about` and `/contact` now redirect to the front
 page; `/blog`, `/feed.xml`, `/admin` and `/editorial-policy` answer 410 Gone.
+
+`/legal/` and `/legal.html` redirect to `/legal`, and `/mentions-legales` to its French part.
 
 ## Credits
 

@@ -2,7 +2,7 @@
 
 > Co-Founder & CTO at Ailog. AI engineer who builds AI systems and the companies around them: retrieval, agents and fine-tuning. Trained at ENSIMAG (Grenoble) and KTH (Stockholm), with research at INRIA on privacy-preserving natural language processing.
 
-This site is a single page, written as an interview in five questions. Everything it says is below.
+This site is one page, written as an interview in five questions, plus a legal notice. Everything the interview says is below. The film behind it was generated with AI tools.
 
 ## Who
 
@@ -41,3 +41,4 @@ This site is a single page, written as an interview in five questions. Everythin
 - [dev.to](https://dev.to/helain)
 - [Medium](https://medium.com/@helain.zimmermann)
 - [Google Scholar](https://scholar.google.com/citations?user=MXMobs8AAAAJ)
+- [Legal notice and privacy](https://helain-zimmermann.com/legal)
